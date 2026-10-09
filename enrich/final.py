@@ -40,7 +40,14 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
         return {"ICP": "PENDING", "ICP status": "Not checked yet (run phase 1)"}
     verdict = icp.get("icp_verdict", "")
     yes_no, status = ICP_STATUS.get(verdict, ("PENDING", verdict))
+    if yes_no == "NO":
+        status = {"excluded": "Excluded: proof of an exclusion was found",
+                  "failed must-have": "Failed a must-have: proof it doesn't meet one"}.get(icp.get("gate"), "Not ICP")
     seg, seg_basis = segment(employees)
+    ai_seg = (sig or {}).get("segment_ai")
+    if not (employees or "").strip() and ai_seg:
+        seg = ai_seg["value"]
+        seg_basis = f"AI estimate from the website ({ai_seg.get('headcount') or 'unknown'} people)"
     row = {
         "ICP": yes_no,
         "ICP status": status or verdict,
@@ -69,6 +76,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
         "Needs checking": "; ".join(SIGNALS[k][1] for k, v in s_all.items() if v["value"] == "check"),
         "Website": icp.get("crawl", {}).get("final_url") or "",
         "Website status": (icp.get("crawl", {}).get("status") or "").capitalize(),
+        "Vertical": (sig or {}).get("vertical", ""),
         "Legal entity type": src.get("entity_type", ""),
         "Legal name": src.get("legal_name") or "",
         "Funding stage": sig.get("funding_stage", "") if sig else "",

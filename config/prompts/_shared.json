@@ -2,9 +2,36 @@
   "id": "_shared",
   "description": "Added to every prompt. Edit here to change rules for all data points at once.",
   "version": 1,
-  "models": {
-    "small": "claude-haiku-4-5",
-    "large": "claude-sonnet-5-5"
+  "provider": "openai",
+  "providers": {
+    "note": "Switch AI company by changing 'provider'. 'small' answers step 1 (our saved data); 'web' answers step 2 (web search). Prices are per 1M tokens, used only for the cost estimate.",
+    "openai": {
+      "api_key_env": "OPENAI_API_KEY",
+      "small": "gpt-4o-mini",
+      "large": "gpt-4o-mini",
+      "web": "gpt-4o-mini",
+      "web_search_tool": {
+        "type": "web_search"
+      },
+      "price_per_million": {
+        "input": 0.15,
+        "cached_input": 0.075,
+        "output": 0.6
+      },
+      "price_per_web_search": 0.01
+    },
+    "anthropic": {
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "small": "claude-haiku-4-5",
+      "large": "claude-sonnet-5-5",
+      "web": "claude-sonnet-5-5",
+      "web_search_tool": {
+        "type": "web_search_20260209",
+        "name": "web_search",
+        "max_uses": 3
+      },
+      "note": "Not wired up yet; the runner currently supports OpenAI."
+    }
   },
   "system": {
     "role": "You are a careful B2B research analyst for Puzzle, modern accounting software for startup founders. You decide ONE data point about ONE company at a time, using only the text you are given.",
@@ -75,12 +102,7 @@
     "only_for": "Companies still in the running: phase 1 for must-haves and exclusions, phase 2 for signals. Companies already a NO get no web searches."
   },
   "web_search_step": {
-    "model": "large",
-    "tool": {
-      "type": "web_search_20260209",
-      "name": "web_search",
-      "max_uses": 3
-    },
+    "model": "web",
     "variables": {
       "{company}": "company name from your list",
       "{domain}": "cleaned domain from your list",
@@ -155,6 +177,7 @@
           "type": "string"
         }
       }
-    }
+    },
+    "max_searches": 3
   }
 }

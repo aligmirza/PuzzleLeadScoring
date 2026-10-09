@@ -25,6 +25,9 @@ class Store:
         # one results table per phase: phase 1 (ICP check) and phase 2 (signals)
         for table in RESULT_TABLES.values():
             self.db.execute(f"CREATE TABLE IF NOT EXISTS {table} (domain TEXT PRIMARY KEY, result TEXT, updated_at REAL)")
+        # AI answers are kept apart from rule results, so re-running the rules never loses them
+        self.db.execute("CREATE TABLE IF NOT EXISTS ai_answers (domain TEXT, phase TEXT, prompt_id TEXT, step INTEGER, "
+                        "answer TEXT, usage TEXT, created REAL, PRIMARY KEY (domain, phase, prompt_id, step))")
         self.db.commit()
 
     # pages -------------------------------------------------------------
@@ -79,6 +82,24 @@ class Store:
             return None
         data = row[0]
         return json.loads(zlib.decompress(data) if isinstance(data, bytes) else data)
+
+    # AI answers --------------------------------------------------------
+    def save_ai(self, domain: str, phase: str, prompt_id: str, step: int, answer: dict, usage: dict) -> None:
+        self.db.execute("INSERT OR REPLACE INTO ai_answers VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (domain, phase, prompt_id, step, json.dumps(answer), json.dumps(usage), time.time()))
+        self.db.commit()
+
+    def get_ai(self, domain: str, phase: str) -> dict[str, dict[int, dict]]:
+        """{prompt_id: {step: {"answer": ..., "usage": ...}}}"""
+        out: dict[str, dict[int, dict]] = {}
+        for pid, step, ans, usage in self.db.execute(
+                "SELECT prompt_id, step, answer, usage FROM ai_answers WHERE domain = ? AND phase = ?", (domain, phase)):
+            out.setdefault(pid, {})[step] = {"answer": json.loads(ans), "usage": json.loads(usage)}
+        return out
+
+    def delete_ai(self, domain: str, phase: str) -> None:
+        self.db.execute("DELETE FROM ai_answers WHERE domain = ? AND phase = ?", (domain, phase))
+        self.db.commit()
 
     # space -------------------------------------------------------------
     def pages_size(self, domain: str) -> int:

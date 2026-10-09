@@ -47,6 +47,18 @@ def load() -> tuple[dict, dict]:
     return shared, prompts
 
 
+def provider() -> dict:
+    """The active AI provider's settings from _shared.json (models, key name, prices)."""
+    shared = load()[0]
+    name = shared.get("provider", "openai")
+    return {"name": name, **shared["providers"][name]}
+
+
+def model_for(tier: str) -> str:
+    """'small', 'large' or 'web' -> the model name for the active provider."""
+    return provider().get(tier, tier)
+
+
 def by_signal() -> dict[str, str]:
     """Signal ID -> prompt id."""
     return {p["signal_id"]: pid for pid, p in load()[1].items() if p.get("signal_id")}
@@ -111,7 +123,7 @@ def build(prompt_id: str, company: str, domain: str, known_facts: dict, context:
     p = prompts[prompt_id]
     return {
         "prompt_id": prompt_id,
-        "model": shared["models"].get(p["model"], p["model"]),
+        "model": model_for(p["model"]),
         "system": system_text(),
         "context": context_text(company, domain, known_facts, context),
         "instruction": instruction_text(prompt_id),
@@ -190,10 +202,10 @@ def build_search(prompt_id: str, company: str, domain: str, known_facts: dict, l
     return {
         "prompt_id": prompt_id,
         "step": 2,
-        "model": shared["models"].get(cfg["model"], cfg["model"]),
+        "model": model_for(cfg["model"]),
         "system": system_text(),
         "instruction": "\n\n".join(parts),
-        "tools": [cfg["tool"]],
+        "tools": [provider()["web_search_tool"]],
         "schema": search_schema(prompt_id),
         "queries": queries(prompt_id, vars_),
     }

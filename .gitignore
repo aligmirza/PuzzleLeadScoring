@@ -10,5 +10,8 @@ out/
 *.sqlite
 *.sqlite-*
 
+# Secrets: API keys live here, set once with `python -m enrich settings`
+.env
+
 # OS
 .DS_Store

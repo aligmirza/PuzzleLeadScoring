@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "puzzle-lead-scoring": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "enrich", "mcp"]
+    }
+  }
+}

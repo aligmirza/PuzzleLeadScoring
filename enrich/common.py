@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 
+from . import ai_apply
 from . import prompts as prompt_files
 from .dashboard import ICON
 from .inputs import load_leads
@@ -66,6 +67,9 @@ def run_rules(store: Store, row: dict, record: dict, phase: str) -> dict:
     pages = {k: store.load_page(row["domain"], k) for k in record.get("pages", {})}
     pages = {k: v for k, v in pages.items() if v}
     result = extract(row["domain"], row["company"], row["employees"], record, pages, store.load_jobs(row["domain"]), phase)
+    answers = store.get_ai(row["domain"], phase)
+    if answers:  # keep earlier AI answers when the rules are re-run
+        result = ai_apply.apply(result, answers, phase)
     store.save_result(row["domain"], result, phase)
     return result
 

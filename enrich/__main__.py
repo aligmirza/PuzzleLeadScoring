@@ -4,6 +4,7 @@ Two separate phases:
   python -m enrich icp leads.csv          phase 1: is it our ICP? (must-haves and exclusions only)
   python -m enrich signals leads          phase 2: fit, buying and weak signals, for companies that passed phase 1
   python -m enrich run leads.csv          both phases, one after the other
+  python -m enrich ai leads --phase icp   answer phase 1's AI prompts with OpenAI (then --phase signals after phase 2)
 
 Other commands:
   python -m enrich lists                  every list, its progress and disk use
@@ -42,6 +43,83 @@ def cmd_run(args):
     folder = phase1_icp.run(Path(args.csv), args.list, args.workers, args.max_requests, args.limit, args.refresh, "all", False)
     console.rule()
     phase2_signals.run(folder, args.only_yes, args.workers, args.max_requests, args.refresh, args.keep, args.yes)
+
+
+def cmd_ai(args):
+    from . import ai
+    ai.run(list_dir(args.list), args.phase, args.limit, not args.no_web, args.redo, args.concurrency, args.yes)
+
+
+def cmd_serve(args):
+    import uvicorn
+    from . import settings
+    key = settings.api_key()
+    console.print(f"[bold]PuzzleLeadScoring API[/] on http://{args.host}:{args.port}  (interactive docs: /docs)\n"
+                  f"Callers send the header  x-api-key: {key[:8]}...  (full key: python -m enrich settings)")
+    uvicorn.run("enrich.api:app", host=args.host, port=args.port, log_level="info")
+
+
+def cmd_mcp(args):
+    from .mcp_server import main as mcp_main
+    mcp_main()
+
+
+def cmd_settings(args):
+    import os
+    from . import settings
+    for flag, key in ((args.openai_key, "OPENAI_API_KEY"), (args.clay_webhook, "CLAY_WEBHOOK_URL"),
+                      (args.clay_webhook_token, "CLAY_WEBHOOK_TOKEN"), (args.clay_api_key, "CLAY_API_KEY"),
+                      (args.anthropic_key, "ANTHROPIC_API_KEY")):
+        if flag:
+            settings.set_env(key, flag)
+    for item in args.set or []:
+        if "=" not in item:
+            sys.exit(f"--set needs KEY=value, got '{item}'")
+        k, v = item.split("=", 1)
+        settings.set_env(k.strip(), v.strip())
+    settings.api_key(rotate=args.rotate_api_key)
+    settings.write_files()  # keep .env and .env.example listing every key
+    t = Table(title=f"Settings in {rel(settings.ENV_FILE)} (blank copy for the team: {rel(settings.EXAMPLE_FILE)})",
+              header_style="bold")
+    for col in ("Group", "Key", "Status", "Used for"):
+        t.add_column(col, overflow="fold")
+    for sec, key, what, where, used in settings.ENV_KEYS:
+        value = os.environ.get(key, "")
+        status = ("[green]set[/] " + (value[:6] + "..." if key == "PUZZLE_API_KEY" and args.show_key is False else "")) if value \
+            else ("[yellow]not set[/]" if used else "[dim]not used yet[/]")
+        if key == "PUZZLE_API_KEY" and value and args.show_key:
+            status = f"[green]set[/] {value}"
+        t.add_row(sec, key, status, what)
+    console.print(t)
+    console.print("[dim]Show the full API key with --show-key. Set any key with --set KEY=value.[/]")
+
+
+def cmd_pull(args):
+    import asyncio
+    from . import clay, service
+    if not args.table_id:
+        t = Table(title="Clay tables", header_style="bold")
+        for col in ("Table id", "Name", "Workbook"):
+            t.add_column(col)
+        for row in clay.list_tables():
+            t.add_row(row["id"], row["name"], row["workbook"])
+        console.print(t)
+        return
+
+    async def go():
+        status = service.start_from_clay(args.table_id, args.list, args.limit, signals=not args.icp_only, use_ai=args.ai,
+                                         web=True, push_to_clay=args.push)
+        console.print(f"Pulled {status['rows']} rows from Clay into list [bold]{status['list']}[/]; processing...")
+        await service._jobs[status["list"]]
+        console.print(service.list_status(status["list"]))
+    asyncio.run(go())
+
+
+def cmd_push(args):
+    import asyncio
+    from . import service
+    res = asyncio.run(service.push_list(list_dir(args.list).name, args.webhook, args.only_icp))
+    console.print(f"Sent {res['sent']} rows to Clay, {res['failed']} failed. {'; '.join(res['errors'])}")
 
 
 def cmd_rules(args):
@@ -134,8 +212,9 @@ def cmd_prompts(args):
             web = {"fallback": "if step 1 finds nothing", "primary": "always (web first)", "off": "never"}[p["web_search"]["mode"]]
             t.add_row(f"{pid}.json", p["data_point"], phase, stage_names.get(p["stage"], p["stage"]), web, p["run_when"])
         console.print(t)
+        pv = prompt_files.provider()
         console.print(f"Shared rules for all prompts: {rel(prompt_files.PROMPTS_DIR / '_shared.json')}  "
-                      f"(models: {', '.join(f'{k} = {v}' for k, v in shared['models'].items())})")
+                      f"(provider: {pv['name']}; step 1: {pv['small']}, step 2 web search: {pv['web']})")
         return
     pid = args.show.removesuffix(".json")
     if pid not in prompts:
@@ -199,6 +278,51 @@ def main(argv: list[str] | None = None):
     p.add_argument("--only-yes", action="store_true", help="phase 2 leaves out 'Needs AI check' companies")
     speed(p)
     p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("ai", help="answer the queued AI prompts with OpenAI (asks before spending)")
+    p.add_argument("list", help="list name (or its CSV file)")
+    p.add_argument("--phase", choices=["icp", "signals"], default="icp",
+                   help="icp: settle must-haves and exclusions (run after phase 1); signals: run after phase 2")
+    p.add_argument("--limit", type=int, default=0, help="only the first N companies that need AI")
+    p.add_argument("--no-web", action="store_true", help="skip step 2 (web search)")
+    p.add_argument("--redo", action="store_true", help="ask again even where an answer is saved")
+    p.add_argument("--concurrency", type=int, default=8, help="AI calls at the same time")
+    p.add_argument("--yes", action="store_true", help="don't ask before spending")
+    p.set_defaults(fn=cmd_ai)
+
+    p = sub.add_parser("serve", help="run the HTTP API for Clay and other tools")
+    p.add_argument("--host", default="127.0.0.1", help="127.0.0.1 = this PC only; 0.0.0.0 = reachable on the network")
+    p.add_argument("--port", type=int, default=8787)
+    p.set_defaults(fn=cmd_serve)
+
+    p = sub.add_parser("mcp", help="run the MCP server (stdio) for Claude Code / Claude Desktop")
+    p.set_defaults(fn=cmd_mcp)
+
+    p = sub.add_parser("settings", help="show the API key and set keys once (saved in .env)")
+    p.add_argument("--openai-key", help="save the OpenAI API key")
+    p.add_argument("--clay-webhook", help="save the default Clay table webhook URL")
+    p.add_argument("--clay-webhook-token", help="save the Clay webhook auth token, if the webhook has one")
+    p.add_argument("--clay-api-key", help="save the Clay Public API key (from `clay api-keys create`)")
+    p.add_argument("--anthropic-key", help="save the Anthropic API key (alternative AI provider)")
+    p.add_argument("--set", action="append", metavar="KEY=value", help="save any key, e.g. --set APOLLO_API_KEY=...")
+    p.add_argument("--rotate-api-key", action="store_true", help="replace the API key (callers need the new one)")
+    p.add_argument("--show-key", action="store_true", help="print the full API key")
+    p.set_defaults(fn=cmd_settings)
+
+    p = sub.add_parser("pull", help="read a Clay table and run it as a new list (no table id: list Clay tables)")
+    p.add_argument("table_id", nargs="?")
+    p.add_argument("--list", help="list name (default clay_<table id>)")
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--icp-only", action="store_true", help="phase 1 only")
+    p.add_argument("--ai", action="store_true", help="also run the AI step (costs money)")
+    p.add_argument("--push", action="store_true", help="push results to the Clay webhook when done")
+    p.set_defaults(fn=cmd_pull)
+
+    p = sub.add_parser("push", help="send a list's results to a Clay table webhook")
+    p.add_argument("list")
+    p.add_argument("--webhook", help="Clay webhook URL (default: saved setting)")
+    p.add_argument("--only-icp", action="store_true", help="only rows where ICP = YES")
+    p.set_defaults(fn=cmd_push)
 
     p = sub.add_parser("lists", help="every list, its progress and disk use")
     p.set_defaults(fn=cmd_lists)

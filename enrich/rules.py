@@ -247,6 +247,39 @@ LD_LOCAL_SERVICE = {"LegalService", "Attorney", "RealEstateAgent", "Professional
 
 
 # ---------------------------------------------------------------------------
+def decide(signals: dict, site_status: str | None) -> dict:
+    """The ICP verdict from must-have and exclusion answers. Used by the rules and again after AI answers."""
+    def val(sid):
+        return signals.get(sid, {}).get("value", UNKNOWN)
+    excluded = [sid for sid, (g, _) in SIGNALS.items() if g == "exclusion" and val(sid) == YES]
+    failed = [sid for sid, (g, _) in SIGNALS.items() if g == "must" and val(sid) == NO]
+    confirmed = [sid for sid, (g, _) in SIGNALS.items() if g == "must" and val(sid) == YES]
+    checks = [sid for sid, (g, _) in SIGNALS.items() if g in ("must", "exclusion") and val(sid) == CHECK]
+    if site_status in ("blocked", "unreachable", "error"):
+        gate = "not reached (retry)"
+    elif excluded:
+        gate = "excluded"
+    elif failed:
+        gate = "failed must-have"
+    elif len(confirmed) == 4:
+        gate = "pass"
+    else:
+        gate = "pass (some unknown)"
+    if gate == "not reached (retry)":
+        verdict = "Unknown: site not reached"
+    elif gate in ("excluded", "failed must-have"):
+        verdict = "No"
+    elif checks:
+        verdict = "Needs AI check"
+    elif gate == "pass":
+        verdict = "Yes"
+    else:
+        verdict = "Yes (some must-haves unconfirmed)"
+    return {"gate": gate, "verdict": verdict, "checks": checks, "excluded": excluded, "failed": failed,
+            "confirmed": confirmed,
+            "exclusion_reason": "; ".join(f"{SIGNALS[sid][1]}: {signals[sid]['evidence']}" for sid in excluded)}
+
+
 @dataclass
 class Page:
     kind: str
@@ -930,35 +963,11 @@ class Extractor:
         for sid in SIGNALS:
             self.s.setdefault(sid, sig(UNKNOWN))
         live = self.record.get("status") == "live"
-        excluded = [sid for sid, (g, _) in SIGNALS.items() if g == "exclusion" and self.s[sid]["value"] == YES]
-        failed = [sid for sid, (g, _) in SIGNALS.items() if g == "must" and self.s[sid]["value"] == NO]
-        confirmed = [sid for sid, (g, _) in SIGNALS.items() if g == "must" and self.s[sid]["value"] == YES]
-
-        if self.record.get("status") in ("blocked", "unreachable", "error"):
-            gate = "not reached (retry)"
-        elif excluded:
-            gate = "excluded"
-        elif failed:
-            gate = "failed must-have"
-        elif len(confirmed) == 4:
-            gate = "pass"
-        else:
-            gate = "pass (some unknown)"
-
         if self.phase == "icp":
             # phase 1 reports only must-haves and exclusions
             self.s = {sid: v for sid, v in self.s.items() if SIGNALS[sid][0] in ("must", "exclusion")}
-        checks = [sid for sid, v in self.s.items() if SIGNALS[sid][0] in ("must", "exclusion") and v["value"] == CHECK]
-        if gate == "not reached (retry)":
-            verdict = "Unknown: site not reached"
-        elif gate in ("excluded", "failed must-have"):
-            verdict = "No"
-        elif checks:
-            verdict = "Needs AI check"
-        elif gate == "pass":
-            verdict = "Yes"
-        else:
-            verdict = "Yes (some must-haves unconfirmed)"
+        d = decide(self.s, self.record.get("status"))
+        gate, verdict, checks, excluded, confirmed = d["gate"], d["verdict"], d["checks"], d["excluded"], d["confirmed"]
 
         ai_prompts = self._ai_prompts() if live and gate not in ("excluded", "failed must-have") else []
         ai_context = self._ai_context(ai_prompts) if ai_prompts else {}

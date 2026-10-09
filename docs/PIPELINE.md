@@ -5,7 +5,7 @@ Every step from your CSV to the scored list: what starts each step, what it deci
 - Setup, commands, configuration and roadmap: [README.md](../README.md)
 - How each must-have, exclusion and signal is checked: [SIGNALS.md](SIGNALS.md)
 
-**Reading the diagrams:** solid boxes are built and tested; dashed boxes are designed and waiting on the AI step (needs an Anthropic API key). Green = ICP YES, red = ICP NO, amber = PENDING. Diagrams use Mermaid; they render on GitHub and in VS Code with a Mermaid preview extension.
+**Reading the diagrams:** dashed boxes are the AI steps, which run separately with `ai_check.py` (OpenAI); everything else runs in the phase scripts. Green = ICP YES, red = ICP NO, amber = PENDING. Diagrams use Mermaid; they render on GitHub and in VS Code with a Mermaid preview extension.
 
 ---
 
@@ -251,7 +251,24 @@ flowchart TD
 
 **Code:** [enrich/prompts.py](../enrich/prompts.py) and the [config/prompts/](../config/prompts/) folder. **Runs for:** companies that aren't a NO and whose site was reached.
 
-> The AI calls aren't built yet. The chosen prompts and the page text they need are written to `icp_ai_queue.jsonl` (phase 1) and `signals_ai_queue.jsonl` (phase 2), ready for them.
+**Code:** [enrich/ai.py](../enrich/ai.py) calls OpenAI; [enrich/ai_apply.py](../enrich/ai_apply.py) turns answers into signal values.
+
+### Running it
+
+The AI step runs separately, after each phase, so you can see the cost first:
+
+```bash
+export OPENAI_API_KEY=sk-...                       # read from the environment only
+.venv/bin/python ai_check.py leads --phase icp       # after phase 1
+.venv/bin/python ai_check.py leads --phase signals   # after phase 2
+```
+
+1. It counts the companies and prompts still unanswered and shows an estimated cost, then **asks before sending anything** (`--yes` skips the question).
+2. It runs about 8 AI calls at the same time, with a live view of calls, tokens, cost and the latest answers.
+3. Each answer is saved in `cache.sqlite`. A stopped run picks up where it left off, and re-running the rules keeps the answers.
+4. The verdicts, scores and the final list are recalculated. For example, a company marked PENDING as a possible accounting firm becomes YES if the AI finds it sells software, or NO if it confirms bookkeeping services.
+
+Models and prices are set in `providers.openai` in `config/prompts/_shared.json`: `gpt-4o-mini` for both steps ($0.15 per 1M input tokens, $0.075 cached, $0.60 output; web search $10 per 1,000 searches). The prompts and the page text each one needs are also written to `icp_ai_queue.jsonl` and `signals_ai_queue.jsonl` for inspection.
 
 ### Prompt files
 
@@ -298,11 +315,11 @@ Every file has the same sections:
 flowchart LR
     A["Needs AI<br/>rule said Needs check,<br/>or an AI-only signal"]
     B["Load prompt file<br/>config/prompts/(group)/(data point).json"]
-    S1["Step 1: our data<br/>AI reads saved pages<br/>Haiku, cached"]
+    S1["Step 1: our data<br/>AI reads saved pages<br/>gpt-4o-mini, cached"]
     C{"Medium or high<br/>confidence?"}
     W["Write back<br/>answer + proof<br/>verdict and score recalculated"]
     V["Variables<br/>company: Resend<br/>domain: resend.com<br/>legal name, year"]
-    S2["Step 2: the web<br/>Claude web search<br/>Sonnet, max 3 searches"]
+    S2["Step 2: the web<br/>OpenAI web search tool<br/>max 3 searches"]
     G{"Confidence gate<br/>is it this company?<br/>how good is the source?"}
     U["Stays Unknown<br/>hint kept as proof"]
 
@@ -514,17 +531,17 @@ Phase 2 shows the same progress bars, then running counts of fit, buying and wea
 |---|---|---|
 | Company website, read by code | Most must-haves, exclusions and signals (see SIGNALS.md) | Built |
 | Job board feeds | Open roles, job descriptions | Built |
-| AI reading our saved pages | Judgment calls: business type, industry, AI core, confirming "Needs check" | Prompts written, calls planned |
+| AI reading our saved pages | Judgment calls: business type, industry, AI core, confirming "Needs check" | Built (OpenAI gpt-4o-mini); first real run pending |
 | Free directories | SEC Form D (funding, date, Delaware), SEC public-company list, YC directory, IRS non-profit list | Planned |
-| Claude web search | Step 2 for data points our pages can't answer | Prompts written, calls planned |
+| AI web search | Step 2 for data points our pages can't answer | Built (OpenAI web search tool); model support to confirm on the first run |
 | Paid data (Clay, Crunchbase, OpenCorporates) | Headcount, funding, entities, only for companies still missing them | Optional |
 
 ```mermaid
 flowchart TD
-    S5["Prepare the AI step<br/>built: prompts chosen per company,<br/>written to the AI queue"]
+    S5["AI step (built)<br/>step 1 on our data, then web search where needed;<br/>settles PENDING verdicts"]
     S5b["Free directories<br/>SEC Form D, SEC public-company list,<br/>YC directory, IRS non-profit list"]
-    S5c["AI step<br/>step 1 on our data, then step 2 web search<br/>where needed; several data points per call;<br/>settles every PENDING verdict"]
-    S6["Write the outputs<br/>built: final list with ICP YES / NO and score;<br/>later also vertical, reasoning, outreach message"]
+    S5c["Group prompts per call<br/>several data points in one AI call<br/>to cut cost"]
+    S6["Write the outputs (built)<br/>final list with ICP YES / NO, score, vertical;<br/>later also reasoning and outreach message"]
 
     S5 --> S5b --> S5c --> S6
 
@@ -537,6 +554,7 @@ flowchart TD
 | When this lands | Effect on the final list |
 |---|---|
 | Free directories | Fewer PENDING rows; public and late-stage companies caught (e.g. HubSpot); funding stage and Delaware status confirmed |
-| AI step | PENDING becomes YES or NO; the highest-weighted signals start counting, so scores rise for real startups; industry filled in |
+| First real AI run | PENDING becomes YES or NO; the highest-weighted signals start counting, so scores rise for real startups; industry filled in |
+| Grouped prompts | Same answers at roughly a third of the AI cost |
 | Web search | Buying signals such as recent funding start counting |
 | Reasoning and outreach message | Two new text columns per ICP company |

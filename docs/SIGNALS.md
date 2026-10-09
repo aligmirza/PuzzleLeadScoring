@@ -29,7 +29,7 @@ Every check answers **Yes**, **No**, **Needs check** or **Unknown**; Unknown nev
 | **Code** | Pattern matching on the website's pages and source code | Free |
 | **Directory** | Looking the company up in a free public list we've downloaded | Free |
 | **AI read** | AI reads our saved pages (step 1 of the AI step) | Low |
-| **Search** | Claude searches the web with the company name and domain (step 2, only if step 1 found nothing); confidence rules in [PIPELINE.md, step 7](PIPELINE.md#7-ai-one-prompt-per-data-point-in-two-steps) | Medium |
+| **Search** | AI searches the web with the company name and domain (step 2, only if step 1 found nothing); confidence rules in [PIPELINE.md, step 7](PIPELINE.md#7-ai-one-prompt-per-data-point-in-two-steps) | Medium |
 | **Paid data** | A paid service such as Clay, Crunchbase or Apollo | Varies |
 
 Each signal below lists:
