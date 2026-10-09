@@ -9,12 +9,12 @@ This file goes through every item in `profile.yaml` one by one and explains how 
 
 Groups 1 and 2 are checked in **phase 1** (is it our ICP?). Groups 3 and 4 are checked in **phase 2**, only for companies that passed phase 1.
 
-For the bigger picture, see [PLAN.md](PLAN.md). For the step-by-step workflow, see [HOW_IT_WORKS.md](HOW_IT_WORKS.md).
+This is the reference for individual checks. How the checks fit into the pipeline (verdict, AI steps, scoring) is in [PIPELINE.md](PIPELINE.md); setup and commands are in [README.md](../README.md).
 
 **Where each part lives:**
-- the code rules: [enrich/rules.py](enrich/rules.py)
-- the AI prompt for each data point: [prompts/](prompts/), one JSON file each
-- the points per signal: [scoring.json](scoring.json)
+- the code rules: [enrich/rules.py](../enrich/rules.py)
+- the AI prompt for each data point: [config/prompts/](../config/prompts/), one JSON file each
+- the points per signal: [config/scoring.json](../config/scoring.json)
 
 The short codes in this file (M1, E3, F12...) are only used here and in the code, to match each signal to its rule. Output files and the terminal use plain names.
 
@@ -22,23 +22,14 @@ The short codes in this file (M1, E3, F12...) are only used here and in the code
 
 ## How to read this file
 
-Every check gives one of four answers:
-
-- **Yes:** we found proof that it's true
-- **No:** we found proof that it's false
-- **Needs check:** code found a clue but can't be sure, so that data point's AI prompt runs
-- **Unknown:** we couldn't find proof either way
-
-**Unknown never hurts a company.** It doesn't fail a must-have, doesn't trigger an exclusion and doesn't cost points. It just means the signal doesn't count.
-
-For each signal, we try methods in order from cheapest to most expensive, and we stop as soon as we have a clear answer. For the AI part this means two steps: first AI reads our saved pages, and only if that finds nothing does it search the internet (see [HOW_IT_WORKS.md](HOW_IT_WORKS.md#two-steps-per-data-point-our-data-first-then-the-internet)). A web answer only counts at medium or high confidence, and only high confidence with a domain match can exclude a company.
+Every check answers **Yes**, **No**, **Needs check** or **Unknown**; Unknown never counts against a company ([PIPELINE.md, step 5](PIPELINE.md#5-apply-the-rules)). For each signal the methods are tried from cheapest to most expensive, stopping at the first clear answer:
 
 | Method | What it means | Cost |
 |---|---|---|
 | **Code** | Pattern matching on the website's pages and source code | Free |
 | **Directory** | Looking the company up in a free public list we've downloaded | Free |
-| **AI read** | A low-cost AI model reads the website text and answers a question | Low |
-| **Search** | Claude searches the web with the company name and domain, and reports sources and confidence. Runs only if the steps above found nothing (or straight away for data that only exists on the web) | Medium |
+| **AI read** | AI reads our saved pages (step 1 of the AI step) | Low |
+| **Search** | Claude searches the web with the company name and domain (step 2, only if step 1 found nothing); confidence rules in [PIPELINE.md, step 7](PIPELINE.md#7-ai-one-prompt-per-data-point-in-two-steps) | Medium |
 | **Paid data** | A paid service such as Clay, Crunchbase or Apollo | Varies |
 
 Each signal below lists:
@@ -534,7 +525,7 @@ Includes seed extensions, bridge rounds and SAFEs, not only priced rounds.
 
 These lower the score but **never disqualify**. A company with several of these is still a valid lead, just a lower priority one that suits self-serve rather than sales outreach.
 
-Each weak signal answered Yes takes away **2 points**. Change this in [scoring.json](scoring.json) (`weak_signal_points`).
+Each weak signal answered Yes takes away **2 points**. Change this in [config/scoring.json](../config/scoring.json) (`weak_signal_points`).
 
 ### Small-business markers
 
@@ -639,26 +630,6 @@ Until the AI step is built, signals it decides count 0 points. So scores are low
 
 ---
 
-## How a score adds up
+## How the answers are used
 
-**Phase 1 (is it our ICP?)**
-
-1. **Exclusions first.** If any exclusion is confirmed, ICP = **NO**, with the proof in "Why".
-2. **Must-haves next.** If any must-have is a confirmed No, ICP = **NO**.
-3. **Needs check.** If a must-have or exclusion is "Needs check", ICP = **PENDING** until the AI check settles it.
-4. **Website not reached.** ICP = **PENDING**, retry later.
-5. Otherwise ICP = **YES**. Unknown must-haves never make a company a NO.
-
-**Phase 2 (lead score), only for YES and PENDING companies**
-
-6. **Size band.** SMB, MM or ENT from the employee count in your list (SMB if missing). This decides how "No finance person visible" and "Has a finance lead" are weighted.
-7. **Add points** for every fit and buying signal answered Yes: **high 3, medium 2, low 1**.
-8. **Subtract 2** for every weak signal answered Yes, skipping "Serves one local area" and "Sells hours of labour" if the company is a local professional services firm.
-9. **Tier:**
-   - **Strong fit:** score at or above the cut-off (12 for now, in scoring.json).
-   - **Weak fit:** below the cut-off.
-
-   The cut-off should be set from about 100 hand-labelled companies.
-10. **Later, AI writes** the reasoning (ending with the `Funding stage:` line) and the fit message, using only signals actually found.
-
-Needs check and Unknown always count 0 points. The score breakdown in the final list shows exactly which signals added or took away points.
+The ICP verdict (phase 1) and the lead score (phase 2) are calculated from these answers as described in [PIPELINE.md, step 6](PIPELINE.md#6-decide-the-icp-verdict-phase-1) and [step 8](PIPELINE.md#8-lead-score-phase-2). Weights are in [config/scoring.json](../config/scoring.json).

@@ -16,7 +16,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "config" / "prompts"
 REQUIRED = ["id", "data_point", "group", "stage", "model", "run_when", "input", "prompt", "output", "web_search"]
 REQUIRED_SECTIONS = ["task", "definition", "yes_when", "no_when", "unknown_when", "watch_out_for", "where_to_look"]
 SECTION_TITLES = {
