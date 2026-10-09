@@ -12,7 +12,7 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from rich.table import Table
 from rich.text import Text
 
-from .rules import SIGNALS
+from ..checks.rules import SIGNALS
 
 EXCLUSION_SHORT = {"E1": "Series C+", "E2": "No website", "E3": "Accounting firm", "E4": "Outside US",
                    "E5": "Non-profit", "E6": "Holds stock"}

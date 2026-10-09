@@ -17,7 +17,7 @@ from datetime import date
 
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
-from . import prompts as prompt_files
+from ..ai import prompts as prompt_files
 
 YES, NO, UNKNOWN, CHECK = "yes", "no", "unknown", "check"
 
@@ -230,7 +230,7 @@ RE_FUND_SENT = re.compile(r"\b(raised|raise|raising|funding|round|backed by|inve
 RE_MONEY = re.compile(r"\$\s?(\d+(?:\.\d+)?)\s?(million|billion|[MB])\b", re.I)
 RE_BIG_RAISE = re.compile(r"\b(?:rais(?:ed|es|ing)|closed|secur(?:ed|es)|announc(?:ed|es|ing))\b[^.]{0,40}\$\s?\d", re.I)
 RE_VALUATION = re.compile(r"valuation of \$\s?\d|\$\s?\d+(?:\.\d+)?\s?(?:billion|B)\s+valuation|valued at \$\s?\d", re.I)
-_late = json.loads((__import__("pathlib").Path(__file__).resolve().parent.parent / "config" / "scoring.json").read_text()).get("late_stage_proof", {})
+_late = json.loads((__import__("pathlib").Path(__file__).resolve().parents[2] / "config" / "scoring.json").read_text()).get("late_stage_proof", {})
 LATE_STAGE_ROUND_USD = _late.get("round_at_least_usd", 100_000_000)          # a single round this big is beyond Series B
 LATE_STAGE_VALUATION_USD = _late.get("valuation_at_least_usd", 1_000_000_000)
 RE_STAGE = re.compile(r"\b(pre-?seed|seed|series ([a-h]))\b", re.I)
@@ -981,7 +981,9 @@ class Extractor:
             self.ai.append("fit/runs_several_us_companies")
 
         if self.page("team"):
-            self.ai += ["fit/no_finance_person_visible", "fit/finance_lead_present", "fields/segment_headcount"]
+            self.ai += ["fit/no_finance_person_visible", "fit/finance_lead_present"]
+            if not self.employees:
+                self.ai.append("fields/segment_headcount")  # dropped later if a directory gives the team size
 
     def must_haves(self):
         tools = self.facts.get("tools", {})
@@ -1029,7 +1031,7 @@ class Extractor:
         """Free official directories (YC, SEC, IRS). They only fill what the rules above left open."""
         if not self.directory_fn:
             return
-        from . import directories
+        from ..sources import directories
         gate = decide(self.s, self.record.get("status"))["gate"]
         history = None
         if self.phase == "signals":  # old copies of the site, only where they could show a change
@@ -1108,17 +1110,24 @@ class Extractor:
             chosen.append("fit/venture_backed_stage")  # a directory proves funding, but not the stage
         if self.facts.get("entity_type", "Unknown") == "Unknown":
             chosen.append("fields/legal_entity_type")
-        if not self.employees:
+        if not self.employees and not self.facts.get("team_size_directory"):
             chosen.append("fields/segment_headcount")
         if self.competitor_mentions or self.competitors:
             chosen.append("fields/competitors_used")
         # phase 1 asks only must-have and exclusion prompts; phase 2 asks everything else.
         # Only prompts that read the website or job posts; search and final-output prompts run in later steps.
         icp_prompt = lambda pid: pid.startswith(("must_haves/", "exclusions/"))  # noqa: E731
-        settled = set()
-        if self.directories_found:
-            from .directories import settled_prompts
-            settled = settled_prompts(self.s) - {"fit/venture_backed_stage"}
+        # AI only for what scraping, rules and lookups didn't answer: a data point already confirmed (Yes or No) by
+        # code or a directory is never asked. The one exception: funding proven but its stage unknown.
+        known_prompts = prompt_files.load()[1]
+        settled = {pid for pid in chosen if known_prompts.get(pid, {}).get("signal_id") in self.s
+                   and self.s[known_prompts[pid]["signal_id"]]["value"] in (YES, NO)}
+        if self.facts.get("team_size_directory") or self.employees:
+            settled.add("fields/segment_headcount")
+        if self.facts.get("entity_type", "Unknown") != "Unknown":
+            settled.add("fields/legal_entity_type")
+        if not self.facts.get("funding_stage") and self.s.get("F1", {}).get("value") == YES:
+            settled.discard("fit/venture_backed_stage")
         return [pid for pid in dict.fromkeys(chosen)
                 if pid in known and pid not in settled
                 and (known[pid]["stage"] in ("site_text", "job_posts")

@@ -12,12 +12,12 @@ from rich.live import Live
 
 from .common import (ai_columns, ai_summary, console, files_and_disk, offer_cleanup, plain, prepare_list, rel,
                      run_rules, signal_columns, signal_summary, write_outputs)
-from .crawl import ICP_KINDS, Crawler, slim_html
+from ..sources.crawl import ICP_KINDS, Crawler, slim_html
 from . import final
-from .dashboard import Dashboard
-from .inputs import load_leads
-from .rules import SIGNALS
-from .store import Store
+from ..core.dashboard import Dashboard
+from ..core.inputs import load_leads
+from ..checks.rules import SIGNALS
+from ..core.store import Store
 
 OUTPUTS = {"csv": "icp_check.csv", "evidence": "icp_evidence.jsonl", "ai_queue": "icp_ai_queue.jsonl"}
 GROUPS = ("must", "exclusion")
@@ -121,7 +121,7 @@ def report(results: list[dict], folder: Path, store: Store, input_report: dict |
     ai_summary(results)
     files_and_disk(paths, store)
     final.write(folder, store)
-    from .runlog import log
+    from ..core.runlog import log
     log(folder, "Phase 1 (ICP check)", companies=len(results), verdicts=counts,
         browser_sites=sum(1 for r in results if (store.get_site(r["domain"]) or {}).get("via_browser")))
     nxt = sum(v for k, v in counts.items() if k.startswith("Yes") or k == "Needs AI check")

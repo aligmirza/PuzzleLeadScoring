@@ -16,7 +16,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-PROMPTS_DIR = Path(__file__).resolve().parent.parent / "config" / "prompts"
+PROMPTS_DIR = Path(__file__).resolve().parents[2] / "config" / "prompts"
 REQUIRED = ["id", "data_point", "group", "stage", "model", "run_when", "input", "prompt", "output", "web_search"]
 REQUIRED_SECTIONS = ["task", "definition", "yes_when", "no_when", "unknown_when", "watch_out_for", "where_to_look"]
 SECTION_TITLES = {
@@ -133,6 +133,65 @@ def build(prompt_id: str, company: str, domain: str, known_facts: dict, context:
 
 # ---------------------------------------------------------------------------
 # Step 2: web search
+def mode(name: str | None = None) -> dict:
+    """AI mode from _shared.json: accurate (one call per data point) or cheap (grouped)."""
+    shared = load()[0]
+    name = name or shared.get("default_mode", "accurate")
+    modes = shared.get("modes", {"accurate": {"site_group": 1, "web_group": 1}})
+    if name not in modes:
+        raise SystemExit(f"Unknown AI mode '{name}'. Modes in _shared.json: {', '.join(modes)}")
+    return {"name": name, **modes[name]}
+
+
+GROUP_INTRO = ("Answer each data point below on its own. Each has its own rules, definitions and answer format; never let "
+               "one answer influence another, and never copy evidence from one data point to another. "
+               "Put each answer under its own key (data_point_1, data_point_2, ...).")
+
+
+def build_group(prompt_ids: list[str], company: str, domain: str, known_facts: dict, context: dict) -> dict:
+    """Step 1 for several data points in one call: system text and page text once, each data point separate."""
+    msgs = [build(pid, company, domain, known_facts, context) for pid in prompt_ids]
+    parts = [GROUP_INTRO] + [f"===== data_point_{k}: {name(m['prompt_id'])} =====\n{m['instruction']}"
+                             for k, m in enumerate(msgs, start=1)]
+    return {"prompt_ids": prompt_ids, "model": msgs[0]["model"], "system": msgs[0]["system"], "context": msgs[0]["context"],
+            "instruction": "\n\n".join(parts),
+            "schema": {"type": "object", "properties": {f"data_point_{k}": m["schema"] for k, m in enumerate(msgs, start=1)}}}
+
+
+def build_search_group(prompt_ids: list[str], company: str, domain: str, known_facts: dict, legal_name: str | None,
+                       step1: dict[str, dict | None]) -> dict:
+    """Step 2 for several data points in one web search call: the searches are shared, each answer is separate."""
+    shared = load()[0]
+    cfg = shared["web_search_step"]
+    vars_ = variables(company, domain, legal_name)
+    parts = [f"Company: {vars_['company']}\nDomain: {vars_['domain']}\nLegal name (if known): {vars_['legal_name']}\n"
+             f"Today: {date.today().isoformat()}"]
+    if known_facts:
+        parts.append("Facts already confirmed (don't contradict them):\n" + "\n".join(f"- {k}: {v}" for k, v in known_facts.items()))
+    parts.append(GROUP_INTRO + " Plan searches that cover several data points at once (for example one search for "
+                 "recent funding and investor news), then answer each data point from what you found.")
+    parts.append("How to search:\n" + "\n".join(f"- {r}" for r in cfg["instructions"]))
+    parts.append("Entity match:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["entity_match"].items()))
+    parts.append("Confidence:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["confidence"].items()))
+    props = {}
+    for k, pid in enumerate(prompt_ids, start=1):
+        ws = load()[1][pid]["web_search"]
+        block = [f"===== data_point_{k}: {name(pid)} ====="]
+        if step1.get(pid):
+            block.append(f"Step 1 (the company's own website) found: {json.dumps(step1[pid])}")
+        block.append(instruction_text(pid).rsplit("Return only JSON", 1)[0].rstrip())
+        block.append("Suggested searches: " + "; ".join(queries(pid, vars_)))
+        block.append("Good sources: " + "; ".join(ws.get("good_sources", [])))
+        if ws.get("note"):
+            block.append(ws["note"])
+        parts.append("\n".join(block))
+        props[f"data_point_{k}"] = search_schema(pid)
+    schema = {"type": "object", "properties": props}
+    parts.append("Return only JSON matching this schema:\n" + json.dumps(schema))
+    return {"prompt_ids": prompt_ids, "step": 2, "model": model_for(cfg["model"]), "system": system_text(),
+            "instruction": "\n\n".join(parts), "tools": [provider()["web_search_tool"]], "schema": schema}
+
+
 def web_mode(prompt_id: str) -> str:
     """fallback, primary or off."""
     return load()[1][prompt_id]["web_search"]["mode"]

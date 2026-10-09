@@ -180,5 +180,18 @@
       }
     },
     "max_searches": 3
+  },
+  "default_mode": "accurate",
+  "modes": {
+    "accurate": {
+      "note": "One AI call per data point, and one web search call per data point. Most careful; the default.",
+      "site_group": 1,
+      "web_group": 1
+    },
+    "cheap": {
+      "note": "Several data points of one company per call: up to site_group questions read the company's pages together, and up to web_group web questions share one web search call. Same rules and answer formats; check with `python -m enrich evaluate` that answers hold up before using it on a big list.",
+      "site_group": 5,
+      "web_group": 5
+    }
   }
 }

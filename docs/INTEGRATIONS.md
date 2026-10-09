@@ -82,21 +82,73 @@ The API key is created once and stays the same until you rotate it.
 
 Interactive docs, where you can try every call: http://127.0.0.1:8787/docs
 
-Every `/v1` call needs the key as a header: `x-api-key: <key>` (or `Authorization: Bearer <key>`). Wrong or missing key: `401`.
+Every `/v1` call needs the key as a header: `x-api-key: <key>` (or `Authorization: Bearer <key>`). Wrong or missing key: `401`. Show the key with `python -m enrich settings --show-key`.
 
-| Method and path | What it does |
-|---|---|
-| `GET /health` | Is the API up (no key needed) |
-| `POST /v1/check` | One company, answered while you wait. Body: `{"domain": "acme.com", "company": "Acme", "employees": "12"}`. Options: `signals` (default true), `ai` (default false; costs money), `refresh`, `wait_seconds` (default 45) |
-| `POST /v1/lists` | Start a whole list in the background. Body: `{"name": "q4", "rows": [{"Domain": "...", ...}], "push_to_clay": true}` |
-| `POST /v1/lists/upload` | The same with a CSV file upload |
-| `GET /v1/lists/{name}` | Progress: state, current step, ICP YES / NO / PENDING counts, push result |
-| `GET /v1/lists/{name}/results` | Every row with all original columns + findings. `?format=csv`, `?only_icp=true`, `?limit=50` |
-| `POST /v1/lists/{name}/push` | Send a finished list to a Clay webhook. Body: `{"only_icp": false}` and optionally `clay_webhook_url` |
-| `GET /v1/clay/tables` | Tables in the signed-in Clay workspace |
-| `POST /v1/clay/pull` | Read a Clay table and run it as a new list. Body: `{"table_id": "t_abc123", "push_to_clay": true}` |
+The full description of every call (fields, types, examples) is in [docs/openapi.json](openapi.json), which any API tool (Postman, Insomnia, code generators) can import without the server running.
 
-**Speed:** a single `/v1/check` took about 5.5 seconds for a new company in testing, and is instant from the cache after that. If a check takes longer than `wait_seconds`, the answer is `"status": "still running"` and the check keeps going; calling again returns the result.
+**Safety rules:**
+- AI only runs when a request says `"ai": true` (or calls the AI endpoint).
+- Every AI run is estimated first. If the worst case is above `max_cost_usd` (default `API_AI_MAX_COST_USD` in `.env`, else $5), the request is refused with `402` and nothing is sent. The message gives the cheap-mode worst case too.
+- Nothing can be deleted through the API.
+
+| Group | Method and path | What it does |
+|---|---|---|
+| | `GET /health` | Is the API up (no key needed) |
+| Companies | `POST /v1/check` | One company, answered while you wait: ICP, reason, score, tier, reasoning, every data point. Cached. Body: `{"domain": "acme.com", "company": "Acme", "employees": "12"}`; options `signals`, `ai`, `ai_options`, `refresh`, `wait_seconds` |
+| Lists | `GET /v1/lists` | Every list with state and counts |
+| | `POST /v1/lists` | Start a whole list in the background. Body: `{"name": "q4", "rows": [{"Domain": "..."}], "ai": false, "callback_url": "https://..."}`; your other columns are kept |
+| | `POST /v1/lists/upload` | The same with a CSV file (form fields `name`, `ai`, `mode`, `max_cost_usd`, `callback_url`) |
+| | `GET /v1/lists/{name}` | Progress: state, step, AI usage and cost, counts, push and callback result |
+| | `GET /v1/lists/{name}/results` | Every row: original columns + findings. `?format=csv`, `?only_icp=true`, `?limit=50` |
+| | `GET /v1/lists/{name}/companies/{domain}` | One company: its row, every answer with proof (quote, page, source: code, directory or AI), directory findings |
+| | `POST /v1/lists/{name}/rules` | Re-apply rules to saved pages after changing scoring or rules. Free. Body: `{"phase": "both"}` |
+| AI | `GET /v1/lists/{name}/ai/estimate?phase=icp` | What the AI step would cost, in both modes. Nothing is sent |
+| | `POST /v1/lists/{name}/ai` | Run the AI step on an existing list in the background. Body: `{"phase": "icp", "ai_options": {"mode": "accurate", "max_cost_usd": 2}}` |
+| Quality | `POST /v1/lists/{name}/evaluate` | Accuracy against right answers, with every disagreement. Body: `{"labels": [{"Domain": "acme.com", "Expected ICP": "YES", "Expected tier": "Strong fit"}]}` |
+| | `GET /v1/lists/{name}/runs` | Run log with AI cost per run and in total |
+| Reference | `GET /v1/lookup?domain=puzzle.io&legal_name=Puzzle Financial Inc.` | YC, SEC and IRS for one company. Free |
+| | `GET /v1/signals` | Every data point: its column name, group and points |
+| Clay | `POST /v1/lists/{name}/push` | Send a list to a Clay webhook. Body: `{"only_icp": false}` |
+| | `GET /v1/clay/tables` | Tables in the signed-in Clay workspace |
+| | `POST /v1/clay/pull` | Read a Clay table and run it as a new list. Body: `{"table_id": "t_abc123", "push_to_clay": true}` |
+
+`ai_options` (on `check`, `lists`, `clay/pull` and the AI endpoint): `mode` (`accurate` default, or `cheap`), `web` (true), `search_signals` (true; the web-only buying signals), `max_cost_usd`.
+
+**Callback:** give `callback_url` and, when the list finishes (or stops at the cost limit), its status with the summary is POSTed there as JSON, with 3 tries. The result is shown under `callback` in the list's status.
+
+**Status codes:** `200` done, `202` started in the background, `400` bad request, `401` key, `402` above the AI cost limit (nothing sent), `404` no such list or company.
+
+**Speed:** a new company takes about 5 to 35 seconds with `/v1/check` (a site read with the real browser is slower), and is instant from the cache after that. If a check takes longer than `wait_seconds`, the answer is `"status": "still running"` and the check keeps going; calling again returns the result.
+
+### Examples
+
+```bash
+KEY=$(.venv/bin/python -c "from enrich import settings; print(settings.api_key(create=False))")
+API=http://127.0.0.1:8787
+
+# one company
+curl -s -X POST $API/v1/check -H "x-api-key: $KEY" -H "Content-Type: application/json" \
+     -d '{"domain": "linear.app", "company": "Linear"}'
+
+# a CSV in the background, with AI capped at $3 and a callback
+curl -s -X POST $API/v1/lists/upload -H "x-api-key: $KEY" \
+     -F file=@leads.csv -F name=q4 -F ai=true -F max_cost_usd=3 -F callback_url=https://example.com/hook
+curl -s $API/v1/lists/q4 -H "x-api-key: $KEY"                       # progress
+curl -s "$API/v1/lists/q4/results?format=csv&only_icp=true" -H "x-api-key: $KEY" > q4_icp.csv
+```
+
+```python
+import httpx, time
+
+api = httpx.Client(base_url="http://127.0.0.1:8787", headers={"x-api-key": "<key>"}, timeout=120)
+api.post("/v1/lists", json={"name": "q4", "rows": [{"Company Name": "Linear", "Domain": "linear.app"}]})
+while api.get("/v1/lists/q4").json()["state"] in ("queued", "running"):
+    time.sleep(5)
+print(api.get("/v1/lists/q4/ai/estimate", params={"phase": "icp"}).json())       # cost first
+api.post("/v1/lists/q4/ai", json={"phase": "icp", "ai_options": {"max_cost_usd": 1}})
+for row in api.get("/v1/lists/q4/results", params={"only_icp": True}).json()["rows"]:
+    print(row["Domain"], row["Lead score"], row["Lead tier"])
+```
 
 ### Making the API reachable for Clay
 
@@ -169,7 +221,7 @@ The project's `.mcp.json` registers it for Claude Code, so anyone who opens the 
 | `pull_clay_table` | Read a Clay table and run it as a list |
 | `push_list_to_clay` | Send a finished list to a Clay webhook |
 
-For **Claude Desktop**, add this to its config file (`~/Library/Application Support/Claude/claude_desktop_config.json`), with your own project path:
+For **Claude Desktop**: Settings > Developer > Edit Config opens `~/Library/Application Support/Claude/claude_desktop_config.json`. Add this inside it (keep what's already there), with your own project path, then quit Claude Desktop fully (Cmd+Q) and open it again. Use full paths: Claude Desktop doesn't start in the project folder, which is why `PYTHONPATH` points to it. Keys, lists and settings are found from the project folder automatically.
 
 ```json
 {
@@ -177,7 +229,7 @@ For **Claude Desktop**, add this to its config file (`~/Library/Application Supp
     "puzzle-lead-scoring": {
       "command": "/Users/<you>/path/to/PuzzleLeadScoring/.venv/bin/python",
       "args": ["-m", "enrich", "mcp"],
-      "cwd": "/Users/<you>/path/to/PuzzleLeadScoring"
+      "env": {"PYTHONPATH": "/Users/<you>/path/to/PuzzleLeadScoring"}
     }
   }
 }

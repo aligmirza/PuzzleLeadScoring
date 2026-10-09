@@ -14,7 +14,7 @@ Confidence rules (from config/prompts/_shared.json):
 import re
 
 from . import prompts as P
-from .rules import CHECK, SIGNALS, UNKNOWN, decide
+from ..checks.rules import CHECK, SIGNALS, UNKNOWN, decide
 
 
 NOT_MENTIONED = re.compile(r"\b(?:does|do|did) not (?:mention|indicate|state|show|say|provide|confirm)|\bno (?:mention|evidence|indication|information)\b"

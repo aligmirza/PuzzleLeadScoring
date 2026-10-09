@@ -16,22 +16,22 @@ The work runs in **two separate phases**, each with its own script. Phase 1 deci
 ```mermaid
 flowchart TD
     subgraph P1["Phase 1: Is it our ICP? (icp_check.py leads.csv)"]
-        A1["Read the list<br/>leads.csv"]
-        A2["Download only the pages must-haves and exclusions need<br/>home, about, pricing, careers, privacy, terms, legal, contact,<br/>security, investor relations, donate, shipping + open jobs"]
-        A3["Must-have and exclusion rules<br/>(free)"]
-        A3b["Free directories: YC, SEC, IRS<br/>public company, non-profit, US address<br/>(free)"]
-        A4{"Verdict per company"}
-        A5["AI prompts for must-haves and exclusions,<br/>only where a rule said Needs check"]
-        A6["output/icp_check.csv,<br/>icp_evidence.jsonl, icp_ai_queue.jsonl"]
+    A1["Read the list<br/>leads.csv"]
+    A2["Download only the pages must-haves and exclusions need<br/>home, about, pricing, careers, privacy, terms, legal, contact,<br/>security, investor relations, donate, shipping + open jobs"]
+    A3["Must-have and exclusion rules<br/>(free)"]
+    A3b["Free directories: YC, SEC, IRS<br/>public company, non-profit, US address<br/>(free)"]
+    A4{"Verdict per company"}
+    A5["AI prompts for must-haves and exclusions,<br/>only where a rule said Needs check"]
+    A6["output/icp_check.csv,<br/>icp_evidence.jsonl, icp_ai_queue.jsonl"]
         A1 --> A2 --> A3 --> A3b --> A4 --> A5 --> A6
     end
 
     subgraph P2["Phase 2: Signals (signals_check.py leads)"]
-        B1["Download the extra pages signals need<br/>team, blog, engineering blog, integrations,<br/>customers, locations, menu<br/>starting from phase 1's saved homepage"]
-        B2["Fit, buying and weak signal rules<br/>(free)"]
-        B2b["Free directories: YC, SEC<br/>funding, Delaware, YC backing, team size<br/>(free, saved from phase 1)"]
-        B3["AI prompts for signals<br/>business type, industry, AI core,<br/>plus anything marked Needs check"]
-        B4["Lead score, tier, segment<br/>output/signals.csv,<br/>signals_evidence.jsonl, signals_ai_queue.jsonl"]
+    B1["Download the extra pages signals need<br/>team, blog, engineering blog, integrations,<br/>customers, locations, menu<br/>starting from phase 1's saved homepage"]
+    B2["Fit, buying and weak signal rules<br/>(free)"]
+    B2b["Free directories: YC, SEC<br/>funding, Delaware, YC backing, team size<br/>(free, saved from phase 1)"]
+    B3["AI prompts for signals<br/>business type, industry, AI core,<br/>plus anything marked Needs check"]
+    B4["Lead score, tier, segment<br/>output/signals.csv,<br/>signals_evidence.jsonl, signals_ai_queue.jsonl"]
         B1 --> B2 --> B2b --> B3 --> B4
     end
 
@@ -49,8 +49,8 @@ flowchart TD
     class N no
 ```
 
-| | Phase 1: ICP check | Phase 2: signals |
-|---|---|---|
+|  | Phase 1: ICP check | Phase 2: signals |
+| --- | --- | --- |
 | Runs on | Every company in the list | Only companies that passed phase 1 |
 | Pages downloaded | 12 page types needed for must-haves and exclusions | 7 more page types, added to phase 1's pages |
 | Rules | 4 must-haves, 6 exclusions | 21 fit, 14 buying, 12 weak signals |
@@ -61,10 +61,12 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 
 ---
 
+**To see every step for one company:** `python -m enrich trace acme.com` runs the whole flow for that company and stops after each step, showing what it received, found (with proof) and decided. `--ai` adds the AI steps (it shows the cost and asks first). The trace is saved as a Markdown report.
+
 ## 2. What starts what
 
 | When this happens | It triggers |
-|---|---|
+| --- | --- |
 | You run phase 1 (`icp_check.py leads.csv`) | Steps 3 to 10 for the whole list |
 | You run phase 2 (`signals_check.py leads`) | Steps 4 to 10 for companies phase 1 passed |
 | The list folder doesn't exist yet | A new folder `lists/leads/` and a copy of your CSV |
@@ -93,7 +95,7 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 
 ## 3. Read the list
 
-**Code:** [enrich/inputs.py](../enrich/inputs.py)
+**Code:** [enrich/core/inputs.py](../enrich/core/inputs.py)
 
 1. Finds the columns by name. Any of these work:
    - domain: Domain, Website, URL, Company Domain
@@ -107,7 +109,7 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 
 ## 4. Download each website
 
-**Code:** [enrich/crawl.py](../enrich/crawl.py) (`crawl` for phase 1, `crawl_more` for phase 2)
+**Code:** [enrich/sources/crawl.py](../enrich/sources/crawl.py) (`crawl` for phase 1, `crawl_more` for phase 2)
 
 **Real-browser fallback:** when a homepage needs JavaScript to show its text, or shows a short "checking your browser" page, the site is read again with your installed Google Chrome (headless, at most 3 pages at a time), and every other page of that site is read the same way. Khan Academy went from 209 to 8,682 characters of text. Hard blocks (Cloudflare "Attention Required") usually stay blocked and are reported as such. `--no-browser` turns it off.
 
@@ -144,7 +146,7 @@ flowchart LR
 **Site status.** A site is only marked dead when public DNS also says the domain doesn't exist. In testing, the local router failed on 4 of 14 real domains; those stay PENDING instead of being failed.
 
 | Status | Meaning | Effect |
-|---|---|---|
+| --- | --- | --- |
 | Live | Homepage loaded | Rules run |
 | Dead | Domain doesn't exist (confirmed by public DNS), or 404 / 410 | ICP = NO (no live website) |
 | Blocked | Bot protection (Cloudflare and similar) | PENDING, retry with a real browser |
@@ -153,7 +155,7 @@ flowchart LR
 **Pages it looks for.** Phase 1 downloads the first group; phase 2 adds the rest. Pages that turn out to be the homepage again, or "not found" pages, are thrown away. If the team, careers, privacy, terms, legal or security page is still missing, the links on already-downloaded pages are followed one level deeper.
 
 | Page | Phase | Used for |
-|---|---|---|
+| --- | --- | --- |
 | About, Pricing, Careers, Contact | 1 | Location, paid pricing, checkout, hiring, job board link |
 | Privacy, Terms, Legal, Security | 1 | Legal name, state of incorporation, tools used (vendor lists) |
 | Investor relations, Donate, Shipping | 1 | Possible public company, non-profit, physical stock |
@@ -172,12 +174,12 @@ flowchart LR
 
 ## 5. Apply the rules
 
-**Code:** [enrich/rules.py](../enrich/rules.py). **Cost:** nothing, it's pattern matching on saved pages.
+**Code:** [enrich/checks/rules.py](../enrich/checks/rules.py). **Cost:** nothing, it's pattern matching on saved pages.
 
 Each check gives one of four answers. Every Yes and No is saved with a short quote and the page it came from.
 
 | Answer | Meaning | Effect |
-|---|---|---|
+| --- | --- | --- |
 | **Yes** | Proof found | Counts |
 | **No** | Proof of the opposite found. Never a guess, and never "nothing found" | Counts |
 | **Needs check** | A clue, but not certain, or two sources disagree | That data point's AI prompt is added |
@@ -187,8 +189,8 @@ Yes and No are only given when confirmed. A clue that points one way but isn't p
 
 The checks run in this order, because later checks use earlier answers:
 
-| # | Check | Looks at |
-|---|---|---|
+| \# | Check | Looks at |
+| --- | --- | --- |
 | 1 | Website | Live, parked, "coming soon", needs JavaScript |
 | 2 | Location and entity | US address, governing law, legal name, entity type |
 | 3 | Pricing and sales | Prices, checkout, app store, waitlist |
@@ -205,7 +207,7 @@ The checks run in this order, because later checks use earlier answers:
 **How the rules avoid false matches:**
 
 | Situation | What the rule does |
-|---|---|
+| --- | --- |
 | "Connect your Stripe account" | Integration wording, so **Needs check**, not Yes |
 | "The payment processors we work with are: Stripe" | Real usage, so **Yes** |
 | "VibeGrade (YC X25)" in a customer story | Not the company's own backing, so ignored |
@@ -220,12 +222,12 @@ The checks run in this order, because later checks use earlier answers:
 
 ### Free directories: YC, SEC, IRS
 
-**Code:** [enrich/directories.py](../enrich/directories.py). **Cost:** nothing; no account or key needed.
+**Code:** [enrich/sources/directories.py](../enrich/sources/directories.py). **Cost:** nothing; no account or key needed.
 
 Right after the rules, every company is looked up in three free official sources. A directory answer fills what the rules left open (Needs check or Unknown). When a strong directory match **disagrees** with the website (say the site's clues point to the UK but the YC directory says San Francisco), neither wins: the answer becomes Needs check with both proofs, and the AI step decides. The company is not made a NO on contested evidence. One exception: an IRS listing overrules the "it has Inc. in its name, so it's for-profit" guess, because many non-profits are incorporated.
 
 | Directory | Matched by | Answers |
-|---|---|---|
+| --- | --- | --- |
 | YC directory (about 6,300 companies; a daily copy of ycombinator.com/companies, refreshed weekly) | Website domain, and the YC entry's name must match the company and not be marked Acquired (Paribus's YC page points to ramp.com) | YC-backed, funded (YC invests in all), public, non-profit, US location (outside the US raises a Needs check), team size |
 | SEC EDGAR (company search and company records) | Legal name from the company's own site | Public (stock ticker on a US exchange), raised private funding (Form D), Delaware corporation, US business address |
 | IRS Publication 78 (1.4 million tax-exempt organisations, refreshed monthly) | Legal name from the company's own site, plus the same state | Non-profit |
@@ -233,7 +235,7 @@ Right after the rules, every company is looked up in three free official sources
 **How strong a match has to be:**
 
 | Match | When | Can do |
-|---|---|---|
+| --- | --- | --- |
 | Strong | YC by domain; SEC or IRS by the legal name found on the company's own site (IRS also needs the same state, or a single organisation with that name in the US) | Anything, including making a company NO |
 | Medium | The list's company name plus the same city or state as the site's address | Yes or No on fit signals; an exclusion only becomes a Needs check |
 | Weak | The list's company name alone | Nothing, except an exclusion clue becomes a Needs check for the AI step |
@@ -241,7 +243,7 @@ Right after the rules, every company is looked up in three free official sources
 Examples from the test list:
 
 | Company | Found | Effect |
-|---|---|---|
+| --- | --- | --- |
 | hubspot.com | SEC: HUBSPOT INC, NYSE: HUBS (legal name match) | Excluded as public. The site alone had missed it, so it used to pass |
 | puzzle.io | SEC: Puzzle Financial Inc., Delaware, Form D 2021 and 2023 | Delaware C-Corp and venture-backed confirmed; score 9 to 15 |
 | resend.com | YC Winter 2023, 45 people | Confirms YC backing and funding; team size for the segment if the list has none |
@@ -252,7 +254,7 @@ Examples from the test list:
 **Buying signals the free sources answer:**
 
 | Signal | Proof |
-|---|---|
+| --- | --- |
 | Raised money in the last 6 months | A Form D filed on SEC EDGAR in the last 183 days |
 | New investor or accelerator | A YC batch in the last 12 months |
 | Converted from an LLC to a C-Corp | SEC record renamed from "Acme LLC" to "Acme Inc" in the last 18 months, or the site's footer 6 to 18 months ago said LLC and says Inc. today |
@@ -312,9 +314,9 @@ flowchart TD
 
 ## 7. AI: one prompt per data point, in two steps
 
-**Code:** [enrich/prompts.py](../enrich/prompts.py) and the [config/prompts/](../config/prompts/) folder. **Runs for:** companies that aren't a NO and whose site was reached.
+**Code:** [enrich/ai/prompts.py](../enrich/ai/prompts.py) and the [config/prompts/](../config/prompts/) folder. **Runs for:** companies that aren't a NO and whose site was reached.
 
-**Code:** [enrich/ai.py](../enrich/ai.py) calls OpenAI; [enrich/ai_apply.py](../enrich/ai_apply.py) turns answers into signal values.
+**Code:** [enrich/ai/runner.py](../enrich/ai/runner.py) calls OpenAI; [enrich/ai/apply.py](../enrich/ai/apply.py) turns answers into signal values.
 
 ### Running it
 
@@ -324,6 +326,15 @@ The AI step runs separately, after each phase, so you can see the cost first:
 .venv/bin/python ai_check.py leads --phase icp       # after phase 1 (key from .env)
 .venv/bin/python ai_check.py leads --phase signals   # after phase 2
 ```
+
+**Two modes** (`--mode`, default in `config/prompts/_shared.json`):
+
+| Mode | Step 1 (our pages) | Step 2 (web search) | Example: one ICP company in phase 2 |
+| --- | --- | --- | --- |
+| `accurate` (default) | One call per data point | One call per data point | 35 calls |
+| `cheap` | Up to 5 data points of the company per call; page text sent once | Up to 5 web questions share one call and its searches | 8 calls |
+
+Both modes use the same prompt files, rules and answer formats, and each data point still gets its own saved answer, so every check in this section applies to both. A grouped call's cost is split evenly across its data points. The estimate before a run shows both modes. To check the cheap mode on your own companies: `python -m enrich copy leads leads_cheap`, `ai_check.py leads_cheap --mode cheap` (both phases), then `python -m enrich compare leads leads_cheap` lists every answer that differs.
 
 Phase 2 also asks the signals only web search can answer (recent funding, new investor, QuickBooks complaints...): 9 web searches per ICP company, about $0.10 to $0.30. `--no-search-signals` skips them; those buying signals then stay empty.
 
@@ -339,7 +350,7 @@ Models and prices are set in `providers.openai` in `config/prompts/_shared.json`
 Every AI question lives in its own JSON file, one per data point (62 in total). Shared rules for all of them are in `config/prompts/_shared.json`.
 
 | Folder | Files | Phase |
-|---|---|---|
+| --- | --- | --- |
 | `must_haves/` | 4, e.g. `based_in_us.json` | 1 |
 | `exclusions/` | 6, e.g. `nonprofit_or_government.json` | 1 |
 | `fit/` | 21, e.g. `uses_stripe_billing.json` | 2 |
@@ -351,7 +362,7 @@ Every AI question lives in its own JSON file, one per data point (62 in total). 
 Every file has the same sections:
 
 | Section | What it holds |
-|---|---|
+| --- | --- |
 | `data_point`, `group`, `weight` | What is being decided and how much it counts |
 | `run_when` | The condition that triggers this prompt |
 | `input` | Which saved pages step 1 reads |
@@ -362,15 +373,18 @@ Every file has the same sections:
 
 ### Which prompts a company gets
 
+**AI is only used for what scraping, the rules and the lookups didn't answer.** After the list below is built, a final filter drops every question whose answer the free checks already confirmed (Yes or No), plus company size when your list or the YC directory gives a headcount, and legal entity type when it's known. The one exception: when SEC or YC proves a company is funded but nothing free shows the stage, the funding question is still asked, for the stage only.
+
 | Trigger | Prompts added |
-|---|---|
-| Every company in phase 2 | Startup selling nationally, B2B SaaS, Local professional services, Billed labour, Vertical, AI core, Manufacturing, Heavy invoicing |
+| --- | --- |
+| Every company in phase 2 (judgement calls no formula can make) | Startup selling nationally, B2B SaaS, Local professional services, Billed labour, Vertical, AI core, Manufacturing, Heavy invoicing |
 | A rule returned **Needs check** | That data point's prompt (e.g. Accounting firm, Non-profit, Uses Stripe) |
 | Location unclear | Based in the US |
-| Funding unknown | Venture-backed stage |
+| Funding unknown, or funding proven but stage unknown | Venture-backed stage |
 | Entity type unknown | Legal entity type |
-| Employee count missing from your list | Segment (company size) |
-| Team page found | No finance person visible, Finance lead present, Segment |
+| No headcount from your list or the YC directory | Segment (company size) |
+| Team page found | No finance person visible, Finance lead present |
+| Phase 2, buying signals the free sources left open | Raised in 6 months, new investor, LLC to C-Corp, incorporated recently, new subsidiary, QuickBooks complaints, launched pricing, board member, accountant picks tools (web search) |
 | Competitor tools mentioned | Competitor tools used |
 
 ### Two steps: our data first, then the internet
@@ -405,7 +419,7 @@ flowchart LR
 ```
 
 | Variable | Filled with | Example |
-|---|---|---|
+| --- | --- | --- |
 | `{company}` | Company name from your list | Resend |
 | `{domain}` | Cleaned domain from your list | resend.com |
 | `{legal_name}` | Legal name found in phase 1, else the company name | Resend |
@@ -414,7 +428,7 @@ flowchart LR
 Example query for "Venture-backed": `"Resend" raises seed OR "Series A" OR "Series B"`.
 
 | Web search mode | When step 2 runs | Data points |
-|---|---|---|
+| --- | --- | --- |
 | `fallback` | Only if step 1 found nothing or only low confidence | 47 (e.g. Delaware C-Corp, venture-backed, accounting firm, headcount) |
 | `primary` | Always; step 1 is skipped because the answer normally only exists on the web | 10 (e.g. raised in the last 6 months, new board member, QuickBooks complaints) |
 | `off` | Never; the web can't prove it | 5 (live website, no finance person visible, no fintech tools, reasoning, fit message) |
@@ -422,15 +436,15 @@ Example query for "Venture-backed": `"Resend" raises seed OR "Series A" OR "Seri
 **Is it the same company?** Many companies share names, so step 2 reports an entity match: `domain` (a source mentions the domain), `name_and_location`, `name_only` (unreliable for common names) or `none`.
 
 | Confidence | Means | Counts? |
-|---|---|---|
+| --- | --- | --- |
 | High | Official record (SEC, state registry, IRS), the company's own page, or 2+ independent reputable sources, with a domain match | Yes, including making a company NO |
 | Medium | One reputable source (major press, Crunchbase, LinkedIn company page, YC directory, job board), with a domain or name-and-location match | Yes, but can't make a company NO |
 | Low | Name-only match, SEO or aggregator page, old information, or sources disagree | No; stays Unknown, kept as a hint |
 
-On top of these, three checks apply to every AI answer (in [enrich/ai_apply.py](../enrich/ai_apply.py)):
+On top of these, three checks apply to every AI answer (in [enrich/ai/apply.py](../enrich/ai/apply.py)):
 
 | Check | Why |
-|---|---|
+| --- | --- |
 | A Yes or No needs an exact quote as proof; without one it stays empty | In testing, the AI called a bootstrapped consultancy "venture-backed (estimated)" with no quote at all |
 | "The text doesn't mention X" is never a No | The AI answered "not Series C" for companies whose pages simply didn't mention funding |
 | An estimated funding stage is shown in "Funding stage" but earns no points | Only a confirmed stage counts toward the score |
@@ -442,7 +456,7 @@ Step 2 never runs for a company that's already a NO, phase 2's AI only runs on c
 ### How a message is built
 
 | Part | Content | Same for every call? |
-|---|---|---|
+| --- | --- | --- |
 | System | Role, ICP summary, ground rules | Yes |
 | Context | Company, today, facts code already proved, page text | Yes, for all prompts of one company, so it's cached after the first call |
 | Instruction | One data point's sections, examples and JSON schema | No, changes per data point |
@@ -453,16 +467,16 @@ Passing in the facts code already proved stops the AI from contradicting them.
 
 ## 8. Lead score (phase 2)
 
-**Code:** [enrich/scoring.py](../enrich/scoring.py). **Weights:** [config/scoring.json](../config/scoring.json), editable without touching code.
+**Code:** [enrich/checks/scoring.py](../enrich/checks/scoring.py). **Weights:** [config/scoring.json](../config/scoring.json), editable without touching code.
 
 Each signal answered Yes adds points by its weight in profile.yaml. Needs check and Unknown add nothing.
 
 | Weight | Points |
-|---|---|
+| --- | --- |
 | High | +3 |
 | Medium | +2 |
 | Low | +1 |
-| Weak fit signal | -2 |
+| Weak fit signal | \-2 |
 
 ```mermaid
 flowchart LR
@@ -479,6 +493,7 @@ flowchart LR
 ```
 
 Profile rules built into the score:
+
 - **Segment** from the employee count in your list: 1 to 5 SMB, 6 to 25 MM, 26+ ENT; on a boundary the lower band; SMB if missing.
 - "No finance person visible" counts medium for SMB, low for MM and not at all for ENT. "Has a finance lead" counts only for MM and ENT.
 - A company is either a startup selling nationally or a local professional services firm, never both. A local services firm isn't also penalised for being local.
@@ -486,7 +501,7 @@ Profile rules built into the score:
 The two real scores from the 14-company test:
 
 | Company | Score | Tier | Breakdown |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | linear.app | **21** | Strong fit | Stripe +3, Delaware C-Corp +3, Paid pricing +3, Several open roles +2, Growth numbers +2, Remote-first +2, Early adopter +2, Hiring +2, Tax deadline +2 |
 | resend.com | **15** | Strong fit | Venture-backed +3, Stripe +3, Paid pricing +3, YC +2, Remote-first +2, Tax deadline +2 |
 
@@ -515,10 +530,10 @@ lists/leads/output/
   evaluation.csv           after `evaluate`: every disagreement with the right answers, with our proof
 ```
 
-**The main file, `leads_enriched.csv`,** is your list exactly as you gave it (same rows, order and columns), with findings added on the right. It's rewritten after each phase.
+**The main file,** `leads_enriched.csv`**,** is your list exactly as you gave it (same rows, order and columns), with findings added on the right. It's rewritten after each phase.
 
 | Added column | Example |
-|---|---|
+| --- | --- |
 | ICP | YES, NO or PENDING |
 | ICP status, Why | "All 4 must-haves confirmed"; "Mainly operates outside the US: foreign legal entity: API Hero Ltd." |
 | Reasoning | A short summary in plain words, ending with the profile's line, e.g. "Funding stage: Seed (confirmed)". Values: Pre-Seed, Seed, Series A, Series B, Series C or later, Bootstrapped, Unknown; basis: confirmed, estimated, not found |
@@ -531,7 +546,7 @@ lists/leads/output/
 | One column per data point | "Fit: Uses Stripe for billing" = Yes |
 
 | Special row | What you'll see |
-|---|---|
+| --- | --- |
 | Duplicate domain | Same findings as the first row, plus "Duplicate of row N" |
 | No usable domain | ICP = NO, "Domain is empty or not a valid domain" |
 | Website not reached | ICP = PENDING, retry later |
@@ -568,7 +583,7 @@ flowchart LR
 ```
 
 | Option | What's offered for deletion |
-|---|---|
+| --- | --- |
 | `--keep useful` (default) | Companies phase 1 marked NO |
 | `--keep none` | All raw pages in the list |
 | `--keep all` | Nothing, no question asked |
@@ -608,7 +623,7 @@ Phase 2 shows the same progress bars, then running counts of fit, buying and wea
 ## 12. Data sources and what comes next
 
 | Source | What it gives | Status |
-|---|---|---|
+| --- | --- | --- |
 | Company website, read by code | Most must-haves, exclusions and signals (see SIGNALS.md) | Built |
 | Job board feeds | Open roles, job descriptions | Built |
 | AI reading our saved pages | Judgment calls: business type, industry, AI core, confirming "Needs check" | Built (OpenAI gpt-4o-mini); first real run pending |
@@ -632,7 +647,7 @@ flowchart TD
 ```
 
 | When this lands | Effect on the final list |
-|---|---|
+| --- | --- |
 | Free directories (built) | Public companies caught (HubSpot); funding and Delaware status confirmed (Puzzle); fewer AI calls |
 | First real AI run | PENDING becomes YES or NO; the highest-weighted signals start counting, so scores rise for real startups; industry filled in |
 | Grouped prompts | Same answers at roughly a third of the AI cost |

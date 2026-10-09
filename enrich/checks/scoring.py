@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .rules import SIGNALS
 
-CONFIG = Path(__file__).resolve().parent.parent / "config" / "scoring.json"
+CONFIG = Path(__file__).resolve().parents[2] / "config" / "scoring.json"
 
 
 @lru_cache(maxsize=1)

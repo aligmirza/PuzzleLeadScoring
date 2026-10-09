@@ -5,16 +5,17 @@ Runs locally over stdio:   python -m enrich mcp
 """
 import sys
 
-from . import common
+from ..pipeline import common
 
 # stdout carries the MCP protocol, so all of the tool's own printing goes to stderr
 common.console.file = sys.stderr
 
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 
-from . import clay, service  # noqa: E402
-from .rules import SIGNALS, VALUE_NAMES  # noqa: E402
-from .store import Store  # noqa: E402
+from . import clay  # noqa: E402
+from . import service
+from ..checks.rules import SIGNALS, VALUE_NAMES  # noqa: E402
+from ..core.store import Store  # noqa: E402
 
 mcp = MCPServer(
     name="puzzle-lead-scoring",
@@ -67,8 +68,8 @@ def list_results(list_name: str, only_icp: bool = True, limit: int = 25) -> dict
 @mcp.tool()
 def explain_company(domain: str, list_name: str = service.SINGLE_LIST) -> dict:
     """Every answer for one company with its proof (quote and page link), for phase 1 and phase 2."""
-    from .common import LISTS
-    from .inputs import normalize_domain
+    from ..pipeline.common import LISTS
+    from ..core.inputs import normalize_domain
     d = normalize_domain(domain) or domain
     store = Store(LISTS / list_name)
     out = {}

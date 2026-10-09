@@ -37,11 +37,10 @@ from urllib.parse import quote
 
 import httpx
 
-from . import prompts as prompt_files
-from .inputs import normalize_domain
-from .rules import CHECK, NO, SIGNALS, UNKNOWN, US_STATES, YES, sig
+from ..core.inputs import normalize_domain
+from ..checks.rules import CHECK, NO, SIGNALS, UNKNOWN, US_STATES, YES, sig
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / "cache"
 ENABLED = True  # switched off with --no-directories
 VERSION = 3  # raise when the matching rules change, so saved lookups are redone
@@ -528,7 +527,7 @@ def _usd(text: str | None) -> float | None:
 
 
 def _late_stage_round() -> float:
-    from .rules import LATE_STAGE_ROUND_USD
+    from ..checks.rules import LATE_STAGE_ROUND_USD
     return LATE_STAGE_ROUND_USD
 
 
@@ -538,13 +537,6 @@ def _yc_batch_date(batch: str) -> date | None:
     if not m:
         return None
     return date(int(m.group(2)), {"Winter": 1, "Spring": 4, "Summer": 6, "Fall": 9}[m.group(1)], 1)
-
-
-def settled_prompts(s: dict) -> set[str]:
-    """AI prompts a directory already answered, so they are not asked (and paid for)."""
-    by_signal = prompt_files.by_signal()
-    return {by_signal[sid] for sid, v in s.items()
-            if v.get("method") == "directory" and v["value"] in (YES, NO) and sid in by_signal}
 
 
 # status / refresh ---------------------------------------------------------

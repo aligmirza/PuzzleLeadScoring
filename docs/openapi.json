@@ -1,0 +1,1925 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PuzzleLeadScoring API",
+    "description": "Check companies against Puzzle's ICP, score them, and exchange lists with other tools. Every /v1 call needs the header `x-api-key`. AI only runs when asked, within a cost limit.",
+    "version": "2.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "description": "Is the API up (no key needed).",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/check": {
+      "post": {
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Check",
+        "description": "One company, answered while you wait: ICP YES/NO/PENDING with the reason, lead score, tier, reasoning and\nevery data point. Cached, so asking again is instant. Use this from a Clay HTTP API column.",
+        "operationId": "check_v1_check_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists": {
+      "get": {
+        "tags": [
+          "Lists"
+        ],
+        "summary": "All Lists",
+        "description": "Every list with its state and counts (ICP YES / NO / PENDING, Strong fit).",
+        "operationId": "all_lists_v1_lists_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Lists"
+        ],
+        "summary": "Create List",
+        "description": "Start a whole list in the background: phase 1, optional AI, phase 2, optional AI, final list, optional Clay\npush and callback. Follow it with GET /v1/lists/{name}.",
+        "operationId": "create_list_v1_lists_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/upload": {
+      "post": {
+        "tags": [
+          "Lists"
+        ],
+        "summary": "Upload List",
+        "description": "Same as POST /v1/lists, with a CSV file upload.",
+        "operationId": "upload_list_v1_lists_upload_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_list_v1_lists_upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}": {
+      "get": {
+        "tags": [
+          "Lists"
+        ],
+        "summary": "Get List",
+        "description": "Progress: state, current step, AI usage, ICP YES / NO / PENDING counts, push and callback result.",
+        "operationId": "get_list_v1_lists__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/results": {
+      "get": {
+        "tags": [
+          "Lists"
+        ],
+        "summary": "Get Results",
+        "description": "Every row of the list: your original columns plus ICP, score, tier, reasoning and every data point.",
+        "operationId": "get_results_v1_lists__name__results_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "type": "string",
+              "default": "json",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "only_icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Only Icp"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/companies/{domain}": {
+      "get": {
+        "tags": [
+          "Lists"
+        ],
+        "summary": "Company",
+        "description": "One company in a list: its result row, every answer with its proof (quote, page, source: code, directory\nor AI) and what the free directories found.",
+        "operationId": "company_v1_lists__name__companies__domain__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/rules": {
+      "post": {
+        "tags": [
+          "Lists"
+        ],
+        "summary": "Rules",
+        "description": "Re-apply the rules to saved pages, e.g. after changing scoring.json. Free: no downloading, no AI.",
+        "operationId": "rules_v1_lists__name__rules_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulesIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/push": {
+      "post": {
+        "tags": [
+          "Clay"
+        ],
+        "summary": "Push",
+        "description": "Send the list's rows to a Clay table webhook, one row per request.",
+        "operationId": "push_v1_lists__name__push_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/ai/estimate": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Ai Estimate",
+        "description": "What the AI step would cost for this list, in both modes. Nothing is sent.",
+        "operationId": "ai_estimate_v1_lists__name__ai_estimate_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "phase",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "icp",
+                "signals"
+              ],
+              "type": "string",
+              "title": "Phase"
+            }
+          },
+          {
+            "name": "search_signals",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Search Signals"
+            }
+          },
+          {
+            "name": "web",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Web"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/ai": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "summary": "Ai Run",
+        "description": "Run the AI step on an existing list in the background (after phase 1: phase=icp; after phase 2:\nphase=signals). Refused if the estimate could exceed ai_options.max_cost_usd. Follow it with GET /v1/lists/{name}.",
+        "operationId": "ai_run_v1_lists__name__ai_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/evaluate": {
+      "post": {
+        "tags": [
+          "Quality"
+        ],
+        "summary": "Evaluate",
+        "description": "Accuracy against the right answers: ICP, tier and any data point, plus every disagreement with our proof.",
+        "operationId": "evaluate_v1_lists__name__evaluate_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/runs": {
+      "get": {
+        "tags": [
+          "Quality"
+        ],
+        "summary": "Runs",
+        "description": "The run log: every phase, AI and evaluate run with counts, AI cost and time.",
+        "operationId": "runs_v1_lists__name__runs_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lookup": {
+      "get": {
+        "tags": [
+          "Reference"
+        ],
+        "summary": "Lookup",
+        "description": "The free directories for one company: YC (by domain), SEC EDGAR and the IRS non-profit list (by legal name).\nFree; no AI.",
+        "operationId": "lookup_v1_lookup_get",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "company",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Company"
+            }
+          },
+          {
+            "name": "legal_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Legal Name"
+            }
+          },
+          {
+            "name": "place",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Place"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/signals": {
+      "get": {
+        "tags": [
+          "Reference"
+        ],
+        "summary": "Signals",
+        "description": "Every data point: its column name in the results, group (must-have, exclusion, fit, buying, weak) and points.",
+        "operationId": "signals_v1_signals_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/clay/tables": {
+      "get": {
+        "tags": [
+          "Clay"
+        ],
+        "summary": "Clay Tables",
+        "description": "Tables in the signed-in Clay workspace.",
+        "operationId": "clay_tables_v1_clay_tables_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/clay/pull": {
+      "post": {
+        "tags": [
+          "Clay"
+        ],
+        "summary": "Clay Pull",
+        "description": "Read a Clay table and process it as a new list.",
+        "operationId": "clay_pull_v1_clay_pull_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PullIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AiIn": {
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "icp",
+              "signals"
+            ],
+            "title": "Phase",
+            "description": "icp: settle PENDING verdicts; signals: AI-only signals and score"
+          },
+          "ai_options": {
+            "$ref": "#/components/schemas/AiOptions",
+            "default": {
+              "web": true,
+              "search_signals": true
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "phase"
+        ],
+        "title": "AiIn"
+      },
+      "AiOptions": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "accurate",
+                  "cheap"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode",
+            "description": "accurate: one AI call per data point (default). cheap: grouped calls, about 3 times cheaper"
+          },
+          "web": {
+            "type": "boolean",
+            "title": "Web",
+            "description": "Allow web search (step 2)",
+            "default": true
+          },
+          "search_signals": {
+            "type": "boolean",
+            "title": "Search Signals",
+            "description": "Phase 2: ask the buying signals only web search can answer (about $0.10 per ICP company in accurate mode)",
+            "default": true
+          },
+          "max_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cost Usd",
+            "description": "Refuse the AI step if the estimate could exceed this. Default: API_AI_MAX_COST_USD in .env, else 5"
+          }
+        },
+        "type": "object",
+        "title": "AiOptions"
+      },
+      "Body_upload_list_v1_lists_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "signals": {
+            "type": "boolean",
+            "title": "Signals",
+            "default": true
+          },
+          "ai": {
+            "type": "boolean",
+            "title": "Ai",
+            "default": false
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "max_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cost Usd"
+          },
+          "push_to_clay": {
+            "type": "boolean",
+            "title": "Push To Clay",
+            "default": false
+          },
+          "clay_webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clay Webhook Url"
+          },
+          "callback_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_list_v1_lists_upload_post"
+      },
+      "CheckIn": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain",
+            "description": "Company website, e.g. acme.com",
+            "examples": [
+              "linear.app"
+            ]
+          },
+          "company": {
+            "type": "string",
+            "title": "Company",
+            "default": ""
+          },
+          "employees": {
+            "type": "string",
+            "title": "Employees",
+            "description": "Employee count, used for the size segment",
+            "default": ""
+          },
+          "signals": {
+            "type": "boolean",
+            "title": "Signals",
+            "description": "Also run phase 2 (signals and lead score) if the company is ICP",
+            "default": true
+          },
+          "ai": {
+            "type": "boolean",
+            "title": "Ai",
+            "description": "Also run the AI step (costs money; capped by ai_options.max_cost_usd)",
+            "default": false
+          },
+          "ai_options": {
+            "$ref": "#/components/schemas/AiOptions",
+            "default": {
+              "web": true,
+              "search_signals": true
+            }
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "description": "Download the website again instead of using the cache",
+            "default": false
+          },
+          "wait_seconds": {
+            "type": "number",
+            "title": "Wait Seconds",
+            "description": "Answer within this time; longer checks keep running, ask again",
+            "default": 45
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain"
+        ],
+        "title": "CheckIn"
+      },
+      "EvaluateIn": {
+        "properties": {
+          "labels": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels",
+            "description": "Right answers: Domain, Expected ICP (YES/NO), Expected tier (Strong fit/Weak fit), 'Expected: <data point>' (Yes/No). Leave out to use Expected columns in the list itself",
+            "examples": [
+              [
+                {
+                  "Domain": "linear.app",
+                  "Expected ICP": "YES",
+                  "Expected tier": "Strong fit",
+                  "Expected: Delaware C-Corp": "Yes"
+                }
+              ]
+            ]
+          }
+        },
+        "type": "object",
+        "title": "EvaluateIn"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ListIn": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "List name; default is generated"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Rows",
+            "description": "Rows with at least a Domain (or Website) column; other columns are kept",
+            "examples": [
+              [
+                {
+                  "Company Name": "Linear",
+                  "Domain": "linear.app",
+                  "Owner": "Sam"
+                }
+              ]
+            ]
+          },
+          "signals": {
+            "type": "boolean",
+            "title": "Signals",
+            "default": true
+          },
+          "ai": {
+            "type": "boolean",
+            "title": "Ai",
+            "description": "Run the AI step after each phase (costs money; capped)",
+            "default": false
+          },
+          "ai_options": {
+            "$ref": "#/components/schemas/AiOptions",
+            "default": {
+              "web": true,
+              "search_signals": true
+            }
+          },
+          "push_to_clay": {
+            "type": "boolean",
+            "title": "Push To Clay",
+            "description": "When done, push every row to a Clay table webhook",
+            "default": false
+          },
+          "clay_webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clay Webhook Url",
+            "description": "Clay webhook; default is CLAY_WEBHOOK_URL from settings"
+          },
+          "callback_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Url",
+            "description": "When done, POST the list's status and summary to this URL"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "ListIn"
+      },
+      "PullIn": {
+        "properties": {
+          "table_id": {
+            "type": "string",
+            "title": "Table Id",
+            "description": "Clay table id, e.g. t_abc123 (see GET /v1/clay/tables)"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "description": "Only the first N rows (0 = all)",
+            "default": 0
+          },
+          "signals": {
+            "type": "boolean",
+            "title": "Signals",
+            "default": true
+          },
+          "ai": {
+            "type": "boolean",
+            "title": "Ai",
+            "default": false
+          },
+          "ai_options": {
+            "$ref": "#/components/schemas/AiOptions",
+            "default": {
+              "web": true,
+              "search_signals": true
+            }
+          },
+          "push_to_clay": {
+            "type": "boolean",
+            "title": "Push To Clay",
+            "default": false
+          },
+          "clay_webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clay Webhook Url"
+          },
+          "callback_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "table_id"
+        ],
+        "title": "PullIn"
+      },
+      "PushIn": {
+        "properties": {
+          "clay_webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clay Webhook Url"
+          },
+          "only_icp": {
+            "type": "boolean",
+            "title": "Only Icp",
+            "description": "Push only rows where ICP = YES",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "PushIn"
+      },
+      "RulesIn": {
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "icp",
+              "signals",
+              "both"
+            ],
+            "title": "Phase",
+            "default": "both"
+          }
+        },
+        "type": "object",
+        "title": "RulesIn"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Companies",
+      "description": "Check one company while you wait."
+    },
+    {
+      "name": "Lists",
+      "description": "Run whole lists in the background, follow progress, get results."
+    },
+    {
+      "name": "AI",
+      "description": "Cost estimates and the AI step for an existing list. Always estimated first and capped."
+    },
+    {
+      "name": "Quality",
+      "description": "Accuracy against right answers, and the run log."
+    },
+    {
+      "name": "Reference",
+      "description": "Free directory lookups and the list of data points."
+    },
+    {
+      "name": "Clay",
+      "description": "Pull lists from Clay and push results to a Clay table."
+    }
+  ]
+}

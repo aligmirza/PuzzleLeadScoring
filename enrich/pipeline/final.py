@@ -8,10 +8,10 @@ import re
 from pathlib import Path
 
 from .common import console, plain, rel
-from .inputs import DOMAIN_COLS, normalize_domain
-from .rules import CELL_NAMES, SIGNALS, signal_column
-from .scoring import segment, score
-from .store import Store
+from ..core.inputs import DOMAIN_COLS, normalize_domain
+from ..checks.rules import CELL_NAMES, SIGNALS, signal_column
+from ..checks.scoring import segment, score
+from ..core.store import Store
 
 ICP_STATUS = {
     "Yes": ("YES", "All 4 must-haves confirmed, no exclusion found"),

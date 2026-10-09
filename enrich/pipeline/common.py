@@ -10,15 +10,16 @@ from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 
-from . import ai_apply, directories
-from . import prompts as prompt_files
-from .dashboard import ICON
-from .inputs import load_leads
-from .rules import CELL_NAMES, SIGNALS, VALUE_NAMES, extract, signal_column
-from .store import Store
+from ..ai import apply as ai_apply
+from ..sources import directories
+from ..ai import prompts as prompt_files
+from ..core.dashboard import ICON
+from ..core.inputs import load_leads
+from ..checks.rules import CELL_NAMES, SIGNALS, VALUE_NAMES, extract, signal_column
+from ..core.store import Store
 
 console = Console()
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 LISTS = ROOT / "lists"
 
 

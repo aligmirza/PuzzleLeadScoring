@@ -75,7 +75,7 @@ def _text(html: str) -> tuple[str, str]:
 
 def old_site(domain: str, want_legal: bool, want_pricing: bool) -> dict:
     """What the site looked like about a year ago. Keys only appear when a snapshot was found."""
-    from .rules import RE_ENTITY, RE_PRICE, RE_PRICE_LOOSE, clean_legal_name
+    from ..checks.rules import RE_ENTITY, RE_PRICE, RE_PRICE_LOOSE, clean_legal_name
     out: dict = {}
     with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": "PuzzleLeadScoring research tool"}) as c:
         home = _snapshot(c, domain)

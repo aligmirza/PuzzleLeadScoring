@@ -15,8 +15,8 @@ from pathlib import Path
 from rich.table import Table
 
 from .common import console, rel
-from .inputs import DOMAIN_COLS, normalize_domain
-from .rules import SIGNALS, signal_column
+from ..core.inputs import DOMAIN_COLS, normalize_domain
+from ..checks.rules import SIGNALS, signal_column
 
 TEMPLATE_SIGNALS = ["M1", "E1", "E3", "E4", "E5", "E6", "F1", "F2", "F3", "F5", "F6"]
 

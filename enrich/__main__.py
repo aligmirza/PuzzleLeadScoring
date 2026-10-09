@@ -15,6 +15,8 @@ Other commands:
   python -m enrich directories            the free directories (YC, SEC, IRS): status, refresh, look up one company
   python -m enrich evaluate leads         compare results with the right answers (Expected columns or --labels)
   python -m enrich runs leads             the run log: when, what, counts and AI cost
+  python -m enrich copy leads leads_cheap   clone a list without AI answers; compare leads leads_cheap shows differences
+  python -m enrich trace acme.com         one company through every step, one at a time (--ai for the AI steps)
 
 Each list gets its own folder: lists/<list>/ with input.csv, raw/, cache.sqlite and output/.
 Nothing is deleted without asking.
@@ -25,13 +27,14 @@ from pathlib import Path
 
 from rich.table import Table
 
-from . import phase1_icp, phase2_signals
-from . import prompts as prompt_files
-from .common import LISTS, ai_prompts, console, human, list_dir, offer_cleanup, plain, rel
-from .dashboard import ICON
-from .inputs import normalize_domain
-from .rules import GATE_NAMES, SIGNALS, VALUE_NAMES
-from .store import Store
+from .pipeline import phase1_icp
+from .pipeline import phase2_signals
+from .ai import prompts as prompt_files
+from .pipeline.common import LISTS, ai_prompts, console, human, list_dir, offer_cleanup, plain, rel
+from .core.dashboard import ICON
+from .core.inputs import normalize_domain
+from .checks.rules import GATE_NAMES, SIGNALS, VALUE_NAMES
+from .core.store import Store
 
 
 def cmd_icp(args):
@@ -49,28 +52,28 @@ def cmd_run(args):
 
 
 def cmd_ai(args):
-    from . import ai
+    from .ai import runner as ai
     ai.run(list_dir(args.list), args.phase, args.limit, not args.no_web, args.redo, args.concurrency, args.yes,
-           not args.no_search_signals)
+           not args.no_search_signals, args.mode)
 
 
 def cmd_serve(args):
     import uvicorn
-    from . import settings
+    from .core import settings
     key = settings.api_key()
     console.print(f"[bold]PuzzleLeadScoring API[/] on http://{args.host}:{args.port}  (interactive docs: /docs)\n"
                   f"Callers send the header  x-api-key: {key[:8]}...  (full key: python -m enrich settings)")
-    uvicorn.run("enrich.api:app", host=args.host, port=args.port, log_level="info")
+    uvicorn.run("enrich.integrations.api:app", host=args.host, port=args.port, log_level="info")
 
 
 def cmd_mcp(args):
-    from .mcp_server import main as mcp_main
+    from .integrations.mcp_server import main as mcp_main
     mcp_main()
 
 
 def cmd_settings(args):
     import os
-    from . import settings
+    from .core import settings
     for flag, key in ((args.openai_key, "OPENAI_API_KEY"), (args.clay_webhook, "CLAY_WEBHOOK_URL"),
                       (args.clay_webhook_token, "CLAY_WEBHOOK_TOKEN"), (args.clay_api_key, "CLAY_API_KEY"),
                       (args.anthropic_key, "ANTHROPIC_API_KEY")):
@@ -100,7 +103,8 @@ def cmd_settings(args):
 
 def cmd_pull(args):
     import asyncio
-    from . import clay, service
+    from .integrations import clay
+    from .integrations import service
     if not args.table_id:
         t = Table(title="Clay tables", header_style="bold")
         for col in ("Table id", "Name", "Workbook"):
@@ -121,7 +125,7 @@ def cmd_pull(args):
 
 def cmd_push(args):
     import asyncio
-    from . import service
+    from .integrations import service
     res = asyncio.run(service.push_list(list_dir(args.list).name, args.webhook, args.only_icp))
     console.print(f"Sent {res['sent']} rows to Clay, {res['failed']} failed. {'; '.join(res['errors'])}")
 
@@ -135,7 +139,7 @@ def cmd_rules(args):
 
 
 def cmd_directories(args):
-    from . import directories
+    from .sources import directories
     if args.refresh:
         console.print("Downloading the YC directory and the IRS non-profit list...")
         directories.refresh()
@@ -161,7 +165,7 @@ def cmd_directories(args):
 
 
 def cmd_evaluate(args):
-    from . import evaluate
+    from .pipeline import evaluate
     if args.template:
         path = evaluate.write_template(Path(args.template))
         console.print(f"Labels template written: {path}. Fill one row per company (Expected ICP: YES/NO; "
@@ -172,12 +176,62 @@ def cmd_evaluate(args):
         raise SystemExit("Name a list: python -m enrich evaluate <list> [--labels labels.csv]")
     folder = list_dir(args.list)
     summary = evaluate.run(folder, Path(args.labels) if args.labels else None)
-    from .runlog import log
+    from .core.runlog import log
     log(folder, "Evaluate", labels=args.labels or "columns in the list", **summary)
 
 
+def cmd_trace(args):
+    from .pipeline import trace
+    trace.run(args.domain, args.company or "", args.employees or "", args.ai, args.mode, not args.no_pause, args.refresh, args.yes)
+
+
+def cmd_copy(args):
+    """Clone a list (pages, rules, directory findings) without its AI answers, e.g. to test the cheap mode."""
+    import shutil
+    src, dst = list_dir(args.list), LISTS / args.new_name
+    if dst.exists():
+        raise SystemExit(f"A list called '{dst.name}' already exists.")
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("runs.jsonl", "ai_batch_*", "evaluation.csv"))
+    store = Store(dst)
+    if not args.keep_ai:
+        store.db.execute("DELETE FROM ai_answers")
+        store.db.commit()
+        phase1_icp.rerun_rules(dst)
+        phase2_signals.rerun_rules(dst)
+    console.print(f"Copied {src.name} to {dst.name}" + ("" if args.keep_ai else " without AI answers") + ".")
+
+
+def cmd_compare(args):
+    """Every answer that differs between two lists of the same companies (e.g. accurate vs cheap mode)."""
+    import csv
+    from .checks.rules import signal_column
+    a, b = list_dir(args.list_a), list_dir(args.list_b)
+    def rows(folder):
+        with open(folder / "output" / f"{folder.name}_enriched.csv", newline="") as f:
+            r = list(csv.DictReader(f))
+        dcol = next(c for c in r[0] if c.strip().lower() in ("domain", "website", "url", "company domain"))
+        return {normalize_domain(x[dcol]): x for x in r}
+    ra, rb = rows(a), rows(b)
+    cols = ["ICP", "Lead tier", "Lead score", "Funding stage"] + [signal_column(s) for s in SIGNALS]
+    diffs, same = [], 0
+    for d in ra.keys() & rb.keys():
+        for c in cols:
+            va, vb = ra[d].get(c, ""), rb[d].get(c, "")
+            if va == vb:
+                same += 1
+            else:
+                diffs.append((d, c, va or "(empty)", vb or "(empty)"))
+    t = Table(title=f"{a.name} vs {b.name}: {len(diffs)} answers differ, {same} the same", title_justify="left",
+              header_style="bold")
+    for c in ("Company", "Answer", a.name, b.name):
+        t.add_column(c, overflow="fold")
+    for row in sorted(diffs):
+        t.add_row(*row)
+    console.print(t)
+
+
 def cmd_runs(args):
-    from .runlog import read
+    from .core.runlog import read
     folder = list_dir(args.list)
     rows = read(folder)
     if not rows:
@@ -361,6 +415,9 @@ def main(argv: list[str] | None = None):
                    help="icp: settle must-haves and exclusions (run after phase 1); signals: run after phase 2")
     p.add_argument("--limit", type=int, default=0, help="only the first N companies that need AI")
     p.add_argument("--no-web", action="store_true", help="skip step 2 (web search)")
+    p.add_argument("--mode", choices=["accurate", "cheap"],
+                   help="accurate: one AI call per data point (default, set in _shared.json). cheap: a company's data "
+                        "points grouped, up to 5 per call, and its web questions share one web search call")
     p.add_argument("--no-search-signals", action="store_true",
                    help="phase 2: skip the signals only web search can answer (recent funding, new investors, "
                         "QuickBooks complaints...), the most expensive part")
@@ -418,6 +475,28 @@ def main(argv: list[str] | None = None):
     p.add_argument("--template", metavar="FILE", help="write a blank labels file to fill in")
     p.set_defaults(fn=cmd_evaluate)
 
+    p = sub.add_parser("trace", help="one company through every step of the workflow, one step at a time")
+    p.add_argument("domain")
+    p.add_argument("--company", help="company name")
+    p.add_argument("--employees", help="employee count")
+    p.add_argument("--ai", action="store_true", help="also run the AI steps (shows the cost and asks first)")
+    p.add_argument("--mode", choices=["accurate", "cheap"], help="AI mode (default from _shared.json)")
+    p.add_argument("--no-pause", action="store_true", help="print every step without waiting for Enter")
+    p.add_argument("--refresh", action="store_true", help="download the website again")
+    p.add_argument("--yes", action="store_true", help="run the AI steps without asking about the cost")
+    p.set_defaults(fn=cmd_trace)
+
+    p = sub.add_parser("copy", help="clone a list without its AI answers (to compare AI modes)")
+    p.add_argument("list")
+    p.add_argument("new_name")
+    p.add_argument("--keep-ai", action="store_true", help="keep the AI answers too")
+    p.set_defaults(fn=cmd_copy)
+
+    p = sub.add_parser("compare", help="every answer that differs between two lists of the same companies")
+    p.add_argument("list_a")
+    p.add_argument("list_b")
+    p.set_defaults(fn=cmd_compare)
+
     p = sub.add_parser("runs", help="the run log of a list: when, what, counts and AI cost")
     p.add_argument("list")
     p.set_defaults(fn=cmd_runs)
@@ -452,10 +531,10 @@ def main(argv: list[str] | None = None):
 
     args = ap.parse_args(argv)
     if getattr(args, "no_browser", False):
-        from . import crawl
+        from .sources import crawl
         crawl.BROWSER_ENABLED = False
     if getattr(args, "no_directories", False):
-        from . import directories
+        from .sources import directories
         directories.ENABLED = False
     args.fn(args)
 

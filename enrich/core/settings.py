@@ -8,7 +8,7 @@ import os
 import secrets
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
 EXAMPLE_FILE = ROOT / ".env.example"
 
@@ -26,6 +26,8 @@ ENV_KEYS = [
      "Clay table > Webhook source settings", True),
     ("Clay", "CLAY_API_KEY", "Clay Public API (search, tables, routines over HTTP). Pull and push work without it, through `clay login`",
      "`clay api-keys create --name puzzle-lead-scoring` (shown once)", False),
+    ("This project", "API_AI_MAX_COST_USD", "Highest AI cost one API request may run (estimated first; above it the request is refused). Default 5",
+     "your choice, e.g. 5", True),
     ("Free directories", "SEC_CONTACT_EMAIL", "Contact email sent to SEC EDGAR in the User-Agent, as SEC asks of automated tools (optional; lookups work without it)",
      "any email the SEC can reach you at", True),
     ("Other data tools (planned)", "CRUNCHBASE_API_KEY", "Funding rounds and stage", "crunchbase.com > API", False),

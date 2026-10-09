@@ -12,12 +12,12 @@ from rich.live import Live
 
 from .common import (ai_columns, ai_summary, console, files_and_disk, offer_cleanup, run_rules, signal_columns,
                      signal_summary, write_outputs)
-from .crawl import ICP_KINDS, SIGNAL_KINDS, Crawler, slim_html
+from ..sources.crawl import ICP_KINDS, SIGNAL_KINDS, Crawler, slim_html
 from . import final
-from .dashboard import Dashboard
-from .inputs import load_leads
-from .rules import SIGNALS
-from .store import Store
+from ..core.dashboard import Dashboard
+from ..core.inputs import load_leads
+from ..checks.rules import SIGNALS
+from ..core.store import Store
 
 OUTPUTS = {"csv": "signals.csv", "evidence": "signals_evidence.jsonl", "ai_queue": "signals_ai_queue.jsonl"}
 GROUPS = ("fit", "buying", "weak")
@@ -137,7 +137,7 @@ def report(results: list[dict], folder: Path, store: Store) -> None:
     ai_summary(results)
     files_and_disk(paths, store)
     out = final.write(folder, store)
-    from .runlog import log
+    from ..core.runlog import log
     import csv
     with open(out, newline="") as f:
         tiers = [r.get("Lead tier", "") for r in csv.DictReader(f)]

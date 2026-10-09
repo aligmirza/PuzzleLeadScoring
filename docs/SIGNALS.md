@@ -12,7 +12,7 @@ Groups 1 and 2 are checked in **phase 1** (is it our ICP?). Groups 3 and 4 are c
 This is the reference for individual checks. How the checks fit into the pipeline (verdict, AI steps, scoring) is in [PIPELINE.md](PIPELINE.md); setup and commands are in [README.md](../README.md).
 
 **Where each part lives:**
-- the code rules: [enrich/rules.py](../enrich/rules.py)
+- the code rules: [enrich/checks/rules.py](../enrich/checks/rules.py)
 - the AI prompt for each data point: [config/prompts/](../config/prompts/), one JSON file each
 - the points per signal: [config/scoring.json](../config/scoring.json)
 

@@ -84,6 +84,7 @@ AI options:
 |---|---|
 | `--limit 20` | First 20 companies only |
 | `--no-web` | Skip the web search step |
+| `--mode cheap` | Group a company's questions: up to 5 per call on its pages, and its web questions share one web search call. About 4 times cheaper on web search. Default `accurate` (one call per question), set in `config/prompts/_shared.json`. Check with `copy` + `compare` before using it on a big list |
 | `--no-search-signals` | Phase 2: skip the 9 signals only web search can answer (recent funding, new investor, QuickBooks complaints...). They are the most expensive part, about $0.10 to $0.30 per ICP company |
 | `--redo` | Ask again where an answer is saved |
 | `--yes` | Don't ask before spending |
@@ -92,11 +93,13 @@ AI options:
 |---|---|
 | See all lists: ICP yes / needs check / no, signals done, disk use | `python -m enrich lists` |
 | See every answer and its proof for one company | `python -m enrich explain linear.app` |
+| Follow one company through every step, one at a time (input, download, rules, directories, verdict, AI, signals, score) | `python -m enrich trace linear.app` (add `--ai` for the AI steps; asks before spending). Saved as a report in `lists/trace_linear_app/output/` |
 | Re-check saved pages after changing a rule (no downloading) | `python -m enrich rules leads` (add `--phase icp` or `--phase signals`) |
 | Continue a stopped run | Run the same command again; finished companies come from the cache |
 | Delete raw pages no longer needed (always asks first) | `python -m enrich clean leads` |
 | Measure accuracy against the right answers | `python -m enrich evaluate leads --labels labels.csv` (blank file: `python -m enrich evaluate --template labels.csv`) |
 | See every run of a list: when, counts, AI cost | `python -m enrich runs leads` |
+| Compare AI modes on the same companies | `python -m enrich copy leads leads_cheap`, run `ai_check.py leads_cheap --mode cheap`, then `python -m enrich compare leads leads_cheap` |
 | List the AI prompts | `python -m enrich prompts` |
 | See the exact AI message for a company | `python -m enrich prompts --show fit/venture_backed_stage --domain resend.com` (add `--step 2` for the web search step) |
 | See the free directories, or look up one company in YC, SEC and IRS | `python -m enrich directories` / `python -m enrich directories acme.com --legal-name "Acme, Inc."` |
@@ -123,7 +126,7 @@ Other tools can use the pipeline too. Details and setup steps: [docs/INTEGRATION
 | You want to | Run |
 |---|---|
 | See the API key and save keys once (OpenAI, Clay webhook) | `python -m enrich settings` |
-| Start the API (Clay and other tools call it) | `python -m enrich serve` |
+| Start the API for Clay, scripts and other tools (docs at http://127.0.0.1:8787/docs; all calls in [INTEGRATIONS.md](docs/INTEGRATIONS.md#api), importable description in [docs/openapi.json](docs/openapi.json)) | `python -m enrich serve` |
 | List Clay tables / run one as a list | `python -m enrich pull` / `python -m enrich pull t_abc123 --list q4` |
 | Send a finished list to a Clay table | `python -m enrich push leads` |
 | Use it from Claude Code | Approve **puzzle-lead-scoring** once in `/mcp` (registered in `.mcp.json`) |
@@ -145,7 +148,7 @@ Other tools can use the pipeline too. Details and setup steps: [docs/INTEGRATION
 
 | File | What it holds | Change it when |
 |---|---|---|
-| [enrich/rules.py](enrich/rules.py) | The pattern-matching rules: what counts as proof for each data point | A rule finds wrong answers or misses clear ones |
+| [enrich/checks/rules.py](enrich/checks/rules.py) | The pattern-matching rules: what counts as proof for each data point | A rule finds wrong answers or misses clear ones |
 | [config/prompts/](config/prompts/) | One JSON prompt file per data point (62), plus shared rules, the AI provider and model names in `_shared.json` | AI should judge a data point differently, or you want another model |
 | [config/scoring.json](config/scoring.json) | Points per signal (high 3, medium 2, low 1, weak fit -2), Strong fit cut-off (12), size bands | You want different weights or tiers |
 
@@ -176,28 +179,36 @@ docs/
 examples/
   sample_leads.csv    14-company test list
 enrich/
-  __main__.py         all commands
-  phase1_icp.py       phase 1: ICP check
-  phase2_signals.py   phase 2: signals and score
-  directories.py      free directories: YC, SEC EDGAR, IRS non-profit list
-  history.py          old copies of company sites (Internet Archive)
-  evaluate.py         accuracy against labels
-  runlog.py           run log per list (runs.jsonl)
-  ai.py               AI step: calls OpenAI, step 1 then web search, cost estimate
-  ai_apply.py         turns AI answers into signal values with the confidence rules
-  api.py              HTTP API (python -m enrich serve)
-  mcp_server.py       MCP server (python -m enrich mcp)
-  service.py          runs the pipeline from code, for the API and MCP
-  clay.py             pull from / push to Clay
-  settings.py         keys from .env, set once
-  inputs.py           reads the CSV, cleans domains
-  crawl.py            finds and downloads pages, job feeds, public DNS check
-  rules.py            pattern-matching rules; which AI prompts each company needs
-  prompts.py          loads prompt files and builds AI messages (both steps)
-  scoring.py          lead score from scoring.json
-  final.py            the final list: every original row + findings
-  dashboard.py        live terminal view
-  store.py, common.py storage and shared helpers
+  __main__.py         all commands (python -m enrich ...)
+  core/               shared foundations
+    settings.py       keys from .env, set once
+    store.py          per-list storage: pages, results, AI answers, directory findings
+    inputs.py         reads the CSV, cleans domains
+    runlog.py         run log per list (runs.jsonl)
+    dashboard.py      live terminal view
+  sources/            where data comes from
+    crawl.py          finds and downloads pages, job feeds; real-browser and public DNS fallbacks
+    directories.py    free directories: YC, SEC EDGAR, IRS non-profit list
+    history.py        old copies of company sites (Internet Archive)
+  checks/             free checks
+    rules.py          pattern-matching rules for every data point; which AI prompts a company needs
+    scoring.py        lead score from scoring.json
+  ai/                 the AI step
+    prompts.py        loads prompt files and builds AI messages (single and grouped)
+    runner.py         calls OpenAI: step 1 then web search, accurate and cheap modes, cost estimate
+    apply.py          turns AI answers into signal values with the confidence, quote and date checks
+  pipeline/           the two phases and their outputs
+    phase1_icp.py     phase 1: ICP check
+    phase2_signals.py phase 2: signals and score
+    final.py          the final list: every original row + findings + reasoning
+    common.py         shared helpers for both phases
+    evaluate.py       accuracy against labels
+    trace.py          one company through every step, one at a time
+  integrations/       using it from outside
+    api.py            HTTP API (python -m enrich serve)
+    service.py        runs the pipeline from code, for the API and MCP
+    mcp_server.py     MCP server (python -m enrich mcp)
+    clay.py           pull from / push to Clay
 lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.jsonl, output/  (not in git)
 ```
 
@@ -221,9 +232,10 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.json
 | Free directories: YC (by domain), SEC EDGAR (public, Form D funding, Delaware, address), IRS non-profit list, with match-strength rules | Done; on the test list it caught HubSpot as public and confirmed Puzzle's Delaware status and funding |
 | 62 AI prompt files with a web search step | Written |
 | AI step with OpenAI (gpt-4o-mini): our data first, web search only if needed, cost estimate and confirmation, answers kept when rules re-run, a quote required for every Yes / No | Done; $0.11 for the 10-company test |
+| Two AI modes: `accurate` (default) and `cheap` (grouped calls), with `copy` and `compare` to check one against the other | Built; tested with a stand-in for OpenAI (8 calls instead of 35 for one company) |
 | Live dashboards, `explain`, `lists`, `rules`, `clean`, ask before deleting | Done |
 | Version control | Done: private GitHub repo `PuzzleLeadScoring` |
-| API (one company, whole lists, push and pull) with a key set once | Built and tested locally |
+| API: one company, whole lists, AI with cost estimate and a hard cost limit, per-company proof, rules re-run, evaluate, run log, directory lookup, data point list, Clay push and pull, completion callback | Built and tested locally (17 endpoints) |
 | MCP server for Claude Code / Desktop | Built and tested with an MCP client; needs your one-time approval |
 | Clay: pull tables, push to a webhook, per-row HTTP column | Pull tested on your workspace; push tested against a stand-in webhook; per-row needs a public address |
 
@@ -231,7 +243,7 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.json
 
 1. **Labelled list from Puzzle:** about 50 current customers and 50 lost or "not a fit" deals. Run them and `evaluate`, to measure accuracy and set the Strong fit cut-off from data instead of the current 12.
 2. **Pilot on 500 real rows** to measure speed, block rate and cost.
-3. **Cheaper AI, later:** several data points per call, OpenAI's half-price Batch API, and one web search for several news signals. Each needs an `evaluate` check before use.
+3. **Check the cheap mode** on the labelled list with `copy` + `compare` + `evaluate`, then decide whether it can be the default. OpenAI's half-price Batch API could come after that.
 
 ### Then
 
@@ -246,7 +258,7 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.json
 |---|---|
 | AI provider and models | OpenAI gpt-4o-mini for both steps (`providers.openai` in `config/prompts/_shared.json`). Claude settings are kept there as an alternative but not wired up |
 | OpenAI API key | Saved once in `.env` (git-ignored) |
-| One AI call per data point, or grouped | One call per data point for now; cheaper options are on the roadmap |
+| One AI call per data point, or grouped | Both: `accurate` (one call per data point, the default) and `cheap` (grouped, `--mode cheap`). Cheap stays opt-in until `compare` shows its answers hold up |
 | Large rounds | A confirmed single round of $100M+ or a $1B+ valuation counts as "Series C or later" (`late_stage_proof` in config/scoring.json) |
 | Undecided companies | PENDING until the AI check or a retry settles them |
 | Weak fit points | -2 each (in config/scoring.json) |
