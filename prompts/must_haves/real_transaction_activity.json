@@ -1,0 +1,113 @@
+{
+  "id": "must_haves/real_transaction_activity",
+  "data_point": "Real transaction activity",
+  "group": "Must-have",
+  "signal_id": "M4",
+  "profile_section": "must_haves",
+  "weight": "required",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found no prices, checkout, app store link or open jobs, but the site is live.",
+  "input": {
+    "pages": [
+      "home",
+      "pricing",
+      "careers",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company shows genuine transaction activity: payroll running, a card in use, or revenue being processed.",
+    "definition": "Published paid pricing, a working checkout, an app store listing with paid plans, or actively advertised open roles all count as proof.",
+    "yes_when": [
+      "Prices for named plans",
+      "A buy, subscribe or checkout flow",
+      "An app with paid plans",
+      "Open job listings"
+    ],
+    "no_when": [
+      "The site is pre-launch only: waitlist or early access, no pricing, no checkout, no jobs"
+    ],
+    "unknown_when": [
+      "Pricing says 'contact sales' only and there are no jobs or other proof"
+    ],
+    "watch_out_for": [
+      "A donation page, membership fee or event ticket is not commercial transaction activity",
+      "'Contact us for a quote' alone is not proof either way"
+    ],
+    "where_to_look": [
+      "Pricing page",
+      "Homepage buttons",
+      "Careers page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" pricing plans",
+      "\"{company}\" jobs hiring",
+      "\"{company}\" app store"
+    ],
+    "good_sources": [
+      "company pricing page",
+      "job boards",
+      "app stores"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Join the waitlist. We're launching soon. Get early access.",
+      "output": {
+        "answer": "no",
+        "confidence": "high",
+        "evidence_quote": "Join the waitlist. We're launching soon.",
+        "source": "home",
+        "reason": "The site is pre-launch with only a waitlist."
+      }
+    }
+  ]
+}

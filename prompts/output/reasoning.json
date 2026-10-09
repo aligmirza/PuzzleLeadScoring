@@ -1,0 +1,55 @@
+{
+  "id": "output/reasoning",
+  "data_point": "ICP reasoning with funding stage line",
+  "group": "Final output",
+  "signal_id": null,
+  "profile_section": "must_haves (funding stage callout)",
+  "weight": "n/a",
+  "version": 1,
+  "stage": "final",
+  "model": "large",
+  "run_when": "After all signals are decided and scored.",
+  "input": {
+    "pages": [],
+    "extra": [
+      "all_signals",
+      "score",
+      "segment",
+      "vertical"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Write the reasoning for this company's ICP result from the signals and evidence provided.",
+    "definition": "Explain in plain English why the company passed or failed, which signals fired, and its segment and vertical. Mention a stage only as confirmed or estimated, and say what an estimate was based on.",
+    "yes_when": [],
+    "no_when": [],
+    "unknown_when": [],
+    "watch_out_for": [
+      "Never say a company falls short because its funding could not be found",
+      "Never present an unknown signal as a weakness",
+      "Use only the signals and evidence provided",
+      "End with this exact line on its own: 'Funding stage: <value> (<basis>)' where value is Pre-Seed, Seed, Series A, Series B, Series C or later, Bootstrapped or Unknown, and basis is confirmed, estimated or not found. No extra punctuation."
+    ],
+    "where_to_look": []
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "reasoning"
+      ],
+      "properties": {
+        "reasoning": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "off",
+    "why": "Writes text from answers already found; no new facts needed."
+  },
+  "examples": []
+}

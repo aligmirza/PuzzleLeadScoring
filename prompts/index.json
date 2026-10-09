@@ -1,0 +1,502 @@
+{
+  "description": "Every AI prompt, one per data point. Built from the files in this folder.",
+  "count": 62,
+  "prompts": [
+    {
+      "id": "must_haves/based_in_us",
+      "file": "must_haves/based_in_us.json",
+      "data_point": "Based and operating in the US",
+      "group": "Must-have",
+      "stage": "site_text",
+      "run_when": "Code found no US address or US governing law, or found mixed US and foreign clues."
+    },
+    {
+      "id": "must_haves/live_website_real_product",
+      "file": "must_haves/live_website_real_product.json",
+      "data_point": "Live website with a real product or service",
+      "group": "Must-have",
+      "stage": "site_text",
+      "run_when": "The site loaded but looked thin (little text or few pages)."
+    },
+    {
+      "id": "must_haves/uses_fintech_tool",
+      "file": "must_haves/uses_fintech_tool.json",
+      "data_point": "Uses a fintech tool Puzzle connects to",
+      "group": "Must-have",
+      "stage": "site_text",
+      "run_when": "Code found a mention of one of the tools but couldn't tell if the company itself uses it."
+    },
+    {
+      "id": "must_haves/real_transaction_activity",
+      "file": "must_haves/real_transaction_activity.json",
+      "data_point": "Real transaction activity",
+      "group": "Must-have",
+      "stage": "site_text",
+      "run_when": "Code found no prices, checkout, app store link or open jobs, but the site is live."
+    },
+    {
+      "id": "exclusions/series_c_or_public",
+      "file": "exclusions/series_c_or_public.json",
+      "data_point": "Raised Series C or later, or publicly traded",
+      "group": "Exclusion",
+      "stage": "site_text",
+      "run_when": "Code found a Series C+ mention, a stock ticker or an investor relations page."
+    },
+    {
+      "id": "exclusions/new_company_no_website",
+      "file": "exclusions/new_company_no_website.json",
+      "data_point": "Newly incorporated, no live website, no disclosed funding",
+      "group": "Exclusion",
+      "stage": "search_results",
+      "run_when": "The website did not load and search results are available."
+    },
+    {
+      "id": "exclusions/accounting_firm",
+      "file": "exclusions/accounting_firm.json",
+      "data_point": "Accounting firm, bookkeeping practice or fractional CFO firm",
+      "group": "Exclusion",
+      "stage": "site_text",
+      "run_when": "Code found accounting, CPA, bookkeeping or fractional CFO wording in the page title or headline."
+    },
+    {
+      "id": "exclusions/outside_us",
+      "file": "exclusions/outside_us.json",
+      "data_point": "Operates primarily outside the US or reports in non-USD currency",
+      "group": "Exclusion",
+      "stage": "site_text",
+      "run_when": "Code found foreign clues (legal entity, address, governing law, country domain, currency)."
+    },
+    {
+      "id": "exclusions/nonprofit_or_government",
+      "file": "exclusions/nonprofit_or_government.json",
+      "data_point": "Non-profit, charity, foundation, association or government body",
+      "group": "Exclusion",
+      "stage": "site_text",
+      "run_when": "Code found 501(c)(3), charity, tax-deductible or donation wording, or a donate button."
+    },
+    {
+      "id": "exclusions/holds_physical_stock",
+      "file": "exclusions/holds_physical_stock.json",
+      "data_point": "E-commerce or retail business holding physical inventory",
+      "group": "Exclusion",
+      "stage": "site_text",
+      "run_when": "Code found a store platform, 'add to cart', stock labels or shipping pages."
+    },
+    {
+      "id": "fit/venture_backed_stage",
+      "file": "fit/venture_backed_stage.json",
+      "data_point": "Venture-backed at pre-seed, seed, Series A or Series B",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found no clear funding statement, or found investors without a stage."
+    },
+    {
+      "id": "fit/uses_stripe_billing",
+      "file": "fit/uses_stripe_billing.json",
+      "data_point": "Uses Stripe for billing or subscription revenue",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found Stripe mentioned but not in a way that proves usage."
+    },
+    {
+      "id": "fit/delaware_c_corp",
+      "file": "fit/delaware_c_corp.json",
+      "data_point": "Delaware C-Corporation",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found an 'Inc.' name but no Delaware governing law, or the entity was unclear."
+    },
+    {
+      "id": "fit/uses_quickbooks_online",
+      "file": "fit/uses_quickbooks_online.json",
+      "data_point": "Currently on QuickBooks Online",
+      "group": "Fit signal",
+      "stage": "job_posts",
+      "run_when": "QuickBooks was mentioned on the site or in job posts."
+    },
+    {
+      "id": "fit/startup_selling_nationally",
+      "file": "fit/startup_selling_nationally.json",
+      "data_point": "Operates as a startup selling nationally",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "fit/b2b_saas_or_tech_service",
+      "file": "fit/b2b_saas_or_tech_service.json",
+      "data_point": "B2B SaaS or tech-enabled service sold beyond one metro",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "fit/local_professional_services",
+      "file": "fit/local_professional_services.json",
+      "data_point": "Professional services business serving a single metro area",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "fit/real_paid_pricing",
+      "file": "fit/real_paid_pricing.json",
+      "data_point": "Publishes real paid pricing",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found a pricing page but couldn't read prices from it."
+    },
+    {
+      "id": "fit/payroll_gusto_rippling_deel",
+      "file": "fit/payroll_gusto_rippling_deel.json",
+      "data_point": "Runs payroll on Gusto, Rippling or Deel",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found Gusto, Rippling or Deel mentioned but couldn't confirm usage."
+    },
+    {
+      "id": "fit/ai_core_to_product",
+      "file": "fit/ai_core_to_product.json",
+      "data_point": "AI or machine learning is core to their own product",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "fit/yc_or_accelerator",
+      "file": "fit/yc_or_accelerator.json",
+      "data_point": "Backed by Y Combinator or a comparable accelerator",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found an accelerator mention that may not be the company's own backing."
+    },
+    {
+      "id": "fit/several_open_roles",
+      "file": "fit/several_open_roles.json",
+      "data_point": "Active careers page with several open roles",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "A careers page was found but no known job board, so roles couldn't be counted."
+    },
+    {
+      "id": "fit/no_finance_person_visible",
+      "file": "fit/no_finance_person_visible.json",
+      "data_point": "No dedicated accounting or finance person visible",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "A team page was found."
+    },
+    {
+      "id": "fit/finance_lead_present",
+      "file": "fit/finance_lead_present.json",
+      "data_point": "Controller, Head of Finance or finance team present (mid-size and up)",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "A team page was found."
+    },
+    {
+      "id": "fit/publishes_growth_numbers",
+      "file": "fit/publishes_growth_numbers.json",
+      "data_point": "Publishes ARR, customer count or growth milestones",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found a possible metric that needs confirming."
+    },
+    {
+      "id": "fit/remote_first_or_hybrid",
+      "file": "fit/remote_first_or_hybrid.json",
+      "data_point": "Remote-first or hybrid operations",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found no remote wording and no remote job flags, but a careers or about page exists."
+    },
+    {
+      "id": "fit/runs_several_us_companies",
+      "file": "fit/runs_several_us_companies.json",
+      "data_point": "Runs several US legal entities under common ownership",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found 'Holdings', 'portfolio company' or 'family of companies' wording."
+    },
+    {
+      "id": "fit/early_adopter",
+      "file": "fit/early_adopter.json",
+      "data_point": "Early-adopter posture",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found no Product Hunt link or engineering blog, but a blog exists."
+    },
+    {
+      "id": "fit/banks_mercury_or_brex",
+      "file": "fit/banks_mercury_or_brex.json",
+      "data_point": "Banks with Mercury or Brex",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found Mercury or Brex mentioned but couldn't confirm usage."
+    },
+    {
+      "id": "fit/ramp_or_brex_cards",
+      "file": "fit/ramp_or_brex_cards.json",
+      "data_point": "Uses Ramp or Brex for corporate cards and spend",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found Ramp or Brex mentioned but couldn't confirm usage."
+    },
+    {
+      "id": "fit/cap_table_carta_or_pulley",
+      "file": "fit/cap_table_carta_or_pulley.json",
+      "data_point": "Cap table managed in Carta or Pulley",
+      "group": "Fit signal",
+      "stage": "site_text",
+      "run_when": "Code found Carta or Pulley mentioned but couldn't confirm usage."
+    },
+    {
+      "id": "buying/raised_last_6_months",
+      "file": "buying/raised_last_6_months.json",
+      "data_point": "Announced a funding round in the last six months",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "Web search results about the company's funding are available."
+    },
+    {
+      "id": "buying/new_investor_or_accelerator",
+      "file": "buying/new_investor_or_accelerator.json",
+      "data_point": "A new institutional investor or accelerator affiliation appeared",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "Web search results or a new directory listing are available."
+    },
+    {
+      "id": "buying/hiring_several_roles",
+      "file": "buying/hiring_several_roles.json",
+      "data_point": "Actively hiring across several open roles",
+      "group": "Buying signal",
+      "stage": "site_text",
+      "run_when": "A careers page was found but roles couldn't be counted from a job board."
+    },
+    {
+      "id": "buying/hiring_finance_lead",
+      "file": "buying/hiring_finance_lead.json",
+      "data_point": "Open role for a Controller, Head of Finance or first finance hire",
+      "group": "Buying signal",
+      "stage": "job_posts",
+      "run_when": "Job titles are available and one may be a finance role."
+    },
+    {
+      "id": "buying/hiring_ops_or_chief_of_staff",
+      "file": "buying/hiring_ops_or_chief_of_staff.json",
+      "data_point": "Open role for operations, business operations or chief of staff",
+      "group": "Buying signal",
+      "stage": "job_posts",
+      "run_when": "Job titles are available and one may be an ops role."
+    },
+    {
+      "id": "buying/converted_llc_to_delaware",
+      "file": "buying/converted_llc_to_delaware.json",
+      "data_point": "Recently converted from an LLC to a Delaware C-Corporation",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "An older snapshot of the site or registry results are available."
+    },
+    {
+      "id": "buying/incorporated_last_12_months",
+      "file": "buying/incorporated_last_12_months.json",
+      "data_point": "Incorporated within the last 12 months, funded, with a live product",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "Registry or filing results are available."
+    },
+    {
+      "id": "buying/new_subsidiary",
+      "file": "buying/new_subsidiary.json",
+      "data_point": "Registered a new subsidiary or additional operating entity",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "Registry or news results are available."
+    },
+    {
+      "id": "buying/replacing_bookkeeper",
+      "file": "buying/replacing_bookkeeper.json",
+      "data_point": "Recently parted ways with, or is replacing, a bookkeeper or fractional CFO",
+      "group": "Buying signal",
+      "stage": "job_posts",
+      "run_when": "A bookkeeper or finance role is open, or search results are available."
+    },
+    {
+      "id": "buying/quickbooks_complaints",
+      "file": "buying/quickbooks_complaints.json",
+      "data_point": "Publicly complaining about QuickBooks",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "Web search results mentioning the company or founders with QuickBooks are available."
+    },
+    {
+      "id": "buying/launched_paid_pricing",
+      "file": "buying/launched_paid_pricing.json",
+      "data_point": "Recently launched paid pricing, a new revenue line or subscription billing",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "An older snapshot of the pricing page or a launch post is available."
+    },
+    {
+      "id": "buying/new_board_member_or_investor_updates",
+      "file": "buying/new_board_member_or_investor_updates.json",
+      "data_point": "Announced a new board member or began publishing investor updates",
+      "group": "Buying signal",
+      "stage": "search_results",
+      "run_when": "Web search results are available."
+    },
+    {
+      "id": "buying/preparing_first_audit",
+      "file": "buying/preparing_first_audit.json",
+      "data_point": "Preparing for a first audit or diligence process",
+      "group": "Buying signal",
+      "stage": "job_posts",
+      "run_when": "A finance job post or search results mention audits."
+    },
+    {
+      "id": "weak/serves_one_local_area",
+      "file": "weak/serves_one_local_area.json",
+      "data_point": "Serves a single metro area or local service radius",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Code found a locations page, 'areas we serve' wording or local business data."
+    },
+    {
+      "id": "weak/billed_labour_not_product",
+      "file": "weak/billed_labour_not_product.json",
+      "data_point": "Revenue is billed labour rather than a product",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "weak/physical_single_location",
+      "file": "weak/physical_single_location.json",
+      "data_point": "Physical or single-location operation",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Code found opening hours, a menu page or local business data."
+    },
+    {
+      "id": "weak/llc_no_venture_funding",
+      "file": "weak/llc_no_venture_funding.json",
+      "data_point": "Organised as an LLC or sole proprietorship with no discoverable venture funding",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "The entity type is LLC or sole proprietorship and no funding was found."
+    },
+    {
+      "id": "weak/pre_revenue",
+      "file": "weak/pre_revenue.json",
+      "data_point": "Pre-revenue with minimal operating activity",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Code found waitlist or early-access wording and no pricing or checkout."
+    },
+    {
+      "id": "weak/multi_currency",
+      "file": "weak/multi_currency.json",
+      "data_point": "Requires multi-currency or non-USD reporting",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Code found prices in several currencies or a currency switcher."
+    },
+    {
+      "id": "weak/manufacturing_hardware",
+      "file": "weak/manufacturing_hardware.json",
+      "data_point": "Manufacturing or hardware operations",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "weak/heavy_ar_ap",
+      "file": "weak/heavy_ar_ap.json",
+      "data_point": "Heavy accounts-receivable or accounts-payable workflows",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "weak/shopify_without_stock",
+      "file": "weak/shopify_without_stock.json",
+      "data_point": "Shopify or similar storefront that does not hold inventory",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Code found a store platform but no proof of physical stock."
+    },
+    {
+      "id": "weak/established_erp",
+      "file": "weak/established_erp.json",
+      "data_point": "Already running an established ERP with a full in-house accounting team",
+      "group": "Weak fit signal",
+      "stage": "job_posts",
+      "run_when": "Job posts mention NetSuite or QuickBooks Enterprise."
+    },
+    {
+      "id": "weak/accountant_controls_tools",
+      "file": "weak/accountant_controls_tools.json",
+      "data_point": "Tooling decisions controlled by an incumbent accountant or bookkeeper",
+      "group": "Weak fit signal",
+      "stage": "search_results",
+      "run_when": "Search results mention the company's accountant or CPA firm."
+    },
+    {
+      "id": "weak/no_fintech_tools",
+      "file": "weak/no_fintech_tools.json",
+      "data_point": "No fintech tooling: traditional bank and spreadsheets only",
+      "group": "Weak fit signal",
+      "stage": "site_text",
+      "run_when": "Job posts or pages describe the finance stack."
+    },
+    {
+      "id": "fields/vertical",
+      "file": "fields/vertical.json",
+      "data_point": "Vertical (industry)",
+      "group": "Classification",
+      "stage": "site_text",
+      "run_when": "Always, for companies still in the running."
+    },
+    {
+      "id": "fields/segment_headcount",
+      "file": "fields/segment_headcount.json",
+      "data_point": "Segment (company size)",
+      "group": "Classification",
+      "stage": "site_text",
+      "run_when": "When the employee count from the list is missing, or a team page was found."
+    },
+    {
+      "id": "fields/legal_entity_type",
+      "file": "fields/legal_entity_type.json",
+      "data_point": "Legal entity type and state of incorporation",
+      "group": "Classification",
+      "stage": "site_text",
+      "run_when": "Code couldn't decide the entity type."
+    },
+    {
+      "id": "fields/competitors_used",
+      "file": "fields/competitors_used.json",
+      "data_point": "Competitor accounting tools in use",
+      "group": "Classification",
+      "stage": "job_posts",
+      "run_when": "Job posts or pages mention accounting tools."
+    },
+    {
+      "id": "output/reasoning",
+      "file": "output/reasoning.json",
+      "data_point": "ICP reasoning with funding stage line",
+      "group": "Final output",
+      "stage": "final",
+      "run_when": "After all signals are decided and scored."
+    },
+    {
+      "id": "output/fit_message",
+      "file": "output/fit_message.json",
+      "data_point": "Fit message for outreach",
+      "group": "Final output",
+      "stage": "final",
+      "run_when": "After scoring, for companies that passed."
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "id": "fields/legal_entity_type",
+  "data_point": "Legal entity type and state of incorporation",
+  "group": "Classification",
+  "signal_id": null,
+  "profile_section": "axon_extra_field_1",
+  "weight": "n/a",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code couldn't decide the entity type.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "terms",
+      "privacy",
+      "legal"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Determine the company's legal entity type and state of incorporation.",
+    "definition": "Look in order: site footer (Inc., LLC, Corp., Ltd., PBC), terms governing law, privacy policy registered entity and address, app store developer name, legal or imprint page. 'Inc.' plus Delaware governing law confirms a Delaware C-Corp.",
+    "yes_when": [],
+    "no_when": [],
+    "unknown_when": [],
+    "watch_out_for": [
+      "Return exactly one of the allowed values, verbatim",
+      "A Public Benefit Corporation is its own value"
+    ],
+    "where_to_look": [
+      "Footer",
+      "Terms",
+      "Privacy policy",
+      "Legal page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "value",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "value": {
+          "enum": [
+            "Delaware C-Corp",
+            "Other US C-Corp",
+            "LLC",
+            "Public Benefit Corporation",
+            "Non-US entity",
+            "Non-profit",
+            "Unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" Inc OR LLC {domain}",
+      "\"{company}\" OpenCorporates"
+    ],
+    "good_sources": [
+      "OpenCorporates",
+      "state registries",
+      "SEC EDGAR",
+      "app store developer name"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Linear Orbit, Inc. ... governed by the laws of the State of Delaware",
+      "output": {
+        "value": "Delaware C-Corp",
+        "confidence": "high",
+        "evidence_quote": "governed by the laws of the State of Delaware",
+        "source": "terms",
+        "reason": "An Inc. with Delaware governing law."
+      }
+    }
+  ]
+}

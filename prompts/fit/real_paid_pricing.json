@@ -1,0 +1,102 @@
+{
+  "id": "fit/real_paid_pricing",
+  "data_point": "Publishes real paid pricing",
+  "group": "Fit signal",
+  "signal_id": "F8",
+  "profile_section": "strong_fit_signals",
+  "weight": "high",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found a pricing page but couldn't read prices from it.",
+  "input": {
+    "pages": [
+      "pricing"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company publishes real paid pricing: named plans with prices.",
+    "definition": "The most reliable public proof of genuine transaction activity.",
+    "yes_when": [
+      "Named plans with prices (per month, per year, per user)"
+    ],
+    "no_when": [
+      "Only 'contact us' or 'request a quote'"
+    ],
+    "unknown_when": [
+      "The pricing text is missing or unreadable"
+    ],
+    "watch_out_for": [
+      "A free plan only, with no paid plan, is 'no'"
+    ],
+    "where_to_look": [
+      "Pricing page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "site:{domain} pricing",
+      "\"{company}\" pricing plans"
+    ],
+    "good_sources": [
+      "company pricing page",
+      "G2 / Capterra pricing"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Starter $30/mo, Growth $120/mo, Scale contact us",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Starter $30/mo, Growth $120/mo",
+        "source": "pricing",
+        "reason": "Named plans with prices."
+      }
+    }
+  ]
+}

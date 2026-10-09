@@ -1,0 +1,126 @@
+{
+  "id": "fit/banks_mercury_or_brex",
+  "data_point": "Banks with Mercury or Brex",
+  "group": "Fit signal",
+  "signal_id": "F19",
+  "profile_section": "strong_fit_signals",
+  "weight": "low",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found Mercury or Brex mentioned but couldn't confirm usage.",
+  "input": {
+    "pages": [
+      "careers",
+      "blog",
+      "privacy",
+      "security"
+    ],
+    "extra": [
+      "tool_mentions",
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company itself uses Mercury or Brex for this purpose: banks with mercury or brex.",
+    "definition": "Rarely public. Absence means nothing and must not count against the company.",
+    "yes_when": [
+      "Job posts, 'how we work' posts or vendor lists say the company uses Mercury or Brex"
+    ],
+    "no_when": [
+      "The company names a different provider for this purpose"
+    ],
+    "unknown_when": [
+      "The tool is only named as an integration, investor or partner"
+    ],
+    "watch_out_for": [
+      "Integration and partner mentions are not usage",
+      "Brex or Mercury listed as investors is not usage"
+    ],
+    "where_to_look": [
+      "Job posts",
+      "Blog posts about how they work",
+      "Footer partner badges",
+      "Privacy sub-processors"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "tools_used"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "tools_used": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "Mercury",
+              "Brex"
+            ]
+          },
+          "description": "Only tools the company itself uses, proven by the quote."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" Mercury bank OR Brex"
+    ],
+    "good_sources": [
+      "job posts",
+      "company blog",
+      "vendor case studies"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Our finance stack: Mercury for banking, Ramp for cards",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Mercury for banking",
+        "source": "blog",
+        "reason": "The company says it uses Mercury.",
+        "tools_used": [
+          "Mercury"
+        ]
+      }
+    }
+  ]
+}

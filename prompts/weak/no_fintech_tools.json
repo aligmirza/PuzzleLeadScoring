@@ -1,0 +1,87 @@
+{
+  "id": "weak/no_fintech_tools",
+  "data_point": "No fintech tooling: traditional bank and spreadsheets only",
+  "group": "Weak fit signal",
+  "signal_id": "W12",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Job posts or pages describe the finance stack.",
+  "input": {
+    "pages": [
+      "careers",
+      "about"
+    ],
+    "extra": [
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company uses no modern fintech tools at all, only a traditional bank and spreadsheets.",
+    "definition": "This lowers the score but never disqualifies.",
+    "yes_when": [
+      "Explicit text such as 'track expenses in Excel' with a traditional bank and no fintech tools"
+    ],
+    "no_when": [
+      "Any modern fintech tool is used"
+    ],
+    "unknown_when": [
+      "Nothing describes their finance stack"
+    ],
+    "watch_out_for": [
+      "Not finding any fintech tools is NOT proof; answer unknown"
+    ],
+    "where_to_look": [
+      "Job descriptions"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "off",
+    "why": "Based on absence; not finding fintech tools on the web proves nothing."
+  },
+  "examples": []
+}

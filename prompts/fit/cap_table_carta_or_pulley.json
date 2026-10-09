@@ -1,0 +1,125 @@
+{
+  "id": "fit/cap_table_carta_or_pulley",
+  "data_point": "Cap table managed in Carta or Pulley",
+  "group": "Fit signal",
+  "signal_id": "F21",
+  "profile_section": "strong_fit_signals",
+  "weight": "low",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found Carta or Pulley mentioned but couldn't confirm usage.",
+  "input": {
+    "pages": [
+      "careers",
+      "blog",
+      "privacy",
+      "security"
+    ],
+    "extra": [
+      "tool_mentions",
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company itself uses Carta or Pulley for this purpose: cap table managed in carta or pulley.",
+    "definition": "Rarely public. Absence means nothing and must not count against the company.",
+    "yes_when": [
+      "Job posts, 'how we work' posts or vendor lists say the company uses Carta or Pulley"
+    ],
+    "no_when": [
+      "The company names a different provider for this purpose"
+    ],
+    "unknown_when": [
+      "The tool is only named as an integration, investor or partner"
+    ],
+    "watch_out_for": [
+      "Integration and partner mentions are not usage",
+      "Brex or Mercury listed as investors is not usage"
+    ],
+    "where_to_look": [
+      "Job posts",
+      "Blog posts about how they work",
+      "Footer partner badges",
+      "Privacy sub-processors"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "tools_used"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "tools_used": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "Carta",
+              "Pulley"
+            ]
+          },
+          "description": "Only tools the company itself uses, proven by the quote."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" Carta OR Pulley equity"
+    ],
+    "good_sources": [
+      "job posts",
+      "press releases"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Equity: options are managed in Carta",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "options are managed in Carta",
+        "source": "blog",
+        "reason": "The company says it uses Carta.",
+        "tools_used": [
+          "Carta"
+        ]
+      }
+    }
+  ]
+}

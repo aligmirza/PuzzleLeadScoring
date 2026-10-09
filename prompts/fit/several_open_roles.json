@@ -1,0 +1,112 @@
+{
+  "id": "fit/several_open_roles",
+  "data_point": "Active careers page with several open roles",
+  "group": "Fit signal",
+  "signal_id": "F12",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "A careers page was found but no known job board, so roles couldn't be counted.",
+  "input": {
+    "pages": [
+      "careers"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Count the open roles listed on the careers page and decide whether there are several (3 or more).",
+    "definition": "Several roles open at once.",
+    "yes_when": [
+      "3 or more distinct open roles are listed"
+    ],
+    "no_when": [
+      "The page says no open roles, or lists 1 or 2"
+    ],
+    "unknown_when": [
+      "Roles load from elsewhere and aren't in the text"
+    ],
+    "watch_out_for": [
+      "Don't count the same role twice for different locations",
+      "'We're always hiring' with no roles listed is unknown"
+    ],
+    "where_to_look": [
+      "Careers page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "role_count"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "role_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" jobs",
+      "\"{company}\" careers hiring"
+    ],
+    "good_sources": [
+      "company job board",
+      "LinkedIn jobs",
+      "Wellfound"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Open roles: Senior Engineer, Product Designer, Account Executive, Customer Success Lead",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Senior Engineer, Product Designer, Account Executive, Customer Success Lead",
+        "source": "careers",
+        "reason": "Four open roles are listed.",
+        "role_count": 4
+      }
+    }
+  ]
+}

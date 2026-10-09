@@ -1,0 +1,106 @@
+{
+  "id": "weak/billed_labour_not_product",
+  "data_point": "Revenue is billed labour rather than a product",
+  "group": "Weak fit signal",
+  "signal_id": "W2",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Always, for companies still in the running.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "pricing",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company's revenue is billed labour (coaching, training, local services) rather than a product.",
+    "definition": "This lowers the score but never disqualifies. Skip this if the company is a local professional services firm, which is already scored by its own signal.",
+    "yes_when": [
+      "Pricing by the hour, session or project for work done by people",
+      "Coaching, training or service practice"
+    ],
+    "no_when": [
+      "The company sells a product or software"
+    ],
+    "unknown_when": [
+      "Can't tell how they charge"
+    ],
+    "watch_out_for": [
+      "Software with optional onboarding services is a product company"
+    ],
+    "where_to_look": [
+      "Pricing page",
+      "Homepage"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" services rates OR hourly"
+    ],
+    "good_sources": [
+      "company website",
+      "Clutch"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "1:1 executive coaching sessions, $250 per hour",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "1:1 executive coaching sessions, $250 per hour",
+        "source": "pricing",
+        "reason": "Revenue comes from hourly coaching."
+      }
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "id": "buying/raised_last_6_months",
+  "data_point": "Announced a funding round in the last six months",
+  "group": "Buying signal",
+  "signal_id": "B1",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "high",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "Web search results about the company's funding are available.",
+  "input": {
+    "pages": [
+      "search_results",
+      "blog"
+    ],
+    "extra": [
+      "today",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company announced a funding round in the last six months, including seed extensions, bridges and SAFE rounds.",
+    "definition": "Count from today's date given in the context.",
+    "yes_when": [
+      "A dated announcement of a round within the last six months"
+    ],
+    "no_when": [
+      "The latest announced round is older than six months"
+    ],
+    "unknown_when": [
+      "No dated funding news found"
+    ],
+    "watch_out_for": [
+      "Make sure the news is about this company, not one with a similar name",
+      "Use the announcement date, not the article date if different"
+    ],
+    "where_to_look": [
+      "Funding news",
+      "Company blog or press page",
+      "SEC Form D filing date"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "round",
+        "announced"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "round": {
+          "type": "string"
+        },
+        "announced": {
+          "type": "string",
+          "description": "YYYY-MM-DD or empty"
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" raises {year}",
+      "\"{company}\" funding round {year}",
+      "\"{company}\" seed OR \"Series A\" announcement"
+    ],
+    "good_sources": [
+      "company press releases",
+      "TechCrunch and similar press",
+      "SEC Form D",
+      "investor announcements"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "March 3, 2026: Acme raises $6M seed extension led by Initialized",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Acme raises $6M seed extension led by Initialized",
+        "source": "search result",
+        "reason": "A seed extension was announced within six months.",
+        "round": "Seed extension",
+        "announced": "2026-03-03"
+      }
+    }
+  ]
+}

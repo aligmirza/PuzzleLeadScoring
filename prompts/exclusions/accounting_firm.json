@@ -1,0 +1,122 @@
+{
+  "id": "exclusions/accounting_firm",
+  "data_point": "Accounting firm, bookkeeping practice or fractional CFO firm",
+  "group": "Exclusion",
+  "signal_id": "E3",
+  "profile_section": "exclusions",
+  "weight": "disqualifies",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found accounting, CPA, bookkeeping or fractional CFO wording in the page title or headline.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "about",
+      "pricing"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company ITSELF sells accounting, bookkeeping, tax or outsourced finance services.",
+    "definition": "Exclusions need positive evidence. Never exclude on an inference, an estimate or missing information. These firms are a separate buyer scored by their own profile.",
+    "yes_when": [
+      "The company sells bookkeeping, accounting, tax preparation, CPA or fractional CFO / controller services delivered by its people"
+    ],
+    "no_when": [
+      "The company sells software (including accounting software) rather than accounting services",
+      "The company is in another business and only mentions its own accountant"
+    ],
+    "unknown_when": [
+      "The text is too thin to tell whether it sells services or software"
+    ],
+    "watch_out_for": [
+      "Accounting SOFTWARE companies are not accounting firms",
+      "A tech-enabled bookkeeping service where accountants do the work IS an accounting firm",
+      "A company offering 'find an accountant' marketplace features is not itself a firm"
+    ],
+    "where_to_look": [
+      "Homepage headline",
+      "Pricing page (hours, monthly bookkeeping packages)",
+      "About page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} services",
+      "\"{company}\" CPA OR bookkeeping OR \"accounting firm\""
+    ],
+    "good_sources": [
+      "company website",
+      "LinkedIn company page",
+      "state CPA board listings"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": [
+    {
+      "input_excerpt": "Bookkeeping & Accounting Services for Startups. Get expert bookkeeping, CFO, and tax services. Plans from $99/month",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Get expert bookkeeping, CFO, and tax services",
+        "source": "home",
+        "reason": "The company sells bookkeeping, CFO and tax services."
+      }
+    },
+    {
+      "input_excerpt": "Puzzle is accounting software for startups. Automate your books.",
+      "output": {
+        "answer": "no",
+        "confidence": "high",
+        "evidence_quote": "Puzzle is accounting software for startups",
+        "source": "home",
+        "reason": "The company sells software, not accounting services."
+      }
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "id": "fit/delaware_c_corp",
+  "data_point": "Delaware C-Corporation",
+  "group": "Fit signal",
+  "signal_id": "F3",
+  "profile_section": "strong_fit_signals",
+  "weight": "high",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found an 'Inc.' name but no Delaware governing law, or the entity was unclear.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "terms",
+      "privacy",
+      "legal"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is a Delaware C-Corporation.",
+    "definition": "Treat a legal name ending in 'Inc.' together with Delaware governing law as confirmation.",
+    "yes_when": [
+      "'a Delaware corporation' in the terms",
+      "Legal name ending in 'Inc.' plus terms governed by Delaware law"
+    ],
+    "no_when": [
+      "The company is an LLC, a corporation of another state, a PBC or a foreign entity"
+    ],
+    "unknown_when": [
+      "'Inc.' with no state named, or no legal name found"
+    ],
+    "watch_out_for": [
+      "Governing law alone (without 'Inc.') is not enough",
+      "A 'Delaware limited liability company' is an LLC, not a C-Corp"
+    ],
+    "where_to_look": [
+      "Footer",
+      "Terms (first paragraph and governing law section)",
+      "Privacy policy",
+      "Legal page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{legal_name}\" \"Delaware corporation\"",
+      "\"{company}\" Inc Delaware",
+      "\"{company}\" SEC Form D"
+    ],
+    "good_sources": [
+      "SEC EDGAR Form D",
+      "OpenCorporates",
+      "Delaware Division of Corporations",
+      "the company's terms on its own domain"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Linear Orbit, Inc. ... governed exclusively by the internal laws of the State of Delaware",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "governed exclusively by the internal laws of the State of Delaware",
+        "source": "terms",
+        "reason": "An Inc. with Delaware governing law."
+      }
+    }
+  ]
+}

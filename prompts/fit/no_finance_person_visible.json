@@ -1,0 +1,107 @@
+{
+  "id": "fit/no_finance_person_visible",
+  "data_point": "No dedicated accounting or finance person visible",
+  "group": "Fit signal",
+  "signal_id": "F13",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium at SMB, low at MM, not scored at ENT",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "A team page was found.",
+  "input": {
+    "pages": [
+      "team",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Look at the people shown on the team or about page and decide whether anyone has a dedicated finance or accounting role.",
+    "definition": "Describes a company too small to have hired finance yet.",
+    "yes_when": [
+      "A team list is shown and nobody has a finance or accounting title"
+    ],
+    "no_when": [
+      "Someone has a title like CFO, Controller, Head of Finance, Finance Manager, Accountant"
+    ],
+    "unknown_when": [
+      "No team list is shown"
+    ],
+    "watch_out_for": [
+      "Answer 'yes' only when you actually see a team list",
+      "Investors and advisors don't count as team",
+      "Having a finance person is never a negative at mid-size or larger companies"
+    ],
+    "where_to_look": [
+      "Team page",
+      "About page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "people_shown"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "people_shown": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "off",
+    "why": "Based on absence; not finding a finance person on the web proves nothing."
+  },
+  "examples": [
+    {
+      "input_excerpt": "Our team: Jane Doe, CEO; Sam Lee, CTO; Ana Ruiz, Designer; Tom Park, Engineer",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Jane Doe, CEO; Sam Lee, CTO; Ana Ruiz, Designer; Tom Park, Engineer",
+        "source": "team",
+        "reason": "Four team members shown, none in finance.",
+        "people_shown": 4
+      }
+    }
+  ]
+}

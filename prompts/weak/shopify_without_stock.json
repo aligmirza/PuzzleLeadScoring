@@ -1,0 +1,91 @@
+{
+  "id": "weak/shopify_without_stock",
+  "data_point": "Shopify or similar storefront that does not hold inventory",
+  "group": "Weak fit signal",
+  "signal_id": "W9",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found a store platform but no proof of physical stock.",
+  "input": {
+    "pages": [
+      "home",
+      "shipping"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company runs a Shopify-type storefront that does NOT hold inventory: digital goods, print-on-demand or dropshipping.",
+    "definition": "This lowers the score but never disqualifies. Not excluded, but the storefront integration is a known gap.",
+    "yes_when": [
+      "Store sells digital goods, print-on-demand or dropshipped items"
+    ],
+    "no_when": [
+      "No storefront, or it holds its own stock (that's the exclusion)"
+    ],
+    "unknown_when": [
+      "Can't tell how products are fulfilled"
+    ],
+    "watch_out_for": [],
+    "where_to_look": [
+      "Homepage",
+      "Shipping page",
+      "FAQ"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" \"print on demand\" OR dropshipping OR \"digital products\""
+    ],
+    "good_sources": [
+      "company store",
+      "press"
+    ]
+  },
+  "examples": []
+}

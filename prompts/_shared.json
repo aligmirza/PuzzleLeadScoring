@@ -1,0 +1,160 @@
+{
+  "id": "_shared",
+  "description": "Added to every prompt. Edit here to change rules for all data points at once.",
+  "version": 1,
+  "models": {
+    "small": "claude-haiku-4-5",
+    "large": "claude-sonnet-5-5"
+  },
+  "system": {
+    "role": "You are a careful B2B research analyst for Puzzle, modern accounting software for startup founders. You decide ONE data point about ONE company at a time, using only the text you are given.",
+    "icp_summary": "Puzzle's ideal customer is a US-based, tech-forward startup, usually a Delaware C-Corporation between pre-seed and Series B, with roughly 2 to 15 people and no dedicated accounting person. They run B2B SaaS, AI, fintech or service-based tech businesses with real operating activity, use modern fintech tools (Mercury, Brex, Ramp, Stripe, Gusto, Rippling, Deel) and are often unhappy with QuickBooks.",
+    "ground_rules": [
+      "Use only the text provided. Do not use outside knowledge about the company.",
+      "Answer 'unknown' when the text does not prove the answer either way. Unknown is never a negative.",
+      "Absence of evidence is not evidence of absence. Never treat missing information as proof.",
+      "Exclusions require positive evidence. Never exclude on an inference or estimate.",
+      "Judge what the company itself is and does, not who its customers are or which words appear on its site.",
+      "A product that integrates with a tool is not proof the company uses that tool.",
+      "Copy evidence quotes exactly as written, at most 300 characters. Leave the quote empty when the answer is unknown.",
+      "Return only JSON that matches the output schema. No text before or after it."
+    ],
+    "confidence_scale": {
+      "high": "The text states it directly.",
+      "medium": "Strongly implied by several clues.",
+      "low": "Weak or indirect clue."
+    }
+  },
+  "message_layout": {
+    "note": "Context comes first and is the same for every data point of a company, so it can be cached and reused across that company's prompts. The data-point instructions come last.",
+    "order": [
+      "system: role, icp_summary, ground_rules, confidence_scale",
+      "user part 1 (cacheable): company, domain, today, known facts, page texts",
+      "user part 2: the data point prompt sections and output schema"
+    ]
+  },
+  "context_template": {
+    "header": "Company: {company}\nDomain: {domain}\nToday: {today}",
+    "known_facts": "Facts already confirmed by code (don't contradict them):\n{known_facts}",
+    "page": "--- {page} ---\n{text}"
+  },
+  "page_names": {
+    "home_meta": "Homepage title, description and footer",
+    "home": "Homepage text",
+    "about": "About page",
+    "team": "Team page",
+    "pricing": "Pricing page",
+    "careers": "Careers page",
+    "privacy": "Privacy policy",
+    "terms": "Terms of service",
+    "legal": "Legal or imprint page",
+    "contact": "Contact page",
+    "security": "Security or subprocessor page",
+    "blog": "Blog or press page",
+    "engineering": "Engineering blog",
+    "integrations": "Integrations page",
+    "customers": "Customers page",
+    "investors": "Investor relations page",
+    "locations": "Locations page",
+    "shipping": "Shipping and returns page",
+    "donate": "Donate page",
+    "search_results": "Web search results",
+    "tool_mentions": "Tool mentions found by code",
+    "job_titles": "Open job titles",
+    "job_snippets": "Relevant job post excerpts",
+    "old_snapshot": "Older copy of the site"
+  },
+  "two_steps": {
+    "note": "Every AI data point is answered in up to two steps. Step 1 searches our own saved data. Step 2 searches the internet, using the company's details as variables.",
+    "step_1": "Read the saved pages and job posts (the prompt's input pages). Cheap; uses the small model.",
+    "step_2_runs_when": [
+      "the prompt's web_search.mode is 'fallback' and step 1 answered 'unknown' or gave low confidence",
+      "the prompt's web_search.mode is 'primary' (the answer normally only exists on the web), in which case step 1 is skipped",
+      "never when web_search.mode is 'off'"
+    ],
+    "only_for": "Companies still in the running: phase 1 for must-haves and exclusions, phase 2 for signals. Companies already a NO get no web searches."
+  },
+  "web_search_step": {
+    "model": "large",
+    "tool": {
+      "type": "web_search_20260209",
+      "name": "web_search",
+      "max_uses": 3
+    },
+    "variables": {
+      "{company}": "company name from your list",
+      "{domain}": "cleaned domain from your list",
+      "{legal_name}": "legal name found in step 1 or phase 1, else the company name",
+      "{year}": "current year",
+      "{last_year}": "previous year"
+    },
+    "instructions": [
+      "Use the suggested queries as a starting point; adjust them if they return nothing useful.",
+      "First make sure each result is about THIS company: prefer results that mention or link the domain. Many companies share names.",
+      "Prefer the good sources listed for the data point. Treat SEO pages, scraped directories and AI-generated summaries as weak.",
+      "Note the date of each source. Old information can be out of date (funding, headcount, hiring).",
+      "If sources disagree, say so in the reason and lower the confidence.",
+      "Answer 'unknown' if nothing reliable is found. Never fill a gap with a guess."
+    ],
+    "entity_match": {
+      "domain": "A source mentions or links the company's domain.",
+      "name_and_location": "Same name plus a matching location, founder or product, but no domain.",
+      "name_only": "Same name only. Common names make this unreliable.",
+      "none": "Could not confirm the results are about this company."
+    },
+    "confidence": {
+      "high": "An official record (SEC, state registry, IRS), the company's own page, or 2+ independent reputable sources, AND entity match by domain.",
+      "medium": "One reputable source (major press, Crunchbase, LinkedIn company page, YC directory, job board), with entity match by domain or name and location.",
+      "low": "Name-only match, aggregator or SEO page, information older than about 2 years, or sources that disagree."
+    },
+    "counts_when": {
+      "exclusion": "high confidence and entity match 'domain'",
+      "must_have_no": "high confidence and entity match 'domain'",
+      "everything_else": "medium or high confidence",
+      "low_confidence": "Never counts. Kept in the proof file as a hint and the answer stays Unknown."
+    },
+    "extra_output": {
+      "entity_match": {
+        "enum": [
+          "domain",
+          "name_and_location",
+          "name_only",
+          "none"
+        ]
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "url",
+            "title",
+            "date",
+            "mentions_domain"
+          ],
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string",
+              "description": "Publication date YYYY-MM-DD, or empty if unknown"
+            },
+            "mentions_domain": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "queries_used": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

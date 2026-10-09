@@ -1,0 +1,129 @@
+{
+  "id": "must_haves/based_in_us",
+  "data_point": "Based and operating in the US",
+  "group": "Must-have",
+  "signal_id": "M1",
+  "profile_section": "must_haves",
+  "weight": "required",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found no US address or US governing law, or found mixed US and foreign clues.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "contact",
+      "legal",
+      "terms",
+      "privacy",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is headquartered and operating in the United States.",
+    "definition": "The company's headquarters and main operations are in the US. Remote teams or offices abroad are fine if the company itself is US based.",
+    "yes_when": [
+      "A US street address for the company (city, state, ZIP)",
+      "Terms say the company is a corporation or LLC of a US state",
+      "About page says the company is based in a US city"
+    ],
+    "no_when": [
+      "The only company address is outside the US and the site describes the company as based there",
+      "The legal entity is foreign (Ltd, GmbH, Pty and similar) with a foreign registered address and no US presence"
+    ],
+    "unknown_when": [
+      "No address or location is given anywhere",
+      "Only a sales phone number or a list of customer countries is shown"
+    ],
+    "watch_out_for": [
+      "A foreign-founded company with a US 'Inc.' and US headquarters is US based",
+      "Offices in several countries: decide by headquarters, not by number of offices",
+      "A list of support phone numbers by country is not a location"
+    ],
+    "where_to_look": [
+      "Footer",
+      "Contact page",
+      "Legal or imprint page",
+      "First paragraph of terms and privacy policy",
+      "About page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} headquarters",
+      "\"{company}\" company location"
+    ],
+    "good_sources": [
+      "LinkedIn company page",
+      "Crunchbase",
+      "state business registries",
+      "press releases"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Acme, Inc., 2261 Market St, San Francisco, CA 94114",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Acme, Inc., 2261 Market St, San Francisco, CA 94114",
+        "source": "footer",
+        "reason": "The company lists a San Francisco headquarters address."
+      }
+    },
+    {
+      "input_excerpt": "API Hero Ltd, a company registered in England and Wales, registered office 1 Ashley Road, Altrincham",
+      "output": {
+        "answer": "no",
+        "confidence": "high",
+        "evidence_quote": "API Hero Ltd, a company registered in England and Wales",
+        "source": "terms",
+        "reason": "The company is a UK entity with a UK registered office."
+      }
+    }
+  ]
+}

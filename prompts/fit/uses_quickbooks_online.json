@@ -1,0 +1,108 @@
+{
+  "id": "fit/uses_quickbooks_online",
+  "data_point": "Currently on QuickBooks Online",
+  "group": "Fit signal",
+  "signal_id": "F4",
+  "profile_section": "strong_fit_signals",
+  "weight": "high",
+  "version": 1,
+  "stage": "job_posts",
+  "model": "small",
+  "run_when": "QuickBooks was mentioned on the site or in job posts.",
+  "input": {
+    "pages": [
+      "careers",
+      "integrations"
+    ],
+    "extra": [
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company itself currently uses QuickBooks Online for its own books.",
+    "definition": "Rarely visible; when it is, it is decisive.",
+    "yes_when": [
+      "A job post asks for QuickBooks experience for the company's own finance or ops work",
+      "The company says it uses QuickBooks"
+    ],
+    "no_when": [
+      "The company says it uses a different accounting system"
+    ],
+    "unknown_when": [
+      "QuickBooks is only an integration of their product"
+    ],
+    "watch_out_for": [
+      "'Sync with QuickBooks' on a product page describes their product",
+      "Note QuickBooks Enterprise separately; that is a different signal"
+    ],
+    "where_to_look": [
+      "Job posts (finance, ops, office manager)",
+      "Integration pages (usually NOT usage)"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" QuickBooks job",
+      "\"{company}\" bookkeeper QuickBooks"
+    ],
+    "good_sources": [
+      "job boards",
+      "LinkedIn job posts"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Office Manager: maintain books in QuickBooks Online, run payroll in Gusto",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "maintain books in QuickBooks Online",
+        "source": "job post: Office Manager",
+        "reason": "A job post requires running the company's books in QBO."
+      }
+    }
+  ]
+}

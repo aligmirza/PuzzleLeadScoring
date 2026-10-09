@@ -1,0 +1,112 @@
+{
+  "id": "fields/segment_headcount",
+  "data_point": "Segment (company size)",
+  "group": "Classification",
+  "signal_id": null,
+  "profile_section": "segments",
+  "weight": "n/a",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "When the employee count from the list is missing, or a team page was found.",
+  "input": {
+    "pages": [
+      "team",
+      "about",
+      "careers"
+    ],
+    "extra": [
+      "employees_from_list"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Estimate headcount and assign exactly one segment: SMB (1 to 5 employees), MM (6 to 25), ENT (26 or more).",
+    "definition": "Estimate from the team or about page, the number of distinct people named across the site, and the size of the careers page. On a boundary, assign the lower band. When headcount can't be determined, default to SMB.",
+    "yes_when": [],
+    "no_when": [],
+    "unknown_when": [],
+    "watch_out_for": [
+      "Don't assign ENT for a polished website, a broad product or an enterprise customer list; only for evidence of 26+ people",
+      "About seven in ten best-fit customers have five employees or fewer"
+    ],
+    "where_to_look": [
+      "Team page",
+      "About page",
+      "Careers page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "value",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "headcount_estimate"
+      ],
+      "properties": {
+        "value": {
+          "enum": [
+            "SMB",
+            "MM",
+            "ENT"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "headcount_estimate": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" employees LinkedIn",
+      "\"{company}\" team size"
+    ],
+    "good_sources": [
+      "LinkedIn company page",
+      "Crunchbase",
+      "press"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Our team: 4 people listed",
+      "output": {
+        "value": "SMB",
+        "confidence": "high",
+        "evidence_quote": "4 people listed",
+        "source": "team",
+        "reason": "Four people are shown, so SMB.",
+        "headcount_estimate": 4
+      }
+    }
+  ]
+}

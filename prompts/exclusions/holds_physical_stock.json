@@ -1,0 +1,115 @@
+{
+  "id": "exclusions/holds_physical_stock",
+  "data_point": "E-commerce or retail business holding physical inventory",
+  "group": "Exclusion",
+  "signal_id": "E6",
+  "profile_section": "exclusions",
+  "weight": "disqualifies",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found a store platform, 'add to cart', stock labels or shipping pages.",
+  "input": {
+    "pages": [
+      "home",
+      "shipping",
+      "about",
+      "careers"
+    ],
+    "extra": [
+      "job_titles"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company's operations depend on holding and tracking physical inventory (stock levels, cost of goods, purchase orders, warehousing, fulfilment).",
+    "definition": "Exclusions need positive evidence. Never exclude on an inference, an estimate or missing information. Scope this narrowly.",
+    "yes_when": [
+      "A storefront selling physical goods with stock or 'sold out' indicators",
+      "Shipping and returns policies for physical items",
+      "A warehouse or fulfilment address",
+      "Jobs in supply chain, inventory or fulfilment"
+    ],
+    "no_when": [
+      "Digital goods, subscriptions, memberships, software, services booked online, print-on-demand, or dropshipping where the company never holds stock"
+    ],
+    "unknown_when": [
+      "It sells physical goods but there's no sign whether it holds the stock itself"
+    ],
+    "watch_out_for": [
+      "Print-on-demand (Printful, Printify) and dropshipping are NOT excluded",
+      "If you can't tell whether they hold inventory, answer unknown"
+    ],
+    "where_to_look": [
+      "Homepage product listings",
+      "Shipping and returns page",
+      "Careers"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" warehouse OR fulfillment OR inventory",
+      "\"{company}\" shop products shipping"
+    ],
+    "good_sources": [
+      "company store",
+      "job posts",
+      "news"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": [
+    {
+      "input_excerpt": "Shop Men's Shoes. Tree Runner $98. Sold out in size 10. Free shipping and 30-day returns.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Sold out in size 10. Free shipping and 30-day returns.",
+        "source": "home",
+        "reason": "A store selling physical shoes with stock levels and shipping."
+      }
+    }
+  ]
+}

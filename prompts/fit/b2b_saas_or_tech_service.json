@@ -1,0 +1,110 @@
+{
+  "id": "fit/b2b_saas_or_tech_service",
+  "data_point": "B2B SaaS or tech-enabled service sold beyond one metro",
+  "group": "Fit signal",
+  "signal_id": "F6",
+  "profile_section": "strong_fit_signals",
+  "weight": "high",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Always, for companies still in the running.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "pricing"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company sells B2B SaaS, or a technology-enabled service delivered to customers beyond a single metro area.",
+    "definition": "The test is whether the offering reaches business customers anywhere in the country, not what the company calls itself.",
+    "yes_when": [
+      "Subscription software sold to businesses",
+      "A tech-enabled service delivered remotely to businesses nationwide"
+    ],
+    "no_when": [
+      "Consumer-only product",
+      "Service limited to one city",
+      "Physical goods business"
+    ],
+    "unknown_when": [
+      "Unclear who the customers are"
+    ],
+    "watch_out_for": [
+      "Service-based tech counts",
+      "A consumer app is not B2B"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "Pricing page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} software",
+      "\"{company}\" reviews G2 OR Capterra"
+    ],
+    "good_sources": [
+      "G2",
+      "Capterra",
+      "company website"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Infisical: secrets management platform for engineering teams. Team plan $18/user/month.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "secrets management platform for engineering teams",
+        "source": "home",
+        "reason": "Subscription software sold to businesses."
+      }
+    }
+  ]
+}

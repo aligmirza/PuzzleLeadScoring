@@ -1,0 +1,111 @@
+{
+  "id": "fit/startup_selling_nationally",
+  "data_point": "Operates as a startup selling nationally",
+  "group": "Fit signal",
+  "signal_id": "F5",
+  "profile_section": "strong_fit_signals",
+  "weight": "high",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Always, for companies still in the running.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "pricing",
+      "about",
+      "locations"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company operates as a startup rather than a small business: it sells a scalable software or technology product to customers beyond its own metro area, where revenue grows independently of headcount.",
+    "definition": "This is the single most important discriminator on the profile. It cannot be true together with 'Local professional services firm'.",
+    "yes_when": [
+      "A software or tech product sold to customers anywhere (self-serve sign up, national or global customers)"
+    ],
+    "no_when": [
+      "The company sells its own billed labour into one metro area: agency, consultancy, contractor, clinic, single-location operation"
+    ],
+    "unknown_when": [
+      "Not enough text to tell what or where it sells"
+    ],
+    "watch_out_for": [
+      "Don't judge by how polished the site is",
+      "A service business with national clients and no scalable product is NOT this signal"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "Pricing page",
+      "Locations or service area page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} customers",
+      "\"{company}\" startup"
+    ],
+    "good_sources": [
+      "company website",
+      "press",
+      "Crunchbase",
+      "LinkedIn"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Resend: email API for developers. Start for free. Plans from $20/mo. Trusted by teams worldwide.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "email API for developers. Start for free.",
+        "source": "home",
+        "reason": "A self-serve software product sold to developers anywhere."
+      }
+    }
+  ]
+}

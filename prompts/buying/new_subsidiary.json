@@ -1,0 +1,95 @@
+{
+  "id": "buying/new_subsidiary",
+  "data_point": "Registered a new subsidiary or additional operating entity",
+  "group": "Buying signal",
+  "signal_id": "B8",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "medium",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "Registry or news results are available.",
+  "input": {
+    "pages": [
+      "search_results"
+    ],
+    "extra": [
+      "today",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company recently registered a new subsidiary or additional operating entity.",
+    "definition": "A consolidation need appears the moment the second entity exists.",
+    "yes_when": [
+      "A recent filing or announcement of a new entity under the same owners"
+    ],
+    "no_when": [
+      "Only one entity exists"
+    ],
+    "unknown_when": [
+      "No registry information"
+    ],
+    "watch_out_for": [
+      "International subsidiaries count but note them"
+    ],
+    "where_to_look": [
+      "Registries",
+      "News"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" new subsidiary OR \"new entity\" {year}"
+    ],
+    "good_sources": [
+      "state registries",
+      "OpenCorporates",
+      "press"
+    ]
+  },
+  "examples": []
+}

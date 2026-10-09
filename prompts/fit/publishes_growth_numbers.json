@@ -1,0 +1,108 @@
+{
+  "id": "fit/publishes_growth_numbers",
+  "data_point": "Publishes ARR, customer count or growth milestones",
+  "group": "Fit signal",
+  "signal_id": "F15",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found a possible metric that needs confirming.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "customers",
+      "blog"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company publishes its own ARR, revenue, customer count or growth milestones.",
+    "definition": "Real revenue milestones show the transaction volume Puzzle needs.",
+    "yes_when": [
+      "'$5M ARR', '7,000+ companies use us', 'grew 3x this year' about the company itself"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is published"
+    ],
+    "unknown_when": [
+      "No numbers about the company itself"
+    ],
+    "watch_out_for": [
+      "Numbers about the market or about customers' results don't count",
+      "Social media follower counts don't count"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "About page",
+      "Press and blog"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" ARR OR revenue OR customers growth"
+    ],
+    "good_sources": [
+      "press releases",
+      "funding announcements",
+      "interviews"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Over 7,000 companies trust Puzzle with their books",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Over 7,000 companies trust Puzzle",
+        "source": "home",
+        "reason": "The company publishes its customer count."
+      }
+    }
+  ]
+}

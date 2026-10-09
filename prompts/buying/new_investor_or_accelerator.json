@@ -1,0 +1,95 @@
+{
+  "id": "buying/new_investor_or_accelerator",
+  "data_point": "A new institutional investor or accelerator affiliation appeared",
+  "group": "Buying signal",
+  "signal_id": "B2",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "high",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "Web search results or a new directory listing are available.",
+  "input": {
+    "pages": [
+      "search_results",
+      "about"
+    ],
+    "extra": [
+      "today",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether a new institutional investor or accelerator affiliation has recently appeared on their site, in press or on a portfolio page.",
+    "definition": "Recent means within about six months of today.",
+    "yes_when": [
+      "Recent press or portfolio listing naming a new investor or accelerator"
+    ],
+    "no_when": [
+      "Only old affiliations are found"
+    ],
+    "unknown_when": [
+      "No dated affiliation news"
+    ],
+    "watch_out_for": [
+      "Angel investors alone don't count as institutional"
+    ],
+    "where_to_look": [
+      "Press",
+      "Accelerator and investor portfolio pages"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" new investor OR \"joins\" accelerator {year}"
+    ],
+    "good_sources": [
+      "press",
+      "investor and accelerator portfolio pages"
+    ]
+  },
+  "examples": []
+}

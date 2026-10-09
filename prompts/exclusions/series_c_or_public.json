@@ -1,0 +1,115 @@
+{
+  "id": "exclusions/series_c_or_public",
+  "data_point": "Raised Series C or later, or publicly traded",
+  "group": "Exclusion",
+  "signal_id": "E1",
+  "profile_section": "exclusions",
+  "weight": "disqualifies",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found a Series C+ mention, a stock ticker or an investor relations page.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "investors",
+      "blog"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether THIS company has raised a Series C or later round, or is publicly traded.",
+    "definition": "Exclusions need positive evidence. Never exclude on an inference, an estimate or missing information. Requires a confirmed round, an IPO or an explicit public statement.",
+    "yes_when": [
+      "The company says it raised a Series C, D or later round",
+      "The company shows its own stock ticker or says it is publicly traded"
+    ],
+    "no_when": [
+      "The text confirms the latest round is Series B or earlier"
+    ],
+    "unknown_when": [
+      "Only size, polish or customer logos suggest the company is large",
+      "A Series C is mentioned but it may be another company's"
+    ],
+    "watch_out_for": [
+      "A company that merely looks large or mature is not excluded",
+      "Total amount raised alone does not name a round",
+      "A subsidiary of a public company: answer 'unknown' and explain in the reason"
+    ],
+    "where_to_look": [
+      "About page",
+      "Press and funding announcements",
+      "Investor relations page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" \"Series C\" OR \"Series D\" OR IPO",
+      "\"{company}\" {domain} funding round",
+      "\"{company}\" stock NASDAQ OR NYSE ticker"
+    ],
+    "good_sources": [
+      "SEC EDGAR",
+      "company press releases",
+      "major tech and business press",
+      "Crunchbase"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": [
+    {
+      "input_excerpt": "Pilot has raised over $150M in Series A, Series B, and Series C financing from Sequoia, Index Ventures",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Pilot has raised over $150M in Series A, Series B, and Series C financing",
+        "source": "about",
+        "reason": "The company states it raised a Series C."
+      }
+    }
+  ]
+}

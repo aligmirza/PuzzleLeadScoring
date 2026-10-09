@@ -1,0 +1,115 @@
+{
+  "id": "exclusions/outside_us",
+  "data_point": "Operates primarily outside the US or reports in non-USD currency",
+  "group": "Exclusion",
+  "signal_id": "E4",
+  "profile_section": "exclusions",
+  "weight": "disqualifies",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found foreign clues (legal entity, address, governing law, country domain, currency).",
+  "input": {
+    "pages": [
+      "home_meta",
+      "contact",
+      "legal",
+      "terms",
+      "privacy",
+      "pricing",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company operates primarily outside the United States or reports in a non-USD currency.",
+    "definition": "Exclusions need positive evidence. Never exclude on an inference, an estimate or missing information.",
+    "yes_when": [
+      "The company is registered abroad with a foreign registered office and no US headquarters",
+      "The company prices only in a non-USD currency and is based abroad"
+    ],
+    "no_when": [
+      "The company has a US headquarters or is a US corporation operating from the US"
+    ],
+    "unknown_when": [
+      "Only one weak foreign clue, like a country domain or one foreign office"
+    ],
+    "watch_out_for": [
+      "A foreign-founded company with a Delaware 'Inc.' and US headquarters is NOT excluded",
+      "A US company that also shows euro prices for EU customers is NOT excluded"
+    ],
+    "where_to_look": [
+      "Legal or imprint page",
+      "Terms (registered entity and office)",
+      "Contact page",
+      "Pricing currency"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} headquarters country",
+      "\"{legal_name}\" registered office"
+    ],
+    "good_sources": [
+      "company registries (Companies House, OpenCorporates)",
+      "LinkedIn company page",
+      "Crunchbase"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": [
+    {
+      "input_excerpt": "Personio SE & Co. KG, Seidlstraße 3, 80335 München, Germany. Prices in EUR.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Personio SE & Co. KG, Seidlstraße 3, 80335 München, Germany",
+        "source": "legal",
+        "reason": "The company is a German entity headquartered in Munich."
+      }
+    }
+  ]
+}

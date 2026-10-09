@@ -1,0 +1,97 @@
+{
+  "id": "weak/manufacturing_hardware",
+  "data_point": "Manufacturing or hardware operations",
+  "group": "Weak fit signal",
+  "signal_id": "W7",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Always, for companies still in the running.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "careers"
+    ],
+    "extra": [
+      "job_titles"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company has manufacturing or hardware operations: physical production, bills of materials, unit costing.",
+    "definition": "This lowers the score but never disqualifies. If it also holds inventory for sale, the physical stock exclusion applies instead.",
+    "yes_when": [
+      "The company designs and makes physical devices or products",
+      "Jobs in manufacturing, hardware engineering or supply chain"
+    ],
+    "no_when": [
+      "Software or services only"
+    ],
+    "unknown_when": [
+      "Unclear"
+    ],
+    "watch_out_for": [
+      "A software company selling to manufacturers is not a manufacturer"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "Job titles"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" manufacturing OR hardware OR device"
+    ],
+    "good_sources": [
+      "company website",
+      "press",
+      "job posts"
+    ]
+  },
+  "examples": []
+}

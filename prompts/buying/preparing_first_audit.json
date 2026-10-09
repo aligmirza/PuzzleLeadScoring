@@ -1,0 +1,96 @@
+{
+  "id": "buying/preparing_first_audit",
+  "data_point": "Preparing for a first audit or diligence process",
+  "group": "Buying signal",
+  "signal_id": "B14",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "low",
+  "version": 1,
+  "stage": "job_posts",
+  "model": "small",
+  "run_when": "A finance job post or search results mention audits.",
+  "input": {
+    "pages": [
+      "careers",
+      "search_results"
+    ],
+    "extra": [
+      "job_snippets",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is preparing for its first financial audit or a diligence process.",
+    "definition": "",
+    "yes_when": [
+      "A finance job post mentions 'first audit' or 'audit readiness'",
+      "News about diligence or an upcoming audit"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is found"
+    ],
+    "unknown_when": [
+      "Only generic audit wording"
+    ],
+    "watch_out_for": [
+      "A SOC 2 or security audit is NOT a financial audit"
+    ],
+    "where_to_look": [
+      "Finance job descriptions",
+      "News"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" \"first audit\" OR \"audit readiness\""
+    ],
+    "good_sources": [
+      "job posts",
+      "news"
+    ]
+  },
+  "examples": []
+}

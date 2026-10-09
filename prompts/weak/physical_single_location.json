@@ -1,0 +1,107 @@
+{
+  "id": "weak/physical_single_location",
+  "data_point": "Physical or single-location operation",
+  "group": "Weak fit signal",
+  "signal_id": "W3",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found opening hours, a menu page or local business data.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "locations",
+      "contact"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is a physical or single-location operation: restaurant, bar, café, bakery, lodging, farm, retail, salon, gym, studio, clinic or trade.",
+    "definition": "This lowers the score but never disqualifies.",
+    "yes_when": [
+      "A physical venue with opening hours, a menu, appointments or a storefront address"
+    ],
+    "no_when": [
+      "The company operates online or nationwide"
+    ],
+    "unknown_when": [
+      "Not enough information"
+    ],
+    "watch_out_for": [
+      "An office address alone doesn't make it a physical business"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "Contact page",
+      "Locations page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" address hours",
+      "\"{company}\" Yelp OR \"Google Maps\""
+    ],
+    "good_sources": [
+      "Google Business listings",
+      "Yelp"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Open Mon-Sat 8am-10pm. View our menu. 205 E Houston St, New York",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Open Mon-Sat 8am-10pm. View our menu.",
+        "source": "home",
+        "reason": "A restaurant with opening hours and a menu."
+      }
+    }
+  ]
+}

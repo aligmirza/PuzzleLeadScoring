@@ -1,0 +1,92 @@
+{
+  "id": "weak/established_erp",
+  "data_point": "Already running an established ERP with a full in-house accounting team",
+  "group": "Weak fit signal",
+  "signal_id": "W10",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "job_posts",
+  "model": "small",
+  "run_when": "Job posts mention NetSuite or QuickBooks Enterprise.",
+  "input": {
+    "pages": [
+      "careers",
+      "team"
+    ],
+    "extra": [
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company already runs NetSuite, QuickBooks Enterprise or another ERP with a full in-house accounting team.",
+    "definition": "This lowers the score but never disqualifies.",
+    "yes_when": [
+      "Job posts require NetSuite or QuickBooks Enterprise AND there is a finance team of several people"
+    ],
+    "no_when": [
+      "They're on a lightweight tool, or have no finance team"
+    ],
+    "unknown_when": [
+      "Only the ERP or only the team is known"
+    ],
+    "watch_out_for": [],
+    "where_to_look": [
+      "Job descriptions",
+      "Team page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" NetSuite OR \"QuickBooks Enterprise\""
+    ],
+    "good_sources": [
+      "job posts",
+      "vendor case studies"
+    ]
+  },
+  "examples": []
+}

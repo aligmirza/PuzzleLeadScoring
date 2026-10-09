@@ -1,0 +1,110 @@
+{
+  "id": "fit/local_professional_services",
+  "data_point": "Professional services business serving a single metro area",
+  "group": "Fit signal",
+  "signal_id": "F7",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Always, for companies still in the running.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "about",
+      "locations",
+      "contact"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is a professional services business selling billed labour locally: marketing or creative agency, IT or managed-service shop, staffing firm, consultancy.",
+    "definition": "These convert and earn a smaller positive score. Mutually exclusive with 'Startup selling nationally'.",
+    "yes_when": [
+      "An agency, consultancy, IT shop or staffing firm serving clients mainly in one metro area"
+    ],
+    "no_when": [
+      "The company sells a scalable product, or serves clients nationwide with a product"
+    ],
+    "unknown_when": [
+      "Can't tell where the clients are or whether it sells labour"
+    ],
+    "watch_out_for": [
+      "Accounting and bookkeeping firms are an exclusion, not this signal",
+      "A design agency with global clients and no product: answer 'no' and explain"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "About page",
+      "Locations or service area page",
+      "Contact page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} agency OR consultancy location"
+    ],
+    "good_sources": [
+      "Google Business listings",
+      "Clutch",
+      "LinkedIn"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Denver's full-service marketing agency. Serving businesses across the Front Range since 2009.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Denver's full-service marketing agency",
+        "source": "home",
+        "reason": "A local marketing agency serving one metro area."
+      }
+    }
+  ]
+}

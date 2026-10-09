@@ -1,0 +1,100 @@
+{
+  "id": "buying/converted_llc_to_delaware",
+  "data_point": "Recently converted from an LLC to a Delaware C-Corporation",
+  "group": "Buying signal",
+  "signal_id": "B6",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "high",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "An older snapshot of the site or registry results are available.",
+  "input": {
+    "pages": [
+      "search_results",
+      "terms",
+      "legal"
+    ],
+    "extra": [
+      "old_snapshot",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company recently converted from an LLC to a Delaware C-Corporation or reincorporated in Delaware.",
+    "definition": "The standard step before an institutional round, and the moment the books get formalised. Recent means within about 12 months.",
+    "yes_when": [
+      "An older site version or filing shows 'LLC' and the current one shows a Delaware 'Inc.'",
+      "News or a filing describes the conversion"
+    ],
+    "no_when": [
+      "The company has been a Delaware corporation for years"
+    ],
+    "unknown_when": [
+      "No history available"
+    ],
+    "watch_out_for": [
+      "A name change alone is not a conversion"
+    ],
+    "where_to_look": [
+      "Old snapshots of the footer and terms",
+      "State registry results",
+      "News"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" LLC",
+      "\"{legal_name}\" Delaware conversion"
+    ],
+    "good_sources": [
+      "state registries",
+      "OpenCorporates",
+      "SEC Form D"
+    ]
+  },
+  "examples": []
+}

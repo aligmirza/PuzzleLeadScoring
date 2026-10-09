@@ -1,0 +1,138 @@
+{
+  "id": "fit/venture_backed_stage",
+  "data_point": "Venture-backed at pre-seed, seed, Series A or Series B",
+  "group": "Fit signal",
+  "signal_id": "F1",
+  "profile_section": "strong_fit_signals",
+  "weight": "high",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found no clear funding statement, or found investors without a stage.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "team",
+      "careers",
+      "blog"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is venture-backed, and at which stage.",
+    "definition": "Look for funding announcements, investor logos, 'our seed round', accelerator mentions. If the stage can't be confirmed directly, estimate it from maturity clues: team size, number and seniority of open roles, product maturity, published pricing, press. Absence of a funding record is never evidence the company is unfunded.",
+    "yes_when": [
+      "A stated round (pre-seed, seed, Series A, Series B), or named institutional investors",
+      "Clear startup maturity clues that support an estimated stage"
+    ],
+    "no_when": [
+      "Positive evidence the company took no venture funding (e.g. 'proudly bootstrapped')"
+    ],
+    "unknown_when": [
+      "No funding information and no maturity clues"
+    ],
+    "watch_out_for": [
+      "Never say a company falls short because funding couldn't be found",
+      "'Bootstrapped (confirmed)' needs positive evidence; otherwise use 'Unknown (not found)'",
+      "If Series C or later is stated, report it as 'Series C or later'"
+    ],
+    "where_to_look": [
+      "About and team pages (investor logos)",
+      "Blog and press",
+      "Careers ('we just raised')"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "value",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "basis",
+        "venture_backed"
+      ],
+      "properties": {
+        "value": {
+          "enum": [
+            "Pre-Seed",
+            "Seed",
+            "Series A",
+            "Series B",
+            "Series C or later",
+            "Bootstrapped",
+            "Unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "basis": {
+          "enum": [
+            "confirmed",
+            "estimated",
+            "not found"
+          ]
+        },
+        "venture_backed": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "notes": "The final reasoning uses: 'Funding stage: <value> (<basis>)'."
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" raises seed OR \"Series A\" OR \"Series B\"",
+      "\"{company}\" {domain} funding investors",
+      "\"{company}\" Crunchbase"
+    ],
+    "good_sources": [
+      "company press releases",
+      "TechCrunch and similar press",
+      "Crunchbase",
+      "investor portfolio pages",
+      "SEC Form D"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "We raised a $4M seed round led by Accel to build the future of email.",
+      "output": {
+        "value": "Seed",
+        "confidence": "high",
+        "evidence_quote": "We raised a $4M seed round led by Accel",
+        "source": "blog",
+        "reason": "The company announced its seed round.",
+        "basis": "confirmed",
+        "venture_backed": "yes"
+      }
+    }
+  ]
+}

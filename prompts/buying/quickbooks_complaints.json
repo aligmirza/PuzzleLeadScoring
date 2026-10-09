@@ -1,0 +1,97 @@
+{
+  "id": "buying/quickbooks_complaints",
+  "data_point": "Publicly complaining about QuickBooks",
+  "group": "Buying signal",
+  "signal_id": "B11",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "medium",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "Web search results mentioning the company or founders with QuickBooks are available.",
+  "input": {
+    "pages": [
+      "search_results"
+    ],
+    "extra": [
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company or its founders publicly complained about QuickBooks pricing, integrations or support.",
+    "definition": "",
+    "yes_when": [
+      "A post or review by the company or its founder criticising QuickBooks"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is found"
+    ],
+    "unknown_when": [
+      "Complaints by unrelated people"
+    ],
+    "watch_out_for": [
+      "Make sure the author is from this company"
+    ],
+    "where_to_look": [
+      "X / Twitter",
+      "Reddit",
+      "LinkedIn",
+      "Review sites"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" QuickBooks",
+      "{company} founder QuickBooks"
+    ],
+    "good_sources": [
+      "X / Twitter",
+      "LinkedIn posts",
+      "Reddit"
+    ]
+  },
+  "examples": []
+}

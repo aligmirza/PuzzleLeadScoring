@@ -1,0 +1,58 @@
+{
+  "description": "Lead scoring after phase 2. Only signals answered Yes count; Needs check and Unknown count as 0. Weights come from profile.yaml.",
+  "points": {
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+    "none": 0
+  },
+  "weak_signal_points": -2,
+  "tiers": {
+    "note": "Strong fit at or above this score, Weak fit below it. Provisional: tune after checking a hand-labelled sample.",
+    "strong_fit_min_score": 12
+  },
+  "segments": {
+    "note": "From the employee count in your list. On a boundary use the lower band. Missing or unreadable: SMB (profile rule).",
+    "SMB": [1, 5],
+    "MM": [6, 25],
+    "ENT": [26, null]
+  },
+  "skip_rules": [
+    {
+      "if_yes": "Local professional services firm",
+      "skip": ["Serves one local area", "Sells hours of labour, not a product"],
+      "why": "Local professional services firms already get a smaller positive score; don't penalise them twice."
+    }
+  ],
+  "fit_signals": {
+    "Venture-backed, pre-seed to Series B": "high",
+    "Uses Stripe for billing": "high",
+    "Delaware C-Corp": "high",
+    "Uses QuickBooks Online": "high",
+    "Startup selling nationally": "high",
+    "B2B SaaS or tech-enabled service": "high",
+    "Local professional services firm": "medium",
+    "Publishes real paid pricing": "high",
+    "Payroll on Gusto, Rippling or Deel": "medium",
+    "AI is core to the product": "medium",
+    "YC or similar accelerator": "medium",
+    "Several open roles": "medium",
+    "No finance person visible": {"SMB": "medium", "MM": "low", "ENT": "none"},
+    "Has a finance lead (mid-size and up)": {"SMB": "none", "MM": "medium", "ENT": "medium"},
+    "Publishes revenue or growth numbers": "medium",
+    "Remote-first or hybrid": "medium",
+    "Runs several US companies": "medium",
+    "Early adopter": "medium",
+    "Banks with Mercury or Brex": "low",
+    "Uses Ramp or Brex cards": "low",
+    "Cap table in Carta or Pulley": "low"
+  },
+  "buying_signals": {
+    "Hiring for several roles": "medium",
+    "Hiring a finance lead": "medium",
+    "Hiring ops or chief of staff": "medium",
+    "Lost or replacing a bookkeeper": "medium",
+    "Tax deadline coming up": "medium",
+    "Preparing for a first audit": "low"
+  }
+}

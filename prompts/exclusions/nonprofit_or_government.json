@@ -1,0 +1,125 @@
+{
+  "id": "exclusions/nonprofit_or_government",
+  "data_point": "Non-profit, charity, foundation, association or government body",
+  "group": "Exclusion",
+  "signal_id": "E5",
+  "profile_section": "exclusions",
+  "weight": "disqualifies",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found 501(c)(3), charity, tax-deductible or donation wording, or a donate button.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "about",
+      "donate",
+      "legal"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the organisation ITSELF is a non-profit, charity, foundation, religious organisation, membership association or government body.",
+    "definition": "Exclusions need positive evidence. Never exclude on an inference, an estimate or missing information. This turns on what the organisation itself is, never on who it sells to or which words appear on its site.",
+    "yes_when": [
+      "Direct evidence of its own tax-exempt status: a 501(c)(3) or charity registration number, a tax ID shown for tax-deductible donations, a Form 990",
+      "The main call to action is donating or volunteering and nothing commercial is for sale",
+      "It is a government or public-sector body"
+    ],
+    "no_when": [
+      "It is a for-profit company, including one whose customers are non-profits (donor CRMs, fundraising platforms, grant software)"
+    ],
+    "unknown_when": [
+      "Non-profit words appear but it's unclear whether the organisation itself is one"
+    ],
+    "watch_out_for": [
+      "A Public Benefit Corporation is for-profit and is NOT excluded",
+      "'Discounts for 501(c)(3) organisations' means they sell to non-profits",
+      "A donation page, membership fee or event ticket is not commercial activity"
+    ],
+    "where_to_look": [
+      "Footer",
+      "About page",
+      "Donate page",
+      "Legal page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" nonprofit OR 501(c)(3) OR charity",
+      "\"{company}\" ProPublica Nonprofit Explorer EIN"
+    ],
+    "good_sources": [
+      "IRS Tax Exempt Organization Search",
+      "ProPublica Nonprofit Explorer",
+      "Candid / GuideStar"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": [
+    {
+      "input_excerpt": "The American Red Cross is a 501(c)(3) charitable organization. Donations are tax-deductible. Donate now.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "The American Red Cross is a 501(c)(3) charitable organization",
+        "source": "about",
+        "reason": "The organisation states its own 501(c)(3) status."
+      }
+    },
+    {
+      "input_excerpt": "Bloomerang: donor management software for nonprofits. Plans from $119/month.",
+      "output": {
+        "answer": "no",
+        "confidence": "high",
+        "evidence_quote": "donor management software for nonprofits",
+        "source": "home",
+        "reason": "A for-profit software company that sells to non-profits."
+      }
+    }
+  ]
+}

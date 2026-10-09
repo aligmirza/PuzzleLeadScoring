@@ -1,0 +1,99 @@
+{
+  "id": "buying/launched_paid_pricing",
+  "data_point": "Recently launched paid pricing, a new revenue line or subscription billing",
+  "group": "Buying signal",
+  "signal_id": "B12",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "medium",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "An older snapshot of the pricing page or a launch post is available.",
+  "input": {
+    "pages": [
+      "pricing",
+      "blog",
+      "search_results"
+    ],
+    "extra": [
+      "old_snapshot",
+      "today"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company recently launched paid pricing, a new revenue line or subscription billing.",
+    "definition": "Recent means within about six months.",
+    "yes_when": [
+      "An older snapshot had no pricing and the current site does",
+      "A recent post announces paid plans or a new product line"
+    ],
+    "no_when": [
+      "Pricing has been the same for a long time"
+    ],
+    "unknown_when": [
+      "No history available"
+    ],
+    "watch_out_for": [
+      "A price change is not a launch"
+    ],
+    "where_to_look": [
+      "Old snapshots of the pricing page",
+      "Changelog and blog",
+      "Product Hunt launch date"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" launches pricing OR \"paid plans\" {year}"
+    ],
+    "good_sources": [
+      "company blog or changelog",
+      "Product Hunt",
+      "press"
+    ]
+  },
+  "examples": []
+}

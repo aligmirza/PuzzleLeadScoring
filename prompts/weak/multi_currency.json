@@ -1,0 +1,95 @@
+{
+  "id": "weak/multi_currency",
+  "data_point": "Requires multi-currency or non-USD reporting",
+  "group": "Weak fit signal",
+  "signal_id": "W6",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found prices in several currencies or a currency switcher.",
+  "input": {
+    "pages": [
+      "pricing",
+      "contact",
+      "legal"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company needs multi-currency or non-USD reporting (a known product gap).",
+    "definition": "This lowers the score but never disqualifies.",
+    "yes_when": [
+      "Operating entities or offices in several countries",
+      "Revenue in several currencies"
+    ],
+    "no_when": [
+      "Only USD"
+    ],
+    "unknown_when": [
+      "Unclear"
+    ],
+    "watch_out_for": [
+      "Showing local-currency prices to visitors doesn't always mean multi-currency books"
+    ],
+    "where_to_look": [
+      "Pricing page",
+      "Legal page (entities)",
+      "Contact page (offices)"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" offices countries"
+    ],
+    "good_sources": [
+      "LinkedIn company page",
+      "company website"
+    ]
+  },
+  "examples": []
+}

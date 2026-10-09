@@ -1,0 +1,111 @@
+{
+  "id": "fit/uses_stripe_billing",
+  "data_point": "Uses Stripe for billing or subscription revenue",
+  "group": "Fit signal",
+  "signal_id": "F2",
+  "profile_section": "strong_fit_signals",
+  "weight": "high",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found Stripe mentioned but not in a way that proves usage.",
+  "input": {
+    "pages": [
+      "privacy",
+      "terms",
+      "pricing",
+      "security"
+    ],
+    "extra": [
+      "tool_mentions"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company uses Stripe for its own billing or subscription revenue.",
+    "definition": "Stripe processes the company's own customer payments.",
+    "yes_when": [
+      "Privacy policy or terms name Stripe as their payment processor or sub-processor",
+      "Checkout or billing runs on Stripe"
+    ],
+    "no_when": [
+      "The text names a different payment processor as their only one"
+    ],
+    "unknown_when": [
+      "Stripe is only named as an integration, investor or partner"
+    ],
+    "watch_out_for": [
+      "'Connect your Stripe account' describes their product, not their billing",
+      "Stripe as an investor is not usage"
+    ],
+    "where_to_look": [
+      "Privacy policy (sub-processors)",
+      "Terms",
+      "Pricing and checkout"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "site:{domain} stripe",
+      "\"{company}\" Stripe payments"
+    ],
+    "good_sources": [
+      "pages on the company's own domain",
+      "Stripe case studies"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "We use Stripe to process payments. Stripe's privacy policy applies to payment data.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "We use Stripe to process payments.",
+        "source": "privacy",
+        "reason": "The company names Stripe as its payment processor."
+      }
+    }
+  ]
+}

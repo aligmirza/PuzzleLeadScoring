@@ -1,0 +1,109 @@
+{
+  "id": "fields/vertical",
+  "data_point": "Vertical (industry)",
+  "group": "Classification",
+  "signal_id": null,
+  "profile_section": "verticals",
+  "weight": "n/a",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Always, for companies still in the running.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "pricing",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Assign exactly one vertical for the company's primary business.",
+    "definition": "If the company could fit two, pick the one closest to its core revenue. Use Other only when nothing else applies.",
+    "yes_when": [],
+    "no_when": [],
+    "unknown_when": [],
+    "watch_out_for": [
+      "Never more than one, never none",
+      "AI-native products go to AI & Machine Learning; software that merely uses AI goes to its main category"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "Pricing page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "value",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "value": {
+          "enum": [
+            "B2B SaaS",
+            "AI & Machine Learning",
+            "Fintech & Financial Services",
+            "Professional Services",
+            "Marketplace & Platform",
+            "Healthcare & Wellness",
+            "Marketing & Creative",
+            "Education & Learning",
+            "Consumer & DTC",
+            "Other"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} what does it do"
+    ],
+    "good_sources": [
+      "company website",
+      "LinkedIn company page",
+      "Crunchbase",
+      "G2"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Linear: the product development system for teams",
+      "output": {
+        "value": "B2B SaaS",
+        "confidence": "high",
+        "evidence_quote": "the product development system for teams",
+        "source": "home",
+        "reason": "Subscription software sold to businesses."
+      }
+    }
+  ]
+}

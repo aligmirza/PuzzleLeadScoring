@@ -1,0 +1,109 @@
+{
+  "id": "fit/runs_several_us_companies",
+  "data_point": "Runs several US legal entities under common ownership",
+  "group": "Fit signal",
+  "signal_id": "F17",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found 'Holdings', 'portfolio company' or 'family of companies' wording.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "legal",
+      "terms"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company runs several US legal entities under common ownership (holding company, real estate portfolio, incubator or studio).",
+    "definition": "A consolidation need appears the moment a second entity exists.",
+    "yes_when": [
+      "The site names several operating companies or subsidiaries under the same owner",
+      "A holding company or studio with portfolio companies"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing suggests several entities"
+    ],
+    "unknown_when": [
+      "Only one entity is named"
+    ],
+    "watch_out_for": [
+      "Being 'a portfolio company of' a VC fund is NOT common ownership of several entities"
+    ],
+    "where_to_look": [
+      "About page",
+      "Legal page",
+      "Footer"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" subsidiaries OR \"holding company\"",
+      "\"{legal_name}\" OpenCorporates"
+    ],
+    "good_sources": [
+      "OpenCorporates",
+      "state registries",
+      "company legal pages"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Acme Holdings, LLC and its subsidiaries Acme Realty LLC and Acme Property Management LLC",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Acme Holdings, LLC and its subsidiaries Acme Realty LLC and Acme Property Management LLC",
+        "source": "legal",
+        "reason": "Several entities under one holding company."
+      }
+    }
+  ]
+}

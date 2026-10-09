@@ -1,0 +1,150 @@
+{
+  "id": "must_haves/uses_fintech_tool",
+  "data_point": "Uses a fintech tool Puzzle connects to",
+  "group": "Must-have",
+  "signal_id": "M3",
+  "profile_section": "must_haves",
+  "weight": "required",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found a mention of one of the tools but couldn't tell if the company itself uses it.",
+  "input": {
+    "pages": [
+      "privacy",
+      "security",
+      "terms",
+      "careers",
+      "home"
+    ],
+    "extra": [
+      "tool_mentions",
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company itself uses at least one of: Mercury, Brex, Ramp, Stripe, Gusto, Rippling, Deel, Pulley, or Chase business banking.",
+    "definition": "The company uses the tool for its own billing, payroll, banking, cards or cap table.",
+    "yes_when": [
+      "Privacy policy or subprocessor list names the tool as a processor the company uses",
+      "Job posts say benefits or payroll run through Gusto, Rippling or Deel",
+      "Checkout uses Stripe",
+      "The site says 'we bank with Mercury' or similar"
+    ],
+    "no_when": [
+      "Almost never provable. Use 'no' only if the text explicitly says they use a different tool instead and none of these"
+    ],
+    "unknown_when": [
+      "The tool is only named as an integration of their product",
+      "The tool is named as an investor or partner"
+    ],
+    "watch_out_for": [
+      "'Connect your Stripe account' or 'integrates with Gusto' describes their product, not their own stack",
+      "Stripe or Brex listed among investors is not usage"
+    ],
+    "where_to_look": [
+      "Privacy policy and subprocessor list",
+      "Terms",
+      "Careers and job posts",
+      "Checkout links"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "tools_used"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "tools_used": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "Mercury",
+              "Brex",
+              "Ramp",
+              "Stripe",
+              "Gusto",
+              "Rippling",
+              "Deel",
+              "Pulley",
+              "Chase"
+            ]
+          },
+          "description": "Only tools the company itself uses, proven by the quote."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "site:{domain} Stripe OR Gusto OR Rippling OR Deel OR Mercury OR Brex OR Ramp",
+      "\"{company}\" Stripe OR Gusto OR Rippling OR Mercury OR Brex OR Ramp OR Deel"
+    ],
+    "good_sources": [
+      "pages on the company's own domain",
+      "job posts",
+      "vendor case studies"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "The payment processors we work with are: Stripe. Their privacy policy is at stripe.com/privacy",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "The payment processors we work with are: Stripe",
+        "source": "privacy",
+        "reason": "The company names Stripe as its own payment processor.",
+        "tools_used": [
+          "Stripe"
+        ]
+      }
+    },
+    {
+      "input_excerpt": "Puzzle integrates with Stripe, Mercury, Brex and Gusto to pull in your transactions",
+      "output": {
+        "answer": "unknown",
+        "confidence": "low",
+        "evidence_quote": "",
+        "source": "",
+        "reason": "These are integrations of the product, not tools the company says it uses.",
+        "tools_used": []
+      }
+    }
+  ]
+}

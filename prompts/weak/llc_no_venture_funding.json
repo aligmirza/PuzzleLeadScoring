@@ -1,0 +1,96 @@
+{
+  "id": "weak/llc_no_venture_funding",
+  "data_point": "Organised as an LLC or sole proprietorship with no discoverable venture funding",
+  "group": "Weak fit signal",
+  "signal_id": "W4",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "The entity type is LLC or sole proprietorship and no funding was found.",
+  "input": {
+    "pages": [
+      "terms",
+      "legal",
+      "home_meta"
+    ],
+    "extra": [
+      "known_facts"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is organised as an LLC or sole proprietorship and has no discoverable venture funding.",
+    "definition": "This lowers the score but never disqualifies. Common among real customers, so it must never disqualify.",
+    "yes_when": [
+      "Legal name ends in LLC (or it's a sole proprietor) and no funding is mentioned anywhere"
+    ],
+    "no_when": [
+      "The company is a corporation, or funding is mentioned"
+    ],
+    "unknown_when": [
+      "The legal form is unclear"
+    ],
+    "watch_out_for": [],
+    "where_to_look": [
+      "Footer",
+      "Terms",
+      "Legal page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" LLC",
+      "\"{company}\" funding"
+    ],
+    "good_sources": [
+      "state registries",
+      "OpenCorporates",
+      "Crunchbase"
+    ]
+  },
+  "examples": []
+}

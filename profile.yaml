@@ -1,0 +1,429 @@
+job_type: icp_evaluation
+schema_version: 3
+job_fields:
+  # icp_definition (required): A comprehensive definition of the ideal customer profile (ICP) that describes the characteristics, attributes, and criteria of companies that are the best fit for your product or service. This establishes the foundation for all other ICP criteria.
+  icp_definition: |-
+    Puzzle's ideal customer is a US-based, tech-forward startup founder running a
+    Delaware C-Corporation between pre-seed and Series B, with a small team of
+    roughly 2–15 people and no dedicated accounting resource. They are B2B SaaS,
+    AI, fintech, or service-based tech businesses with real operating activity —
+    meaningful monthly expenses, live payroll, and revenue moving through Stripe.
+    They run a modern fintech stack (Mercury, Brex, Ramp, Stripe, Gusto, Rippling,
+    Deel) and they are early adopters by temperament: they like trying new tools and
+    they are actively dissatisfied with QuickBooks and with manual bookkeeping.
+
+    They buy when a board meeting, a fundraise, an audit, or a tax deadline forces
+    the question of where the numbers actually stand — or when a bookkeeper leaves
+    and the work lands back on the founder. They use Puzzle to automate
+    categorization and reconciliation and to keep cash, burn, runway and ARR current
+    every day, so they can answer an investor question on the spot instead of
+    waiting three weeks on a close.
+
+  # must_haves (required): Non-negotiable criteria that every qualified prospect must meet. Leads missing these attributes should be excluded from outreach.
+  must_haves: |-
+    All four must hold. Judge each on positive evidence. Where a criterion cannot be
+    confirmed either way, do not fail the company on that basis alone — an
+    unconfirmed criterion is not a failed one.
+
+    - Headquartered and operating in the United States
+    - An operating business with a live website and a real product or service
+    - Uses at least one modern fintech tool Puzzle ingests — Mercury, Brex, Ramp,
+    Stripe, Gusto, Rippling, Deel, Pulley, or Chase business banking
+    - Has genuine transaction activity — payroll running, a corporate card in use,
+    or revenue being processed. Published paid pricing, a working checkout, an app
+    store listing with paid plans, or actively advertised open roles all count as
+    proof.
+
+    On funding stage — read this carefully, it governs the majority of companies
+    scored. Funding stage is deliberately NOT a must-have. It is scored as a fit
+    signal instead, so that a confirmed early stage counts in the company's favour
+    while an unconfirmed one costs nothing.
+
+    Absence of a funding announcement is not evidence that a company is unfunded.
+    Quiet seed rounds, stealth companies, and rounds that were never press-released
+    are common among exactly the companies Puzzle wants. A company with no
+    discoverable funding record is scored on the four criteria above and on whatever
+    fit signals are observable, exactly as any other company would be. Never state in
+    the reasoning that a company falls short because its funding could not be found.
+
+    Bootstrapped and Series C+ companies are handled in Exclusions below. Both require
+    positive evidence, and an estimated or inferred stage must never trigger an
+    exclusion.
+
+    Report the stage in the reasoning instead of in a structured field. End the
+    reasoning with a callout line in exactly this format, as its own final line, on
+    every company without exception:
+
+    Funding stage: <value> (<basis>)
+
+    <value> is one of Pre-Seed, Seed, Series A, Series B, Series C or later,
+    Bootstrapped, or Unknown. <basis> is one of confirmed, estimated, or not found.
+    Use "Unknown (not found)" where no funding information could be found, and
+    "Bootstrapped (confirmed)" only where there is positive evidence the company took
+    no venture funding — these are different answers and must not be collapsed into
+    one. Write the line verbatim in that format with no extra punctuation, so it can
+    be parsed out of the description reliably.
+
+  # exclusions (required): Characteristics that immediately disqualify a prospect, regardless of other signals.
+  exclusions: |-
+    Every exclusion below requires positive evidence. Never exclude a company on an
+    inference, an estimate, or an absence of information.
+
+    - Raised Series C or later, or is publicly traded — above the ceiling regardless
+    of how well the company fits otherwise. Requires a confirmed round, an IPO, or
+    an explicit public statement. A company that merely looks large or mature is
+    not excluded on that basis.
+    - Newly incorporated entity with no live domain and no disclosed funding — no
+    transaction volume for the product to work on
+    - Accounting firms, bookkeeping practices, and fractional CFO or outsourced
+    controller firms — a separate buyer, scored by its own profile
+    - Operates primarily outside the United States or reports in a non-USD
+    functional currency
+     - Non-profits, charities, foundations, religious organisations, membership associations, and government or public-sector bodies. Puzzle does not do fund accounting — restricted and unrestricted funds, grant tracking, donor-designated balances, or Form 990 reporting — so these are a product gap rather than a preference, and they fail regardless of how well they score otherwise. A donation page, membership fee, or event-ticket checkout is not commercial transaction activity and must not be treated as proof of it. This exclusion turns on what the company ITSELF is — never on who it sells to, what sector it serves, or what words appear on its site. Apply it only where one of these holds: the entity-type extra field returns "Non-profit", or there is direct evidence of the company's own tax-exempt status such as a 501(c)(3) or charity registration number, an EIN presented for tax-deductible donations, a published annual report or Form 990, or a site whose primary call to action is donating or volunteering with no commercial product for sale. A for-profit company whose customers are non-profits — donor CRMs, fundraising platforms, grant-management software, volunteer-management tools, non-profit accounting products — is NOT excluded, however often "non-profit", "donor", "charity", "grant", or "fundraising" appear on its website. A Public Benefit Corporation is a for-profit entity and is not excluded.
+    - E-commerce and retail businesses whose operations depend on holding and tracking physical inventory — stock levels, cost of goods sold, purchase orders, warehousing, or fulfilment. Puzzle does not do inventory accounting, so these are a product gap rather than a preference, and they fail regardless of how well they score otherwise. Positive evidence looks like: a storefront selling physical goods, stock or "sold out" indicators, shipping and returns policies for physical items, a warehouse or fulfilment address, or job postings for supply-chain, inventory, or fulfilment roles. Scope this narrowly. E-commerce without inventory is NOT excluded — digital goods and downloads, subscriptions and memberships, software sold through a storefront, services booked online, print-on-demand, and dropshipping where the company never holds stock. Where it cannot be determined whether the company holds inventory, do not exclude.
+
+    Note on what is deliberately NOT excluded: bootstrapped companies, local and
+    physical businesses, agencies, and consultancies all remain in
+    scope. They are not disqualified — they are scored below venture-backed
+    startups by the weak fit signals. Being a startup is a fit signal on this
+    profile, not a gate. Never exclude a company for being a small business, for
+    lacking venture funding, or for serving a local market.
+
+  # strong_fit_signals (required): Positive indicators that a prospect is highly likely to convert. Prioritize outreach when multiple signals are present.
+  strong_fit_signals: |-
+    Detection guidance applies to every signal below. Check the company's own site
+    first — homepage, about, pricing, careers, blog, footer, privacy policy, and
+    terms of service — then job postings, press coverage, accelerator and investor
+    portfolio pages, Product Hunt, and app store listings. Several of these signals
+    are only visible in places most crawls skip, so the specific places to look are
+    named on each one.
+
+    Never treat absence of evidence as evidence of absence. If a signal cannot be
+    confirmed, it simply does not fire — it is not a negative, and it should not be
+    reported as a weakness in the reasoning.
+
+    Fit Signals
+    - Venture-backed at pre-seed, seed, Series A, or Series B; weight: high
+    Look in: funding announcements and press, investor and accelerator portfolio
+    pages, about and team pages for investor logos, and site language such as "our
+    seed round" or "hiring our first finance person." Where the stage cannot be
+    confirmed directly, maturity proxies may stand in: team or about page headcount,
+    number and seniority of open roles, product maturity and published pricing,
+    press cadence, and office locations. A company that reads as a venture-backed
+    startup on those proxies fires this signal; say in the reasoning that the stage
+    was estimated and from what. Absence means nothing and must not count against
+    the company.
+    - Uses Stripe for billing or subscription revenue; weight: high
+    Look in: privacy policy and terms (Stripe is almost always named as a
+    sub-processor), checkout and pricing pages, developer docs.
+    - Delaware C-Corporation; weight: high
+    Look in: the site footer for a legal entity name ending in "Inc."; terms of
+    service for governing-law language naming Delaware; privacy policy for the
+    registered entity; app store listings for the developer's legal name. Treat
+    "X, Inc." plus Delaware governing law as confirmation.
+    - Currently on QuickBooks Online — the largest displacement pool and the source
+    of the strongest stated dissatisfaction; weight: high
+    Look in: job postings requiring QuickBooks experience, integration or
+    "works with" pages, careers listings for finance and ops roles, and any
+    public accounting-stack mentions. Rarely visible; when it is, it is decisive.
+    - Operates as a startup rather than a small business — sells a scalable software
+    or technology product to customers beyond its own metro area, where revenue
+    grows independently of headcount; weight: high
+    This is the single most important discriminator on this profile and it is a
+    signal, not a gate. A company selling a product nationally fires it. A company
+    selling its own billed labour into one metro area — an agency, consultancy,
+    contractor, clinic, or single-location operation — does not fire it, and is
+    scored lower as a result rather than excluded. Look in: the homepage, pricing
+    page, and any "locations" or "service area" page.
+    - B2B SaaS, or a technology-enabled service delivered to customers beyond a
+    single metro area; weight: high
+    Look in: the homepage and pricing page. Directly readable. Service-based tech
+    counts here — the test is whether the offering reaches customers anywhere in
+    the country, not what the company calls itself.
+    - A professional services business serving a single metro area — a marketing or
+    creative agency, IT or managed-service shop, staffing firm, consultancy, or
+    bookkeeping-adjacent practice selling billed labour locally; weight: medium
+    These convert. They are a real and profitable part of the customer base, so
+    they earn a positive signal — just a smaller one than a company selling a
+    product nationally. Score them here rather than treating them as a poor fit.
+    This signal and the startup signal above are mutually exclusive: a company
+    fires one or the other, never both.
+    - Publishes real paid pricing — named plans with prices, not "contact us" only;
+    weight: high
+    Look in: the pricing page. This is the most reliable public proof of genuine
+    transaction activity.
+    - Runs payroll on Gusto, Rippling, or Deel; weight: medium
+    Look in: careers and benefits pages, job descriptions, and HR-tool mentions.
+    - AI or machine learning is core to their own product; weight: medium
+    - Backed by Y Combinator or a comparable accelerator; weight: medium
+    Look in: about and team pages, press, and accelerator portfolio directories.
+    - Active careers page with several open roles at once; weight: medium
+    - No dedicated accounting or finance person visible on the team page or LinkedIn;
+    weight: medium at SMB, low at MM, and NOT SCORED at ENT
+    This signal describes a company too small to have hired finance yet. At ENT it
+    is meaningless — a Series B company with a finance team is squarely in the ICP
+    and must not lose points for having one. Never treat the presence of a finance
+    hire at an MM or ENT company as a negative.
+    - A Controller, Head of Finance, or finance team is present at an MM or ENT
+    company; weight: medium
+    The larger end of this ICP buys differently: the finance function exists, it is
+    drowning, and it is the one evaluating the tool. Score this positively at MM
+    and ENT only. It does not apply at SMB.
+    - Publishes ARR, customer count, or growth milestones; weight: medium
+    Look in: press releases, funding announcements, about pages, and investor
+    updates. A company reporting real revenue milestones has the transaction
+    volume Puzzle needs.
+    - Remote-first or hybrid operations; weight: medium
+    - Runs several US legal entities under common ownership — holding companies,
+    real estate portfolios, incubators — currently consolidated by hand or in
+    separate QuickBooks files; weight: medium
+    - Early-adopter posture — Product Hunt launches, an engineering blog, or public
+    writing about the tools they build with; weight: medium
+    - Banks with Mercury or Brex; weight: low
+    Rarely public. Look in: job descriptions, engineering or "how we work" blog
+    posts, footer partner badges, and investor or accelerator pages. Absence here
+    means nothing and must not count against the company.
+    - Uses Ramp or Brex for corporate cards and spend management; weight: low
+    Same detection caveat as above.
+    - Cap table managed in Carta or Pulley; weight: low
+    Look in: investor or funding pages and press releases. Absence means nothing.
+
+    Buying Signals
+    - Announced a funding round in the last six months — including a seed extension,
+    bridge, or SAFE round, not only a priced round; weight: high
+    - A new institutional investor or accelerator affiliation has appeared on their
+    site, in press, or on a portfolio page; weight: high
+    - Actively hiring across several open roles at once — headcount growth drives
+    payroll complexity and transaction volume, and it is the best public proxy for
+    the 15%+ month-over-month growth that marks a best-fit account; weight: medium
+    - Open role for a Controller, Head of Finance, or first finance hire; weight: medium
+    - Open role for an operations, business operations, or chief-of-staff position —
+    the function that usually inherits the books before a finance hire; weight: medium
+    - Recently converted from an LLC to a Delaware C-Corporation, or recently
+    reincorporated in Delaware — the standard step before an institutional round,
+    and the moment the books get formalized; weight: high
+    - Incorporated within the last 12 months and already has disclosed funding and a
+    live product — needs books from day one, with no incumbent system to displace;
+    weight: medium
+    - Registered a new subsidiary or an additional operating entity — a consolidation
+    need appears the moment the second entity exists; weight: medium
+    - Recently parted ways with, or is replacing, a bookkeeper or fractional CFO; weight: medium
+    - Approaching a tax filing or extension deadline; weight: medium
+    - Publicly raising complaints about QuickBooks pricing, integrations, or support; weight: medium
+    - Recently launched paid pricing, a new revenue line, or subscription billing; weight: medium
+    - Announced a new board member or began publishing investor updates; weight: low
+    - Preparing for a first audit or diligence process; weight: low
+
+  # weak_fit_signals (required): Indicators that a prospect may be a poor fit or have a longer sales cycle. Proceed with lower priority.
+  weak_fit_signals: |-
+    These lower a company's score. None of them disqualify it. A company tripping
+    several of these is still a valid prospect, just a lower-priority one than a
+    venture-backed startup — work it through self-serve rather than sales-assisted
+    motion.
+
+    Small-business markers — the startup/SMB ladder
+    Note: local professional services firms are scored by a medium-weight POSITIVE
+    signal in Strong Fit Signals, not here. Do not penalise them twice — where a
+    company fired that signal, skip the two markers immediately below.
+    - Serves a single metro area or a defined local service radius — a "locations"
+      or "areas we serve" page is the usual tell
+    - Revenue is billed labour rather than a product — business coaching, training
+      practices, and other local services not already covered by the medium-weight
+      professional services signal in Strong Fit Signals
+    - Physical or single-location operation — restaurants, bars, cafés, bakeries,
+      lodging, farms, retail, salons, gyms, studios, clinics, and trades
+    - Organised as an LLC or sole proprietorship with no discoverable venture
+      funding — weaker than a C-Corp on this profile, but common enough among real
+      customers that it must never disqualify
+
+    Product-fit limitations
+    - Pre-revenue with minimal operating activity — the "explorer" pattern. Converts
+      at the lowest rate, browses rather than buys, and belongs in self-serve rather
+      than sales-assisted motion.
+    - Requires multi-currency or non-USD reporting — a known product gap
+    - Manufacturing or hardware operations — physical production, bills of
+      materials, and unit costing that the product does not cover. Where this also
+      involves holding inventory for sale, see Exclusions instead.
+    - Heavy accounts-receivable or accounts-payable workflows — invoicing and
+      payments are still thin
+    - Runs a Shopify or similar storefront that does not hold inventory — digital
+      goods, print-on-demand, or dropshipping. Not excluded, but the storefront
+      integration is a known gap.
+    - Already running an established ERP such as NetSuite or QuickBooks Enterprise
+      with a full in-house accounting team
+    - Tooling decisions controlled by an incumbent accountant or bookkeeper rather
+      than the founder
+    - No fintech tooling connected — traditional bank account and spreadsheets only
+
+  # segments (required): The company size, growth stage, or behavioral segments that define your best-fit customers.
+  segments: |-
+    Assign exactly one segment to every company — never more than one, never
+    none. Every company that passes the ICP criteria must land in a band. If a
+    company sits exactly on a boundary, assign it to the lower band.
+
+    - SMB: 1–5 employees
+    - MM: 6–25 employees
+    - ENT: 26 or more employees
+
+    Estimate headcount from the team or about page, LinkedIn employee count, the
+    number of distinct people named across the site, and the size of the careers
+    page. When headcount genuinely cannot be determined, default to SMB. Most
+    companies in this ICP are very small — roughly seven in ten best-fit customers
+    have five employees or fewer — so SMB is the correct fallback. Do not assign ENT
+    on the basis of a polished website, a broad product, or an enterprise-sounding
+    customer list; assign it only on actual evidence of 26 or more people.
+
+  # verticals (required): The industries or market verticals where your ICP is most concentrated. Use this to focus prospecting and tailor messaging.
+  verticals: |-
+    Assign exactly one vertical to every company — never more than one, never
+    none. Choose the single best match for the company's primary business. If a
+    company could plausibly fit two, pick the one closest to its core revenue.
+    Use "Other" only when nothing else applies.
+
+    - B2B SaaS — subscription software sold to other businesses
+    - AI & Machine Learning — AI-native products and ML-powered solutions
+    - Fintech & Financial Services — payments, lending, banking, and insurance
+    - Professional Services — consultancies, agencies, and service-based tech
+    - Marketplace & Platform — two-sided marketplaces and platform businesses
+    - Healthcare & Wellness — digital health, wellness, and life sciences
+    - Marketing & Creative — marketing technology, design, and creative tools
+    - Education & Learning — edtech and learning platforms
+    - Consumer & DTC — consumer apps and direct-to-consumer brands
+    - Other — does not fit any category above
+
+  # partners (required): Technology or service partners whose customers or co-sell opportunities align with our ICP.
+  partners: |-
+    Whenever any of these is confirmed in a company's stack or affiliations, record
+    it in the partners field — not only in the reasoning text. Write every confirmed
+    match to the column.
+
+    - Mercury
+    - Brex
+    - Ramp
+    - Stripe
+    - Gusto
+    - Rippling
+    - Deel
+    - Carta
+    - Pulley
+    - Chase
+    - Wise
+    - Y Combinator
+    - Techstars
+    - AngelList
+    - Burkland
+
+  # value_proposition (required): The value proposition of the company to the ICP customer.
+  value_proposition: |-
+    1) Ease of Use for Non-Accountants
+    - A clean, intuitive interface built for founders, not bookkeepers
+    - Insights in plain English — no CPA required to read your own books
+    - The single most cited reason customers choose Puzzle over the alternative
+
+    2) Automation That Gives Hours Back
+    - Auto-categorization, reconciliation, and reporting done for you
+    - Up to 95% of bookkeeping automated; categorization agents reach ~98% no-touch
+    - Correct an error by replying to an email instead of opening a ledger
+    - Replaces the 5–15 hours a month founders lose to manual categorization
+
+    3) Real Startup Metrics, Out of the Box
+    - Burn, runway, cash position, and ARR updated continuously, not at month-end
+    - Drill into any transaction live, mid-board-meeting
+    - Answer investor questions on the spot — no scrambling, no spreadsheets
+
+    4) Built for the Modern Startup Stack
+    - Native integrations with Mercury, Brex, Ramp, Stripe, Gusto, Rippling, and Deel
+    - One platform instead of logging into six systems to find out where cash is
+    - Cash and accrual from a single ledger, plus automated revenue recognition
+    for Stripe subscription billing
+
+    5) Investor, Tax & Audit Readiness
+    - AI-powered error detection so the numbers hold up under scrutiny
+    - Audit-ready financials and accurate filings without a year-end rebuild
+    - Consolidated reporting across multiple entities in a single login
+
+  # competitors (required): Direct and indirect competitors to monitor. Prospects using these tools may be candidates for displacement.
+  competitors: |-
+    Whenever any of these is identified during research, record it in the
+    competitors field — not only in the reasoning text. The column is what gets
+    filtered on; anything found and not written there is lost.
+
+    - QuickBooks Online
+    - QuickBooks Enterprise
+    - Xero
+    - Wave
+    - Zoho Books
+    - Bench
+    - Pilot
+    - NetSuite
+    - Rillet
+    - Kick
+    - Inkle
+    - Pry
+
+  # fit_message_template_or_instructions (optional): The AI-generated fit message explaining why the company is a good fit for the ICP customer.
+  fit_message_template_or_instructions: |-
+    {{company}} {{observation}}.
+
+    Most founders at that stage are still {{current_state}} — and finding out where
+    cash actually stands three weeks after the month ends.
+
+    Puzzle is modern accounting software for founders who'd rather build than
+    bookkeep. It plugs straight into {{detected_fintech_tools}}, categorizes ~95% of
+    transactions automatically, and keeps burn, runway and ARR current every day —
+    so the board deck doesn't wait on a close.
+
+    Worth 20 minutes?
+
+    # Rules for generating this message:
+    # - This message is generated per COMPANY, not per person. There is no contact
+    #   attached, so never use a person-level variable — no {{first_name}}, no
+    #   {{sender_first_name}}, no greeting line and no sign-off. A sending tool adds
+    #   those when the message is paired with a contact.
+    # - Never emit a placeholder that has not been filled — no {{booking_link}}, no
+    #   {{calendar}}, no bracketed stubs. If a variable cannot be filled from real
+    #   evidence, rewrite the sentence without it rather than leaving a placeholder.
+    # - End on the question. A sending tool appends the booking link; the message
+    #   must not contain one.
+    # - {{current_state}} is an assumption, not a detection. Roughly seven in ten of
+    #   these companies are on QuickBooks, so lead with that unless something in the
+    #   research contradicts it.
+    # - {{detected_fintech_tools}} must name only tools actually found. If none were
+    #   found, write "your bank, card and payroll accounts" instead of naming any.
+    #
+    # Sample value banks:
+    # {{observation}}: raised recently · just converted to a Delaware C-Corp ·
+    #   is hiring across several roles · launched paid pricing · registered a second
+    #   entity · is heading into its first full tax year
+    # {{current_state}}: fighting QuickBooks · categorizing transactions by hand ·
+    #   paying a bookkeeper $1–2k a month for the basics · rebuilding runway in a
+    #   spreadsheet · months behind on the books
+
+  # axon_extra_field_1 (optional): Freeform extra attribute to extract per company (Section K). Describe what to output; blank to skip.
+  axon_extra_field_1: |-
+    Determine the company's legal entity type and state of incorporation. Check this
+    on every company — it is reliably discoverable and is one of the strongest fit
+    indicators in this profile.
+
+    Look in, in this order:
+    - the site footer, for a legal entity name ending in "Inc.", "LLC", "Corp.",
+    "Ltd." or "PBC"
+    - the terms of service, for governing-law language naming a state
+    - the privacy policy, for the registered entity name and address
+    - app store listings, for the developer's legal name
+    - any "legal", "imprint", or "company information" page
+
+    Treat an entity name ending in "Inc." together with Delaware governing law as
+    confirmation of a Delaware C-Corporation.
+
+    Answer with exactly one of the following values and nothing else. Return the
+    value verbatim. Do not add an explanation, a dash, a parenthetical, a source
+    citation, a URL, or any trailing text. Never leave it blank.
+
+    - Delaware C-Corp
+    - Other US C-Corp
+    - LLC
+    - Public Benefit Corporation
+    - Non-US entity
+    - Non-profit
+    - Unknown

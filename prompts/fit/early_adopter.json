@@ -1,0 +1,108 @@
+{
+  "id": "fit/early_adopter",
+  "data_point": "Early-adopter posture",
+  "group": "Fit signal",
+  "signal_id": "F18",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found no Product Hunt link or engineering blog, but a blog exists.",
+  "input": {
+    "pages": [
+      "blog",
+      "home",
+      "engineering"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company shows an early-adopter posture: Product Hunt launches, an engineering blog, or public writing about the tools they build with.",
+    "definition": "They like trying new tools.",
+    "yes_when": [
+      "A Product Hunt launch",
+      "An engineering blog",
+      "Posts about their tech or tool stack"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is found"
+    ],
+    "unknown_when": [
+      "No blog or launch information"
+    ],
+    "watch_out_for": [
+      "A marketing blog alone is not enough"
+    ],
+    "where_to_look": [
+      "Blog",
+      "Homepage badges",
+      "Engineering pages"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" Product Hunt",
+      "\"{company}\" engineering blog"
+    ],
+    "good_sources": [
+      "Product Hunt",
+      "company blog"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Engineering blog: How we migrated our queue to Postgres",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "How we migrated our queue to Postgres",
+        "source": "blog",
+        "reason": "The company writes publicly about its own engineering."
+      }
+    }
+  ]
+}

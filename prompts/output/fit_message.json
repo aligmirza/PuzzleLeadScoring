@@ -1,0 +1,68 @@
+{
+  "id": "output/fit_message",
+  "data_point": "Fit message for outreach",
+  "group": "Final output",
+  "signal_id": null,
+  "profile_section": "fit_message_template_or_instructions",
+  "weight": "n/a",
+  "version": 1,
+  "stage": "final",
+  "model": "large",
+  "run_when": "After scoring, for companies that passed.",
+  "input": {
+    "pages": [],
+    "extra": [
+      "signals_found",
+      "partners",
+      "competitors"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Write the company-level fit message using the template and rules below.",
+    "definition": "Template:\n{{company}} {{observation}}.\n\nMost founders at that stage are still {{current_state}} and finding out where cash actually stands three weeks after the month ends.\n\nPuzzle is modern accounting software for founders who'd rather build than bookkeep. It plugs straight into {{detected_fintech_tools}}, categorizes ~95% of transactions automatically, and keeps burn, runway and ARR current every day, so the board deck doesn't wait on a close.\n\nWorth 20 minutes?",
+    "yes_when": [],
+    "no_when": [],
+    "unknown_when": [],
+    "watch_out_for": [
+      "Generated per company, not per person: no first name, no greeting, no sign-off",
+      "Never leave a placeholder unfilled; rewrite the sentence instead",
+      "End on the question; never include a booking link",
+      "{{current_state}} is an assumption: lead with 'fighting QuickBooks' unless research contradicts it",
+      "{{detected_fintech_tools}} names only tools actually found; if none, write 'your bank, card and payroll accounts'",
+      "Observation ideas: raised recently, just converted to a Delaware C-Corp, is hiring across several roles, launched paid pricing, registered a second entity, is heading into its first full tax year",
+      "Current state ideas: fighting QuickBooks, categorizing transactions by hand, paying a bookkeeper $1-2k a month for the basics, rebuilding runway in a spreadsheet, months behind on the books"
+    ],
+    "where_to_look": []
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "fit_message",
+        "observation_used",
+        "tools_named"
+      ],
+      "properties": {
+        "fit_message": {
+          "type": "string"
+        },
+        "observation_used": {
+          "type": "string"
+        },
+        "tools_named": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "off",
+    "why": "Writes text from answers already found; no new facts needed."
+  },
+  "examples": []
+}

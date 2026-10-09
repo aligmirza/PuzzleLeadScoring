@@ -1,0 +1,4 @@
+httpx>=0.28
+selectolax>=0.3
+rich>=13
+pyyaml>=6

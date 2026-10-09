@@ -1,0 +1,102 @@
+{
+  "id": "must_haves/live_website_real_product",
+  "data_point": "Live website with a real product or service",
+  "group": "Must-have",
+  "signal_id": "M2",
+  "profile_section": "must_haves",
+  "weight": "required",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "The site loaded but looked thin (little text or few pages).",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "about",
+      "pricing"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether this website belongs to an operating business with a real product or service someone can buy or use.",
+    "definition": "A live site that describes a specific product or service customers can buy, sign up for or book.",
+    "yes_when": [
+      "The site describes a specific product or service with features, plans or a way to sign up, buy or book"
+    ],
+    "no_when": [
+      "The page is a parked domain or says the domain is for sale",
+      "Only a 'coming soon' or 'under construction' page"
+    ],
+    "unknown_when": [
+      "The text is too short or generic to tell what the company offers"
+    ],
+    "watch_out_for": [
+      "A single-page site can still be a real business if it clearly describes what it sells",
+      "A waitlist page for an unreleased product is not a live product yet"
+    ],
+    "where_to_look": [
+      "Homepage headline and description",
+      "Pricing page",
+      "About page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "off",
+    "why": "Needs the company's own site; search results can't prove the site is live."
+  },
+  "examples": [
+    {
+      "input_excerpt": "Linear is a purpose-built tool for planning and building products. Start building. Pricing: Free, Basic $10 per user",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Linear is a purpose-built tool for planning and building products",
+        "source": "home",
+        "reason": "The site describes a product with paid plans."
+      }
+    }
+  ]
+}

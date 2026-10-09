@@ -1,0 +1,105 @@
+{
+  "id": "fit/remote_first_or_hybrid",
+  "data_point": "Remote-first or hybrid operations",
+  "group": "Fit signal",
+  "signal_id": "F16",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found no remote wording and no remote job flags, but a careers or about page exists.",
+  "input": {
+    "pages": [
+      "careers",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company operates remote-first or hybrid.",
+    "definition": "The team works remotely or hybrid by design.",
+    "yes_when": [
+      "'Remote-first', 'fully remote', 'distributed team', 'hybrid'",
+      "Most open roles are remote"
+    ],
+    "no_when": [
+      "The company says everyone works in the office"
+    ],
+    "unknown_when": [
+      "No information about where the team works"
+    ],
+    "watch_out_for": [
+      "One remote role at an office-based company is not remote-first"
+    ],
+    "where_to_look": [
+      "Careers page",
+      "About page",
+      "Job locations"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" remote-first OR \"fully remote\" OR hybrid"
+    ],
+    "good_sources": [
+      "job posts",
+      "careers pages"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "We're a fully remote team across 12 time zones.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "We're a fully remote team",
+        "source": "careers",
+        "reason": "The company says it is fully remote."
+      }
+    }
+  ]
+}

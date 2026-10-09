@@ -1,0 +1,97 @@
+{
+  "id": "buying/new_board_member_or_investor_updates",
+  "data_point": "Announced a new board member or began publishing investor updates",
+  "group": "Buying signal",
+  "signal_id": "B13",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "low",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "Web search results are available.",
+  "input": {
+    "pages": [
+      "search_results",
+      "blog"
+    ],
+    "extra": [
+      "today",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company recently announced a new board member or began publishing investor updates.",
+    "definition": "",
+    "yes_when": [
+      "A recent announcement naming a new board member",
+      "Recently started investor update posts"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is found"
+    ],
+    "unknown_when": [
+      "Nothing recent found"
+    ],
+    "watch_out_for": [
+      "Advisors are not board members"
+    ],
+    "where_to_look": [
+      "Press",
+      "LinkedIn",
+      "Company blog"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" \"joins board\" OR \"board of directors\" {year}"
+    ],
+    "good_sources": [
+      "press releases",
+      "LinkedIn"
+    ]
+  },
+  "examples": []
+}

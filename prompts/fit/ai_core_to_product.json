@@ -1,0 +1,104 @@
+{
+  "id": "fit/ai_core_to_product",
+  "data_point": "AI or machine learning is core to their own product",
+  "group": "Fit signal",
+  "signal_id": "F10",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Always, for companies still in the running.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "pricing"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether AI or machine learning is core to the company's own product.",
+    "definition": "The product's main value comes from AI/ML, not a single AI feature.",
+    "yes_when": [
+      "The product is an AI model, agent, assistant or ML-powered system at its heart"
+    ],
+    "no_when": [
+      "AI is one feature among many, or only marketing language"
+    ],
+    "unknown_when": [
+      "Not enough product description"
+    ],
+    "watch_out_for": [
+      "Almost every site mentions AI now; keyword use alone is not enough"
+    ],
+    "where_to_look": [
+      "Homepage headline and product description"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} AI product"
+    ],
+    "good_sources": [
+      "company website",
+      "press",
+      "Product Hunt"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Linear: the product development system for teams. Now with AI triage.",
+      "output": {
+        "answer": "no",
+        "confidence": "high",
+        "evidence_quote": "Now with AI triage",
+        "source": "home",
+        "reason": "AI is an added feature, not the core product."
+      }
+    }
+  ]
+}

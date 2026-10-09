@@ -1,0 +1,104 @@
+{
+  "id": "weak/pre_revenue",
+  "data_point": "Pre-revenue with minimal operating activity",
+  "group": "Weak fit signal",
+  "signal_id": "W5",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found waitlist or early-access wording and no pricing or checkout.",
+  "input": {
+    "pages": [
+      "home",
+      "pricing"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is pre-revenue with minimal operating activity (the 'explorer' pattern).",
+    "definition": "This lowers the score but never disqualifies. Converts at the lowest rate and belongs in self-serve.",
+    "yes_when": [
+      "Waitlist, early access or beta sign-up only, with no pricing, checkout or customers"
+    ],
+    "no_when": [
+      "Paid plans, checkout, customers or open jobs exist"
+    ],
+    "unknown_when": [
+      "Not enough information"
+    ],
+    "watch_out_for": [
+      "A free tier with paid upgrades is not pre-revenue"
+    ],
+    "where_to_look": [
+      "Homepage",
+      "Pricing page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" launch OR waitlist OR beta"
+    ],
+    "good_sources": [
+      "Product Hunt",
+      "press",
+      "company website"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Join the waitlist for early access. Launching 2026.",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Join the waitlist for early access.",
+        "source": "home",
+        "reason": "Only a waitlist, no paid offering."
+      }
+    }
+  ]
+}

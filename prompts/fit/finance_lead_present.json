@@ -1,0 +1,105 @@
+{
+  "id": "fit/finance_lead_present",
+  "data_point": "Controller, Head of Finance or finance team present (mid-size and up)",
+  "group": "Fit signal",
+  "signal_id": "F14",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium (MM and ENT only)",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "A team page was found.",
+  "input": {
+    "pages": [
+      "team",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company has a Controller, Head of Finance, CFO or finance team.",
+    "definition": "At larger companies the finance function exists, is drowning, and evaluates the tool. Only scored for mid-size and larger companies.",
+    "yes_when": [
+      "Someone on the team has a finance leadership title"
+    ],
+    "no_when": [
+      "A team list is shown and no one is in finance"
+    ],
+    "unknown_when": [
+      "No team list is shown"
+    ],
+    "watch_out_for": [
+      "Advisors and board members don't count"
+    ],
+    "where_to_look": [
+      "Team page",
+      "About page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" CFO OR \"Head of Finance\" OR Controller",
+      "site:linkedin.com/in \"{company}\" finance"
+    ],
+    "good_sources": [
+      "LinkedIn profiles",
+      "company team page",
+      "press"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Leadership: Maria Chen, CEO; David Ross, VP Finance",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "David Ross, VP Finance",
+        "source": "team",
+        "reason": "A VP Finance is on the team."
+      }
+    }
+  ]
+}

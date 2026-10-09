@@ -1,0 +1,98 @@
+{
+  "id": "exclusions/new_company_no_website",
+  "data_point": "Newly incorporated, no live website, no disclosed funding",
+  "group": "Exclusion",
+  "signal_id": "E2",
+  "profile_section": "exclusions",
+  "weight": "disqualifies",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "The website did not load and search results are available.",
+  "input": {
+    "pages": [
+      "search_results"
+    ],
+    "extra": [
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether this is a newly incorporated entity with no live website and no disclosed funding.",
+    "definition": "Exclusions need positive evidence. Never exclude on an inference, an estimate or missing information. All three must hold: newly formed, no live domain, no funding found.",
+    "yes_when": [
+      "Search results show a recent incorporation AND no working website AND no funding news"
+    ],
+    "no_when": [
+      "Results show funding, an older company, or a working website elsewhere"
+    ],
+    "unknown_when": [
+      "Results don't show the incorporation date"
+    ],
+    "watch_out_for": [
+      "A dead domain alone does not prove the company is new"
+    ],
+    "where_to_look": [
+      "Business registry results",
+      "News",
+      "Other domains for the same company"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" incorporated",
+      "\"{company}\" funding",
+      "\"{company}\" company"
+    ],
+    "good_sources": [
+      "state business registries",
+      "OpenCorporates",
+      "news"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": []
+}

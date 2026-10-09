@@ -1,0 +1,88 @@
+{
+  "id": "fields/competitors_used",
+  "data_point": "Competitor accounting tools in use",
+  "group": "Classification",
+  "signal_id": null,
+  "profile_section": "competitors",
+  "weight": "n/a",
+  "version": 1,
+  "stage": "job_posts",
+  "model": "small",
+  "run_when": "Job posts or pages mention accounting tools.",
+  "input": {
+    "pages": [
+      "careers",
+      "integrations"
+    ],
+    "extra": [
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "List the competitor accounting tools the company itself uses.",
+    "definition": "Competitors: QuickBooks Online, QuickBooks Enterprise, Xero, Wave, Zoho Books, Bench, Pilot, NetSuite, Rillet, Kick, Inkle, Pry.",
+    "yes_when": [],
+    "no_when": [],
+    "unknown_when": [],
+    "watch_out_for": [
+      "Only tools the company uses for its own books, not integrations of its product"
+    ],
+    "where_to_look": [
+      "Job posts",
+      "Finance pages"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "competitors_used",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "competitors_used": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "QuickBooks Online",
+              "QuickBooks Enterprise",
+              "Xero",
+              "Wave",
+              "Zoho Books",
+              "Bench",
+              "Pilot",
+              "NetSuite",
+              "Rillet",
+              "Kick",
+              "Inkle",
+              "Pry"
+            ]
+          }
+        },
+        "evidence_quote": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" QuickBooks OR Xero OR NetSuite job"
+    ],
+    "good_sources": [
+      "job posts"
+    ]
+  },
+  "examples": []
+}

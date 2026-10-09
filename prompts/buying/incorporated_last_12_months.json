@@ -1,0 +1,98 @@
+{
+  "id": "buying/incorporated_last_12_months",
+  "data_point": "Incorporated within the last 12 months, funded, with a live product",
+  "group": "Buying signal",
+  "signal_id": "B7",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "medium",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "Registry or filing results are available.",
+  "input": {
+    "pages": [
+      "search_results"
+    ],
+    "extra": [
+      "today",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company was incorporated within the last 12 months and already has disclosed funding and a live product.",
+    "definition": "Needs books from day one, with no incumbent system to displace.",
+    "yes_when": [
+      "An incorporation date within 12 months, plus funding and a live product"
+    ],
+    "no_when": [
+      "Incorporated more than 12 months ago"
+    ],
+    "unknown_when": [
+      "No incorporation date found"
+    ],
+    "watch_out_for": [
+      "Domain age is only a hint, never proof"
+    ],
+    "where_to_look": [
+      "SEC Form D",
+      "State registries",
+      "News"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" founded {year} OR {last_year}",
+      "\"{company}\" incorporated"
+    ],
+    "good_sources": [
+      "state registries",
+      "OpenCorporates",
+      "SEC Form D",
+      "Crunchbase"
+    ]
+  },
+  "examples": []
+}

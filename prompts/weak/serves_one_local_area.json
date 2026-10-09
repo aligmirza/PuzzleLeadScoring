@@ -1,0 +1,108 @@
+{
+  "id": "weak/serves_one_local_area",
+  "data_point": "Serves a single metro area or local service radius",
+  "group": "Weak fit signal",
+  "signal_id": "W1",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found a locations page, 'areas we serve' wording or local business data.",
+  "input": {
+    "pages": [
+      "home",
+      "locations",
+      "contact",
+      "about"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company serves only a single metro area or a defined local service radius.",
+    "definition": "This lowers the score but never disqualifies. Skip this if the company is a local professional services firm, which is already scored by its own signal.",
+    "yes_when": [
+      "A 'locations' or 'areas we serve' page listing nearby towns",
+      "Text says they serve one city and its surroundings"
+    ],
+    "no_when": [
+      "Customers are national or global"
+    ],
+    "unknown_when": [
+      "Not enough information about where customers are"
+    ],
+    "watch_out_for": [
+      "Several office locations for a national company is not local"
+    ],
+    "where_to_look": [
+      "Locations page",
+      "Homepage",
+      "Contact page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} locations OR \"service area\""
+    ],
+    "good_sources": [
+      "Google Business listings",
+      "Yelp",
+      "company website"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Proudly serving Austin, Round Rock and Cedar Park",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "Proudly serving Austin, Round Rock and Cedar Park",
+        "source": "home",
+        "reason": "The company serves one metro area."
+      }
+    }
+  ]
+}

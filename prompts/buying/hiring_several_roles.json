@@ -1,0 +1,91 @@
+{
+  "id": "buying/hiring_several_roles",
+  "data_point": "Actively hiring across several open roles",
+  "group": "Buying signal",
+  "signal_id": "B3",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "A careers page was found but roles couldn't be counted from a job board.",
+  "input": {
+    "pages": [
+      "careers"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is actively hiring across several open roles at once (3 or more).",
+    "definition": "Headcount growth drives payroll complexity and is the best public proxy for fast growth.",
+    "yes_when": [
+      "3 or more open roles listed"
+    ],
+    "no_when": [
+      "0 to 2 open roles listed"
+    ],
+    "unknown_when": [
+      "Roles not visible in the text"
+    ],
+    "watch_out_for": [
+      "Same role in several locations counts once"
+    ],
+    "where_to_look": [
+      "Careers page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" jobs"
+    ],
+    "good_sources": [
+      "company job board",
+      "LinkedIn jobs",
+      "Wellfound"
+    ]
+  },
+  "examples": []
+}

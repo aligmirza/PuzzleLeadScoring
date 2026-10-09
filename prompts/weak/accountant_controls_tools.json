@@ -1,0 +1,91 @@
+{
+  "id": "weak/accountant_controls_tools",
+  "data_point": "Tooling decisions controlled by an incumbent accountant or bookkeeper",
+  "group": "Weak fit signal",
+  "signal_id": "W11",
+  "profile_section": "weak_fit_signals",
+  "weight": "penalty",
+  "version": 1,
+  "stage": "search_results",
+  "model": "small",
+  "run_when": "Search results mention the company's accountant or CPA firm.",
+  "input": {
+    "pages": [
+      "search_results"
+    ],
+    "extra": [
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether an outside accountant or bookkeeper, not the founder, controls the company's finance tool choices.",
+    "definition": "This lowers the score but never disqualifies. Almost never public; expect unknown.",
+    "yes_when": [
+      "Public statement that their CPA firm runs their books and picks the tools"
+    ],
+    "no_when": [
+      "The founder says they chose their own tools"
+    ],
+    "unknown_when": [
+      "Nothing found"
+    ],
+    "watch_out_for": [],
+    "where_to_look": [
+      "Public posts",
+      "Case studies"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "primary",
+    "queries": [
+      "\"{company}\" CPA OR accountant"
+    ],
+    "good_sources": [
+      "public posts",
+      "case studies"
+    ]
+  },
+  "examples": []
+}

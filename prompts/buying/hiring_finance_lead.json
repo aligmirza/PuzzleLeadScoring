@@ -1,0 +1,93 @@
+{
+  "id": "buying/hiring_finance_lead",
+  "data_point": "Open role for a Controller, Head of Finance or first finance hire",
+  "group": "Buying signal",
+  "signal_id": "B4",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "medium",
+  "version": 1,
+  "stage": "job_posts",
+  "model": "small",
+  "run_when": "Job titles are available and one may be a finance role.",
+  "input": {
+    "pages": [
+      "careers"
+    ],
+    "extra": [
+      "job_titles",
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company has an open role for a Controller, Head of Finance, CFO or its first finance hire.",
+    "definition": "A finance hire means the books are about to be formalised.",
+    "yes_when": [
+      "An open finance leadership or first finance role"
+    ],
+    "no_when": [
+      "Open roles are listed and none are finance roles"
+    ],
+    "unknown_when": [
+      "No open roles visible"
+    ],
+    "watch_out_for": [
+      "An accountant role at an accounting firm doesn't apply (that's an exclusion)"
+    ],
+    "where_to_look": [
+      "Job titles and descriptions"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" hiring controller OR \"head of finance\" OR \"finance manager\""
+    ],
+    "good_sources": [
+      "job boards",
+      "LinkedIn jobs"
+    ]
+  },
+  "examples": []
+}

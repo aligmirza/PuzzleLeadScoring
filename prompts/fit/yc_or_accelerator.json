@@ -1,0 +1,115 @@
+{
+  "id": "fit/yc_or_accelerator",
+  "data_point": "Backed by Y Combinator or a comparable accelerator",
+  "group": "Fit signal",
+  "signal_id": "F11",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found an accelerator mention that may not be the company's own backing.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "team"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether THIS company is backed by Y Combinator, Techstars or a comparable accelerator.",
+    "definition": "The company itself went through or is backed by the accelerator.",
+    "yes_when": [
+      "'Backed by Y Combinator', 'YC W23' next to the company name, a Techstars class mention, accelerator badge"
+    ],
+    "no_when": [
+      "The text says they did not go through an accelerator"
+    ],
+    "unknown_when": [
+      "The accelerator is mentioned for someone else (a customer, an angel investor's employer)"
+    ],
+    "watch_out_for": [
+      "'Gustaf, Partner at Y Combinator' as an angel investor is not YC backing",
+      "'Customer X (YC S24)' is a customer's backing"
+    ],
+    "where_to_look": [
+      "About page",
+      "Team page (investors)",
+      "Homepage badges"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "accelerator"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "accelerator": {
+          "type": "string",
+          "description": "Accelerator name and batch if given"
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" \"Y Combinator\"",
+      "site:ycombinator.com/companies {company}",
+      "\"{company}\" Techstars OR accelerator"
+    ],
+    "good_sources": [
+      "YC company directory",
+      "Techstars portfolio",
+      "accelerator demo day posts"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Angel investors: Gustaf Alströmer, Partner, Y Combinator",
+      "output": {
+        "answer": "unknown",
+        "confidence": "low",
+        "evidence_quote": "",
+        "source": "",
+        "reason": "Y Combinator appears as an angel's employer, not as the company's accelerator.",
+        "accelerator": ""
+      }
+    }
+  ]
+}

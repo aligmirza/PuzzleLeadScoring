@@ -1,0 +1,125 @@
+{
+  "id": "fit/payroll_gusto_rippling_deel",
+  "data_point": "Runs payroll on Gusto, Rippling or Deel",
+  "group": "Fit signal",
+  "signal_id": "F9",
+  "profile_section": "strong_fit_signals",
+  "weight": "medium",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Code found Gusto, Rippling or Deel mentioned but couldn't confirm usage.",
+  "input": {
+    "pages": [
+      "careers",
+      "privacy",
+      "security"
+    ],
+    "extra": [
+      "tool_mentions",
+      "job_snippets"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company runs its own payroll on Gusto, Rippling or Deel.",
+    "definition": "The company's employees are paid or onboarded through one of these.",
+    "yes_when": [
+      "Job posts or benefits pages say payroll or benefits are through the tool",
+      "Careers page hosted on Rippling"
+    ],
+    "no_when": [
+      "The company names a different payroll provider"
+    ],
+    "unknown_when": [
+      "The tool is only an integration of their product"
+    ],
+    "watch_out_for": [
+      "'Sync employees from Gusto' describes their product"
+    ],
+    "where_to_look": [
+      "Careers and benefits text",
+      "Job posts",
+      "Privacy sub-processors"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason",
+        "tools_used"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        },
+        "tools_used": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "Gusto",
+              "Rippling",
+              "Deel"
+            ]
+          },
+          "description": "Only tools the company itself uses, proven by the quote."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" Gusto OR Rippling OR Deel",
+      "site:{domain} benefits payroll"
+    ],
+    "good_sources": [
+      "job posts",
+      "careers pages"
+    ]
+  },
+  "examples": [
+    {
+      "input_excerpt": "Benefits: health insurance through Gusto, 401(k)",
+      "output": {
+        "answer": "yes",
+        "confidence": "high",
+        "evidence_quote": "health insurance through Gusto",
+        "source": "job post",
+        "reason": "Benefits are administered through Gusto.",
+        "tools_used": [
+          "Gusto"
+        ]
+      }
+    }
+  ]
+}
