@@ -78,7 +78,15 @@ The AI step uses OpenAI (gpt-4o-mini). The key is set once in `.env` (git-ignore
 .venv/bin/python -m enrich settings --openai-key sk-...
 ```
 
-AI options: `--limit 20` (first 20 companies only), `--no-web` (skip the web search step), `--redo` (ask again where an answer is saved), `--yes` (don't ask before spending).
+AI options:
+
+| Option | What it does |
+|---|---|
+| `--limit 20` | First 20 companies only |
+| `--no-web` | Skip the web search step |
+| `--no-search-signals` | Phase 2: skip the 9 signals only web search can answer (recent funding, new investor, QuickBooks complaints...). They are the most expensive part, about $0.10 to $0.30 per ICP company |
+| `--redo` | Ask again where an answer is saved |
+| `--yes` | Don't ask before spending |
 
 | You want to | Run |
 |---|---|
@@ -87,6 +95,8 @@ AI options: `--limit 20` (first 20 companies only), `--no-web` (skip the web sea
 | Re-check saved pages after changing a rule (no downloading) | `python -m enrich rules leads` (add `--phase icp` or `--phase signals`) |
 | Continue a stopped run | Run the same command again; finished companies come from the cache |
 | Delete raw pages no longer needed (always asks first) | `python -m enrich clean leads` |
+| Measure accuracy against the right answers | `python -m enrich evaluate leads --labels labels.csv` (blank file: `python -m enrich evaluate --template labels.csv`) |
+| See every run of a list: when, counts, AI cost | `python -m enrich runs leads` |
 | List the AI prompts | `python -m enrich prompts` |
 | See the exact AI message for a company | `python -m enrich prompts --show fit/venture_backed_stage --domain resend.com` (add `--step 2` for the web search step) |
 | See the free directories, or look up one company in YC, SEC and IRS | `python -m enrich directories` / `python -m enrich directories acme.com --legal-name "Acme, Inc."` |
@@ -99,7 +109,8 @@ AI options: `--limit 20` (first 20 companies only), `--no-web` (skip the web sea
 | `--refresh` | Download again, ignoring the cache |
 | `--keep useful / none / all` | What the clean-up question offers to delete (see [PIPELINE.md](docs/PIPELINE.md#10-storage-and-clean-up)) |
 | `--yes` | Clean-up: delete without asking. AI step: run without the cost question (only for scheduled runs) |
-| `--no-directories` | Skip the free directories (YC, SEC, IRS) for this run |
+| `--no-directories` | Skip the free directories (YC, SEC, IRS) and old-site snapshots for this run |
+| `--no-browser` | Don't use the real browser (your Google Chrome) for sites that need JavaScript or check for bots |
 
 Results land in `lists/leads/output/`. The main file is **`leads_enriched.csv`**; [PIPELINE.md](docs/PIPELINE.md#9-outputs) lists every column.
 
@@ -123,7 +134,8 @@ Other tools can use the pipeline too. Details and setup steps: [docs/INTEGRATION
 
 - **DNS problems are handled.** This Mac's DNS sometimes fails on real domains (6 of 10 in one test). The tool now falls back to public DNS (Google, then Cloudflare) automatically, with the usual certificate checks.
 - **Pilot first.** Run 500 rows with `--limit 500` to see speed, block rate and the column mapping before the full list.
-- **Check the scoring.** "Tax deadline coming up" adds 2 points to almost every company around April and October deadlines. Set it to `"none"` in config/scoring.json if you don't want that.
+- **Check the scoring.** "Tax deadline coming up" adds 2 points around the April 15 and October 15 deadlines, only for companies confirmed as C-Corps. Set it to `"none"` in config/scoring.json if you don't want it.
+- **Optional: set `SEC_CONTACT_EMAIL`** in `.env`. SEC then serves Form D documents, which add the amount raised (a $100M+ round excludes as Series C or later) and the year of incorporation ("Incorporated in the last 12 months").
 
 ---
 
@@ -168,6 +180,9 @@ enrich/
   phase1_icp.py       phase 1: ICP check
   phase2_signals.py   phase 2: signals and score
   directories.py      free directories: YC, SEC EDGAR, IRS non-profit list
+  history.py          old copies of company sites (Internet Archive)
+  evaluate.py         accuracy against labels
+  runlog.py           run log per list (runs.jsonl)
   ai.py               AI step: calls OpenAI, step 1 then web search, cost estimate
   ai_apply.py         turns AI answers into signal values with the confidence rules
   api.py              HTTP API (python -m enrich serve)
@@ -183,25 +198,29 @@ enrich/
   final.py            the final list: every original row + findings
   dashboard.py        live terminal view
   store.py, common.py storage and shared helpers
-lists/<list>/         created per list: input.csv, raw/, cache.sqlite, output/  (not in git)
+lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.jsonl, output/  (not in git)
 ```
 
 ---
 
 ## Status and roadmap
 
-### Built and tested (on a 14-company sample)
+### Built and tested (on a 14-company sample and a 10-company accuracy test)
 
 | Part | Status |
 |---|---|
 | Read any CSV, clean domains, keep every row | Done |
 | Phase 1 and phase 2 as separate scripts | Done |
 | Downloading pages, job feeds, robots.txt, public DNS check, slim saving | Done |
-| Rules for all 4 must-haves, 6 exclusions and 37 signals | Done (accuracy checked on 14 companies only) |
+| Rules for all 4 must-haves, 6 exclusions and 47 signals (21 fit, 14 buying, 12 weak) | Done. Yes / No only when confirmed; guesses stay empty or Needs check |
+| Buying signals from free sources: Form D in the last 6 months, new YC batch, LLC-to-Inc. (SEC former names, old footers in the Internet Archive), pricing launched since last year (Internet Archive) | Done; the rest of the buying signals come from web search |
+| Real-browser fallback (your Google Chrome) for JavaScript-only sites and short bot checks | Done; Khan Academy went from 209 to 8,682 characters of text. Hard Cloudflare blocks still fail |
+| Reasoning column ending with the profile's "Funding stage: <value> (<basis>)" line | Done (built by code, no AI cost) |
+| `evaluate` (accuracy against labels) and `runs` (run log with AI cost) | Done; the 10-company test scores 9 of 9 decided, 0 good companies wrongly NO |
 | Final list with ICP YES / NO / PENDING, lead score, tier and segment | Done |
 | Free directories: YC (by domain), SEC EDGAR (public, Form D funding, Delaware, address), IRS non-profit list, with match-strength rules | Done; on the test list it caught HubSpot as public and confirmed Puzzle's Delaware status and funding |
 | 62 AI prompt files with a web search step | Written |
-| AI step with OpenAI (gpt-4o-mini): our data first, web search only if needed, cost estimate and confirmation, answers kept when rules re-run | Built; key added and tested, web search confirmed working with gpt-4o-mini. First real run on a list not done yet |
+| AI step with OpenAI (gpt-4o-mini): our data first, web search only if needed, cost estimate and confirmation, answers kept when rules re-run, a quote required for every Yes / No | Done; $0.11 for the 10-company test |
 | Live dashboards, `explain`, `lists`, `rules`, `clean`, ask before deleting | Done |
 | Version control | Done: private GitHub repo `PuzzleLeadScoring` |
 | API (one company, whole lists, push and pull) with a key set once | Built and tested locally |
@@ -210,18 +229,16 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, output/  
 
 ### Next, in order of impact
 
-1. **First real AI run**, on the test list first (`ai_check.py phase_test --phase icp`). It settles PENDING verdicts and turns on the highest-weighted signals ("Startup selling nationally", "B2B SaaS"), so scores will rise. Measure the real cost per company. A web search costs about $0.011 (the $0.01 search fee plus about 8,000 tokens of results); reading our own pages costs about $0.0003 per question.
-2. **Group prompts at run time.** Keep one file per data point, but send 4 to 5 data points per AI call. Cuts AI cost about 3 to 4 times. Test it against the first run's answers before switching it on, so quality doesn't drop.
-3. **Hand-label about 100 companies** (ICP yes/no, Strong/Weak) to measure accuracy and set the Strong fit cut-off from data instead of the current 12.
+1. **Labelled list from Puzzle:** about 50 current customers and 50 lost or "not a fit" deals. Run them and `evaluate`, to measure accuracy and set the Strong fit cut-off from data instead of the current 12.
+2. **Pilot on 500 real rows** to measure speed, block rate and cost.
+3. **Cheaper AI, later:** several data points per call, OpenAI's half-price Batch API, and one web search for several news signals. Each needs an `evaluate` check before use.
 
 ### Then
 
-4. **Real-browser fallback** (Playwright) for sites that block bots or need JavaScript (1 in 14 in the test).
-5. **Follow investor and careers subdomains** such as `ir.hubspot.com`.
-6. **Pilot on 500 real rows** to measure speed, block rate and cost.
-7. **Run log** per list: date, settings, counts and cost of each run.
-8. **More directories:** Techstars and other accelerator portfolios; Form D amounts and dates for "raised in the last 6 months".
-9. Optional: Clay (already connected) for headcount and funding on PENDING companies; monthly re-checks of old lists; a shared page for the team to browse results.
+4. **Follow investor and careers subdomains** such as `ir.hubspot.com`.
+5. **More directories:** Techstars and other accelerator portfolios.
+6. **A server** for the API, so Clay can call it row by row.
+7. Optional: Clay (already connected) for headcount and funding on PENDING companies; monthly re-checks of old lists; a shared page for the team to browse results.
 
 ### Decisions and open questions
 
@@ -229,7 +246,8 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, output/  
 |---|---|
 | AI provider and models | OpenAI gpt-4o-mini for both steps (`providers.openai` in `config/prompts/_shared.json`). Claude settings are kept there as an alternative but not wired up |
 | OpenAI API key | Saved once in `.env` (git-ignored) |
-| One AI call per data point, or grouped | Files stay one per data point; grouping per call is suggested, waiting on your OK |
+| One AI call per data point, or grouped | One call per data point for now; cheaper options are on the roadmap |
+| Large rounds | A confirmed single round of $100M+ or a $1B+ valuation counts as "Series C or later" (`late_stage_proof` in config/scoring.json) |
 | Undecided companies | PENDING until the AI check or a retry settles them |
 | Weak fit points | -2 each (in config/scoring.json) |
 | Strong fit cut-off | 12 for now; to be set after the 100-company check |

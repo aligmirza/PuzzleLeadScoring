@@ -438,7 +438,7 @@ Product Hunt launches, an engineering blog, or public writing about the tools th
 Includes seed extensions, bridge rounds and SAFEs, not only priced rounds.
 
 - **How we check:**
-  1. **Directory:** SEC Form D filings include the date of the first sale. A filing within the last 6 months is strong, free proof.
+  1. **Directory (built):** a Form D filed in the last 183 days. A filing is due within 15 days of the first sale, so it's strong, free proof.
   2. **Search:** funding news from the last 6 months.
   3. **Code:** a recent "we raised" blog post or press page.
   4. **Paid data:** Crunchbase.
@@ -446,7 +446,7 @@ Includes seed extensions, bridge rounds and SAFEs, not only priced rounds.
 #### B2. New investor or accelerator has appeared (high)
 
 - **How we check:**
-  1. **Directory:** YC batch dates and new accelerator portfolio entries. Because we download these lists every week, we can see who has been newly added.
+  1. **Directory (built):** a YC batch in the last 12 months. Other accelerator portfolios are not built yet.
   2. **Search:** recent press naming a new investor.
 
 #### B3. Hiring for several roles at once (medium)
@@ -467,14 +467,14 @@ Includes seed extensions, bridge rounds and SAFEs, not only priced rounds.
 #### B6. Recently converted from an LLC to a Delaware C-Corp (high)
 
 - **How we check:**
-  1. **Code (old snapshots):** compare the footer and terms today with copies from 6 to 12 months ago in the Internet Archive (Wayback Machine, free). "Acme LLC" becoming "Acme, Inc." is the giveaway.
+  1. **Code (old snapshots, built):** the footer today vs the Internet Archive copy from 6 to 18 months ago. "Acme LLC" becoming "Acme, Inc." is the giveaway. Also built: an SEC record renamed from "Acme LLC" in the last 18 months.
   2. **Paid data:** OpenCorporates conversion filings.
   3. **Search:** "company name converted to C-Corp".
 
 #### B7. Incorporated in the last 12 months, already funded, with a live product (medium)
 
 - **How we check:**
-  1. **Directory:** SEC Form D filings include the year of incorporation.
+  1. **Directory (built, needs `SEC_CONTACT_EMAIL`):** the year of incorporation on the latest Form D; this year counts.
   2. **Paid data:** OpenCorporates incorporation date.
   3. **Code (clue only):** the age of the domain registration. This is an estimate and is never enough on its own.
 - **Also needs:** F1 or B1 (funding) and M2 (live product) to be Yes.
@@ -506,7 +506,7 @@ Includes seed extensions, bridge rounds and SAFEs, not only priced rounds.
 #### B12. Recently launched paid pricing, a new revenue line or subscriptions (medium)
 
 - **How we check:**
-  1. **Code (old snapshots):** compare today's pricing page with Internet Archive copies. If there was no pricing page before and there is one now, it fires.
+  1. **Code (old snapshots, built):** the Internet Archive copy from 6 to 18 months ago had a pricing page without prices, or a homepage with no pricing link and no prices; today the site shows prices. "The Archive has no copy" proves nothing.
   2. **Code:** recent changelog or blog posts announcing pricing.
   3. **Directory:** a recent Product Hunt launch date.
 
@@ -612,7 +612,7 @@ Digital goods, print-on-demand or dropshipping.
 #### W12. No fintech tools at all, just a traditional bank and spreadsheets
 
 - **Yes when:** there's real proof, such as a job post asking for Excel bookkeeping with a traditional bank.
-- **How we check:** reuse the M3 results.
+- **How we check (built):** no fintech tool found, and a job post mentions bookkeeping or expenses in spreadsheets, Excel or QuickBooks Desktop. That clue goes to the AI to confirm; on its own it's only Needs check.
 - **Watch out for:** "we didn't find any fintech tools" is **not** proof. Without real proof this stays Unknown and doesn't count.
 
 ---
@@ -625,11 +625,12 @@ Digital goods, print-on-demand or dropshipping.
 | Fit: Stripe, Delaware C-Corp, paid pricing, open roles, growth numbers, remote, early adopter, payroll and banking tools, YC | Yes; directories add funding (SEC Form D, YC), Delaware (SEC) and YC backing | |
 | Fit: startup selling nationally, B2B SaaS, local services, AI core, finance person, several companies | Clues only | AI step |
 | Buying: several roles, finance hire, ops hire, bookkeeper, audit, tax deadline | Yes, from job posts and the calendar | |
-| Buying: raised in last 6 months, new investor, LLC to C-Corp, incorporated recently, new subsidiary, QuickBooks complaints, launched pricing, board member | Not yet | Web search, SEC Form D dates (already downloaded), old site snapshots |
+| Buying: raised in last 6 months, new investor, LLC to C-Corp, incorporated recently, launched pricing | Yes, from Form D, the YC batch, SEC former names and Internet Archive snapshots | Web search (phase 2 AI) when the free sources find nothing |
+| Buying: new subsidiary, QuickBooks complaints, board member | Web search only (phase 2 AI) | |
 | Weak: local area, physical business, LLC with no funding, pre-revenue, multi-currency, manufacturing, Shopify without stock, NetSuite | Yes or clues | AI step for the clue-only ones |
-| Weak: invoicing-heavy, accountant picks tools, no fintech tools | Not yet | AI step, web search |
+| Weak: invoicing-heavy, accountant picks tools, no fintech tools | AI step (accountant: web search; no fintech tools: a spreadsheet clue in job posts, confirmed by AI) | |
 
-Until the AI step is built, signals it decides count 0 points. So scores are lower than they will be, especially for real startups.
+Signals the AI decides count 0 points until the AI step has run for that phase, so scores straight after the free checks are lower than final ones.
 
 ---
 

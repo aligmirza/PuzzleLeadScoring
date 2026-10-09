@@ -109,6 +109,10 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 
 **Code:** [enrich/crawl.py](../enrich/crawl.py) (`crawl` for phase 1, `crawl_more` for phase 2)
 
+**Real-browser fallback:** when a homepage needs JavaScript to show its text, or shows a short "checking your browser" page, the site is read again with your installed Google Chrome (headless, at most 3 pages at a time), and every other page of that site is read the same way. Khan Academy went from 209 to 8,682 characters of text. Hard blocks (Cloudflare "Attention Required") usually stay blocked and are reported as such. `--no-browser` turns it off.
+
+**DNS fallback:** when this computer's DNS can't find a real domain, the address comes from public DNS (Google, then Cloudflare), with the usual certificate checks.
+
 ```mermaid
 flowchart LR
     H["Open homepage<br/>https, then www, then http"]
@@ -243,6 +247,21 @@ Examples from the test list:
 | resend.com | YC Winter 2023, 45 people | Confirms YC backing and funding; team size for the segment if the list has none |
 | linear.app | SEC: "Linear LLC", a housewares company in California (name only) | Weak match, ignored and not shown |
 
+**Phase 2 adds old copies of the site** from the Internet Archive (free), only where they could show a change: for a company that is an "Inc." today (was it an LLC a year ago?) and one that publishes prices today (did it a year ago?). Only a real snapshot counts; "the Archive has no copy" proves nothing.
+
+**Buying signals the free sources answer:**
+
+| Signal | Proof |
+|---|---|
+| Raised money in the last 6 months | A Form D filed on SEC EDGAR in the last 183 days |
+| New investor or accelerator | A YC batch in the last 12 months |
+| Converted from an LLC to a C-Corp | SEC record renamed from "Acme LLC" to "Acme Inc" in the last 18 months, or the site's footer 6 to 18 months ago said LLC and says Inc. today |
+| Incorporated in the last 12 months | Form D year of incorporation (needs `SEC_CONTACT_EMAIL`), with funding and a live product |
+| Recently launched paid pricing | 6 to 18 months ago the pricing page had no prices, or the homepage had no pricing link; today it shows prices |
+| Series C or later (exclusion) | A Form D for $100M+ in one offering (needs `SEC_CONTACT_EMAIL`) |
+
+The rest (new subsidiary, QuickBooks complaints, board members, the accountant picking the tools) are web-search questions in phase 2's AI step.
+
 Shared downloads live in `cache/` at the project root (git-ignored): the YC list (2 MB), the IRS list (29 MB, stored as name fingerprints) and saved SEC answers. Each list saves its own companies' findings in its `cache.sqlite`, so `rules` never looks them up again. `python -m enrich directories` shows what's downloaded; `python -m enrich directories acme.com --legal-name "Acme, Inc."` looks up one company.
 
 SEC asks automated tools to include a contact email. Set `SEC_CONTACT_EMAIL` in `.env` (optional; lookups work without it). SEC allows 10 requests a second, and the tool stays at 8, which is about 3 lookups per company.
@@ -302,10 +321,11 @@ flowchart TD
 The AI step runs separately, after each phase, so you can see the cost first:
 
 ```bash
-export OPENAI_API_KEY=sk-...                       # read from the environment only
-.venv/bin/python ai_check.py leads --phase icp       # after phase 1
+.venv/bin/python ai_check.py leads --phase icp       # after phase 1 (key from .env)
 .venv/bin/python ai_check.py leads --phase signals   # after phase 2
 ```
+
+Phase 2 also asks the signals only web search can answer (recent funding, new investor, QuickBooks complaints...): 9 web searches per ICP company, about $0.10 to $0.30. `--no-search-signals` skips them; those buying signals then stay empty.
 
 1. It counts the companies and prompts still unanswered and shows an estimated cost, then **asks before sending anything** (`--yes` skips the question).
 2. It runs about 8 AI calls at the same time, with a live view of calls, tokens, cost and the latest answers.
@@ -414,6 +434,8 @@ On top of these, three checks apply to every AI answer (in [enrich/ai_apply.py](
 | A Yes or No needs an exact quote as proof; without one it stays empty | In testing, the AI called a bootstrapped consultancy "venture-backed (estimated)" with no quote at all |
 | "The text doesn't mention X" is never a No | The AI answered "not Series C" for companies whose pages simply didn't mention funding |
 | An estimated funding stage is shown in "Funding stage" but earns no points | Only a confirmed stage counts toward the score |
+| "Recent" signals (raised in 6 months, new investor, LLC to C-Corp, incorporated, launched pricing, board member) are decided by the date in the AI's own quote: Yes needs a dated, matching event inside the window | The AI found "closed a $45M Series B on 4/17/2026" and still said "not in the last 6 months"; it also called "the pricing page shows three tiers" a recent launch |
+| A confirmed recent round sets the funding stage | Mintlify's site says Seed; its April 2026 round is a Series B |
 
 Step 2 never runs for a company that's already a NO, phase 2's AI only runs on companies phase 1 (with its AI answers) hasn't ruled out, and each call is capped at 3 searches. The rules are in `config/prompts/_shared.json` (`two_steps`, `web_search_step`); each data point's queries and good sources are in its own file.
 
@@ -490,6 +512,7 @@ lists/leads/output/
   signals_evidence.jsonl   phase 2: every answer with its quote and page link
   icp_ai_queue.jsonl       phase 1: prompts waiting for AI, with the page text they need
   signals_ai_queue.jsonl   phase 2: the same for signals
+  evaluation.csv           after `evaluate`: every disagreement with the right answers, with our proof
 ```
 
 **The main file, `leads_enriched.csv`,** is your list exactly as you gave it (same rows, order and columns), with findings added on the right. It's rewritten after each phase.
@@ -498,6 +521,7 @@ lists/leads/output/
 |---|---|
 | ICP | YES, NO or PENDING |
 | ICP status, Why | "All 4 must-haves confirmed"; "Mainly operates outside the US: foreign legal entity: API Hero Ltd." |
+| Reasoning | A short summary in plain words, ending with the profile's line, e.g. "Funding stage: Seed (confirmed)". Values: Pre-Seed, Seed, Series A, Series B, Series C or later, Bootstrapped, Unknown; basis: confirmed, estimated, not found |
 | Lead score, Lead tier | 21, Strong fit (or Not ICP, or "Not scored: website not reached (retry)") |
 | Score breakdown | Uses Stripe for billing +3; Delaware C-Corp +3; Several open roles +2; ... |
 | Segment, Segment based on | ENT, "120 employees from the list" |
@@ -524,6 +548,7 @@ lists/leads/
   input.csv               copy of your list
   raw/<domain>/           slim pages (*.html.gz) + jobs.json.gz
   cache.sqlite            answers and proof for both phases (compressed)
+  runs.jsonl              run log: when, what, counts, AI cost (`python -m enrich runs leads`)
   output/                 the files in step 9
 ```
 

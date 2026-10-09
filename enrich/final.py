@@ -4,6 +4,7 @@ No row is ever dropped. Duplicates get the same findings as their first row, and
 domain are kept with a note. Written after each phase to lists/<list>/output/<list>_enriched.csv.
 """
 import csv
+import re
 from pathlib import Path
 
 from .common import console, plain, rel
@@ -35,6 +36,48 @@ def _why(icp: dict) -> str:
     return ""
 
 
+STAGES = {"pre-seed": "Pre-Seed", "preseed": "Pre-Seed", "seed": "Seed", "series a": "Series A", "series b": "Series B",
+          "series c or later": "Series C or later", "series c": "Series C or later", "series d": "Series C or later",
+          "series e": "Series C or later", "bootstrapped": "Bootstrapped", "unknown": "Unknown"}
+
+
+def funding_line(icp: dict, sig: dict | None) -> str:
+    """The profile's callout, exactly: 'Funding stage: <value> (<basis>)'. Values and bases are the profile's lists."""
+    if icp.get("signals", {}).get("E1", {}).get("value") == "yes":
+        return "Funding stage: Series C or later (confirmed)"
+    raw = (sig or {}).get("funding_stage") or icp.get("funding_stage") or ""
+    m = re.match(r"\s*(.+?)\s*\((confirmed|estimated|not found)\)\s*$", raw, re.I)
+    value = STAGES.get((m.group(1) if m else raw).strip().lower())
+    basis = m.group(2).lower() if m else ""
+    if not value or value == "Unknown" or not basis:
+        return "Funding stage: Unknown (not found)"
+    return f"Funding stage: {value} ({basis})"
+
+
+def reasoning(icp: dict, sig: dict | None, row: dict, sc: dict | None) -> str:
+    """Plain-language summary of why, built from the answers (no AI cost). Never says a company falls short because
+    something couldn't be found."""
+    s = icp.get("signals", {})
+    lines = []
+    if row["ICP"] == "NO":
+        lines.append(f"Not ICP. {row['Why']}".rstrip(". ") + ".")
+    elif row["ICP"] == "PENDING":
+        lines.append(f"ICP pending: {row['ICP status'].rstrip('.')}." + (f" {row['Why']}" if row["Why"] else ""))
+    else:
+        confirmed = [SIGNALS[k][1] for k, v in s.items() if SIGNALS[k][0] == "must" and v["value"] == "yes"]
+        lines.append(f"ICP: {len(confirmed)} of 4 must-haves confirmed" + (f" ({'; '.join(confirmed)})" if confirmed else "")
+                     + ", and no exclusion found.")
+    if sc:
+        top = [n for n, p in sorted(sc["parts"], key=lambda x: -x[1]) if p > 0][:5]
+        weak = [n for n, p in sc["parts"] if p < 0]
+        lines.append(f"{sc['tier']} with {sc['score']} points" + (f", mainly: {', '.join(top)}" if top else "") + "."
+                     + (f" Weak fit signals: {', '.join(weak)}." if weak else ""))
+    if row.get("Found in directories"):
+        lines.append(f"Directories: {row['Found in directories'].rstrip('.')}.")
+    lines.append(funding_line(icp, sig))
+    return "\n".join(lines)
+
+
 def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) -> dict:
     if not icp:
         return {"ICP": "PENDING", "ICP status": "Not checked yet (run phase 1)"}
@@ -62,6 +105,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
         "Lead tier": "Not ICP" if yes_no == "NO" else "",
         "Score breakdown": "",
     }
+    sc = None
     if sig and yes_no != "NO":
         sc = score(sig["signals"], seg)
         row.update({"Lead score": sc["score"], "Lead tier": sc["tier"] + (" (pending AI check)" if yes_no == "PENDING" else ""),
@@ -70,6 +114,8 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
         row["Lead tier"] = "Not scored: website not reached (retry)"
     elif yes_no != "NO":
         row["Lead tier"] = "Scored after phase 2"
+    if yes_no == "NO":
+        sig = None  # phase 2 answers saved before the company was ruled out are no longer relevant
     src = sig or icp
     s_all = {**(sig or {}).get("signals", {}), **icp.get("signals", {})}
     roles = src.get("crawl", {}).get("jobs_count")
@@ -94,6 +140,8 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
     for sid in SIGNALS:
         if sid in s_all:
             row[signal_column(sid)] = CELL_NAMES[s_all[sid]["value"]]
+    row["Reasoning"] = reasoning(icp, sig, row, sc)
+    row["Funding stage"] = funding_line(icp, sig).removeprefix("Funding stage: ")
     return row
 
 
@@ -134,7 +182,7 @@ def write(folder: Path, store: Store) -> Path:
         out_rows.append({**raw, **{k: v for k, v in extra.items() if k not in original_cols}})
 
     # keep a stable, readable column order for the added columns
-    order = ["ICP", "ICP status", "Why", "Lead score", "Lead tier", "Score breakdown", "Segment", "Segment based on",
+    order = ["ICP", "ICP status", "Why", "Lead score", "Lead tier", "Reasoning", "Score breakdown", "Segment", "Segment based on",
              "Fit signals found", "Buying signals found", "Weak fit signals found", "Needs checking", "Notes"]
     added_cols = [c for c in order if c in added_cols] + [c for c in added_cols if c not in order]
     with open(out, "w", newline="") as f:

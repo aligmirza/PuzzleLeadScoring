@@ -24,7 +24,8 @@
     "definition": "Exclusions need positive evidence. Never exclude on an inference, an estimate or missing information. Requires a confirmed round, an IPO or an explicit public statement.",
     "yes_when": [
       "The company says it raised a Series C, D or later round",
-      "The company shows its own stock ticker or says it is publicly traded"
+      "The company shows its own stock ticker or says it is publicly traded",
+      "The company confirms a single funding round of $100 million or more, or a valuation of $1 billion or more (a stated fact, so it counts even when the round's letter isn't named)"
     ],
     "no_when": [
       "The text confirms the latest round is Series B or earlier"
@@ -35,7 +36,7 @@
     ],
     "watch_out_for": [
       "A company that merely looks large or mature is not excluded",
-      "Total amount raised alone does not name a round",
+      "Total raised across all rounds is not one round: only a single round of $100M+ or a $1B+ valuation counts",
       "A subsidiary of a public company: answer 'unknown' and explain in the reason"
     ],
     "where_to_look": [

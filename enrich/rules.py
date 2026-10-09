@@ -57,11 +57,19 @@ SIGNALS = {
     "F20": ("fit", "Uses Ramp or Brex cards"),
     "F21": ("fit", "Cap table in Carta or Pulley"),
     # buying
+    "B1": ("buying", "Raised money in the last 6 months"),
+    "B2": ("buying", "New investor or accelerator"),
     "B3": ("buying", "Hiring for several roles"),
     "B4": ("buying", "Hiring a finance lead"),
     "B5": ("buying", "Hiring ops or chief of staff"),
+    "B6": ("buying", "Converted from an LLC to a C-Corp"),
+    "B7": ("buying", "Incorporated in the last 12 months"),
+    "B8": ("buying", "Registered a new subsidiary"),
     "B9": ("buying", "Lost or replacing a bookkeeper"),
     "B10": ("buying", "Tax deadline coming up"),
+    "B11": ("buying", "Complaining about QuickBooks"),
+    "B12": ("buying", "Recently launched paid pricing"),
+    "B13": ("buying", "New board member or investor updates"),
     "B14": ("buying", "Preparing for a first audit"),
     # weak
     "W1": ("weak", "Serves one local area"),
@@ -74,6 +82,8 @@ SIGNALS = {
     "W8": ("weak", "Heavy invoicing and bill-paying"),
     "W9": ("weak", "Shopify store without stock"),
     "W10": ("weak", "Already on NetSuite or similar"),
+    "W11": ("weak", "Accountant picks the tools"),
+    "W12": ("weak", "No fintech tools, spreadsheets and a traditional bank"),
 }
 
 GROUP_NAMES = {"must": "Must-have", "exclusion": "Exclusion", "fit": "Fit", "buying": "Buying signal", "weak": "Weak fit"}
@@ -87,6 +97,10 @@ def signal_column(sid: str) -> str:
     group, label = SIGNALS[sid]
     return f"{GROUP_NAMES[group]}: {label}"
 
+
+# Signals only the web can answer (news, registries, social posts). Asked in phase 2 with web search when the free
+# checks left them open; skip them with `ai_check.py <list> --phase signals --no-search-signals`.
+SEARCH_SIGNALS = ["B1", "B2", "B6", "B7", "B8", "B11", "B12", "B13", "W11"]
 
 # AI prompts live in prompts/<group>/<data point>.json. These run for every company still in the running;
 # others are added when a rule returns "Needs check" or a condition in Extractor._ai_prompts matches.
@@ -207,9 +221,18 @@ RE_LEAD_FIN = re.compile(r"\b(controller|comptroller|head of finance|vp,? financ
 RE_OPS_ROLE = re.compile(r"\b(operations|bizops|biz ops|business operations|chief of staff|office manager)\b", re.I)
 RE_PEOPLE_ROLE = re.compile(r"\b(people|hr|human resources|talent)\b", re.I)
 RE_MFG_ROLE = re.compile(r"manufactur|hardware engineer|mechanical engineer|supply chain|production (?:technician|associate|manager)|assembly|warehouse|fulfil?ment|inventory", re.I)
+RE_SPREADSHEET_FINANCE = re.compile(r"\b(?:bookkeeping|accounting|expenses?|invoic\w+|payroll|reconcil\w+|financial records)\b[^.]{0,60}"
+                                    r"\b(?:spreadsheets?|Excel|Google Sheets)\b|\b(?:spreadsheets?|Excel|Google Sheets)\b[^.]{0,60}"
+                                    r"\b(?:bookkeeping|accounting|expenses?|invoic\w+|reconcil\w+)\b|QuickBooks Desktop", re.I)
 RE_AUDIT = re.compile(r"\b(?:first|annual|financial) audit|audit[- ]read|prepare for (?:an )?audit", re.I)
 
 RE_FUND_SENT = re.compile(r"\b(raised|raise|raising|funding|round|backed by|investors? include|led by|seed|series [a-h])\b", re.I)
+RE_MONEY = re.compile(r"\$\s?(\d+(?:\.\d+)?)\s?(million|billion|[MB])\b", re.I)
+RE_BIG_RAISE = re.compile(r"\b(?:rais(?:ed|es|ing)|closed|secur(?:ed|es)|announc(?:ed|es|ing))\b[^.]{0,40}\$\s?\d", re.I)
+RE_VALUATION = re.compile(r"valuation of \$\s?\d|\$\s?\d+(?:\.\d+)?\s?(?:billion|B)\s+valuation|valued at \$\s?\d", re.I)
+_late = json.loads((__import__("pathlib").Path(__file__).resolve().parent.parent / "config" / "scoring.json").read_text()).get("late_stage_proof", {})
+LATE_STAGE_ROUND_USD = _late.get("round_at_least_usd", 100_000_000)          # a single round this big is beyond Series B
+LATE_STAGE_VALUATION_USD = _late.get("valuation_at_least_usd", 1_000_000_000)
 RE_STAGE = re.compile(r"\b(pre-?seed|seed|series ([a-h]))\b", re.I)
 RE_FIRST_PERSON = re.compile(r"\b(we|we've|we're|our|us)\b", re.I)
 RE_TICKER = re.compile(r"\b(?:NASDAQ|Nasdaq|NYSE(?: American)?)\s?:\s?[A-Z]{1,5}\b")
@@ -427,6 +450,8 @@ class Extractor:
         if self.phase == "signals":
             self.weak_derived()
         self.directories()
+        if self.phase == "signals":
+            self.tax_deadline()
         return self._result()
 
     def _not_live(self, status) -> dict:
@@ -766,6 +791,15 @@ class Extractor:
             self.s["W7"] = sig(CHECK, f"open role: {mfg[0]['title']}")
             self.facts["inventory_roles"] = [j["title"] for j in mfg[:5]]
 
+        if not any(t["value"] == YES for t in self.facts.get("tools", {}).values()):
+            for j in self.jobs:
+                m = RE_SPREADSHEET_FINANCE.search(j["description"])
+                if m:
+                    self.s["W12"] = sig(CHECK, f"job post '{j['title']}': {_snip(j['description'], m)}",
+                                        note="spreadsheet bookkeeping mentioned and no fintech tools found; AI confirms")
+                    self.ai.append("weak/no_fintech_tools")
+                    break
+
         remote_jobs = [j for j in self.jobs if j.get("remote")]
         if self.jobs and len(remote_jobs) >= max(1, len(self.jobs) // 2):
             self.s["F16"] = sig(YES, f"{len(remote_jobs)} of {len(self.jobs)} jobs are remote")
@@ -777,7 +811,7 @@ class Extractor:
     def funding(self):
         stages = {"pre-seed": 0, "preseed": 0, "seed": 1, "series a": 2, "series b": 3}
         best, best_ev, best_url, backed = None, "", "", None
-        c_plus = None
+        c_plus = big = None
         for kind in ("home", "about", "team", "careers", "blog", "investors"):
             p = self.page(kind)
             if not p:
@@ -798,6 +832,10 @@ class Extractor:
                             best, best_ev, best_url = st, sent.strip()[:250], p.url
                 if not backed and re.search(r"backed by|investors include|funded by|led by", sent, re.I):
                     backed = (sent.strip()[:250], p.url)
+                if not big:
+                    big = _late_stage_amount(sent, self.company or self.label)
+                    if big:
+                        big = (f"{big}: {sent.strip()[:220]}", p.url)
 
         label = {"pre-seed": "Pre-Seed", "preseed": "Pre-Seed", "seed": "Seed", "series a": "Series A", "series b": "Series B"}
         if best and c_plus:
@@ -811,6 +849,11 @@ class Extractor:
         if ticker[0]:
             self.s["E1"] = sig(YES, f"publicly traded: {ticker[1]}", ticker[0].url)
             self.facts["funding_stage"], self.facts["funding_basis"] = "Series C or later", "confirmed"
+        elif big:
+            self.s["E1"] = sig(YES, big[0], big[1], note="a round of $100M+ or a $1B+ valuation is beyond Series B")
+            self.facts["funding_stage"], self.facts["funding_basis"] = "Series C or later", "confirmed"
+            if self.s.get("F1", {}).get("value") == YES:
+                self.s["F1"] = sig(NO, big[0], big[1], note="later than Series B")
         elif c_plus:
             self.s["E1"] = sig(CHECK, c_plus[0], c_plus[1], note="Series C+ mentioned; confirm it is this company")
             self.ai.append("exclusions/series_c_or_public")
@@ -937,14 +980,6 @@ class Extractor:
             self.s["F17"] = sig(CHECK, snip, p.url)
             self.ai.append("fit/runs_several_us_companies")
 
-        # B10: tax deadlines for US calendar-year C-Corps (Apr 15, Oct 15 extension)
-        today = date.today()
-        for month, day in ((4, 15), (10, 15)):
-            deadline = date(today.year, month, day)
-            if 0 <= (deadline - today).days <= 45 and self.s.get("M1", {}).get("value") != NO:
-                self.s["B10"] = sig(YES, f"{(deadline - today).days} days to the {deadline:%b %d} filing deadline",
-                                    note="calendar based; applies to almost every US company")
-
         if self.page("team"):
             self.ai += ["fit/no_finance_person_visible", "fit/finance_lead_present", "fields/segment_headcount"]
 
@@ -978,14 +1013,29 @@ class Extractor:
         if self.facts.get("entity_type") == "LLC" and self.s.get("F1", {}).get("value") != YES:
             self.s["W4"] = sig(YES, self.facts.get("entity_evidence", ""), note="provisional until the funding search runs")
 
+    def tax_deadline(self):
+        """B10: April 15 and the October 15 extension are C-Corp filing deadlines, so this only counts for a company
+        confirmed as a C-Corp (on its site or in SEC). Otherwise it would add points to every company."""
+        corp = self.s.get("F3", {}).get("value") == YES or self.facts.get("entity_type") in ("Delaware C-Corp", "Other US C-Corp")
+        today = date.today()
+        for month, day in ((4, 15), (10, 15)):
+            deadline = date(today.year, month, day)
+            days = (deadline - today).days
+            if 0 <= days <= 45 and corp and self.s.get("M1", {}).get("value") == YES:
+                self.s["B10"] = sig(YES, f"{days} days to the {deadline:%b %d} C-Corp filing deadline",
+                                    note=f"calendar based, for a confirmed C-Corp ({self.facts.get('entity_type')})")
+
     def directories(self):
         """Free official directories (YC, SEC, IRS). They only fill what the rules above left open."""
         if not self.directory_fn:
             return
         from . import directories
         gate = decide(self.s, self.record.get("status"))["gate"]
+        history = None
+        if self.phase == "signals":  # old copies of the site, only where they could show a change
+            history = {"legal": self.facts.get("entity_suffix") == "corp", "pricing": bool(self.facts.get("prices"))}
         self.directories_found = self.directory_fn(self.facts.get("legal_name"), self.facts.get("us_clues", []),
-                                                   gate in ("excluded", "failed must-have"))
+                                                   gate in ("excluded", "failed must-have"), history)
         directories.apply(self)
 
     # result ----------------------------------------------------------
@@ -1048,6 +1098,9 @@ class Extractor:
         for sid, v in self.s.items():
             if v["value"] == CHECK and sid in signal_prompt:
                 chosen.append(signal_prompt[sid])
+        if self.phase == "signals":
+            chosen += [signal_prompt[sid] for sid in SEARCH_SIGNALS
+                       if sid in signal_prompt and self.s.get(sid, {}).get("value") in (UNKNOWN, CHECK)]
         if self.phase == "icp" and self.facts.get("funded_stage_open") and self.s.get("E1", {}).get("value") == UNKNOWN:
             chosen.append("exclusions/series_c_or_public")
         if self.s.get("F1", {}).get("value") == UNKNOWN or (
@@ -1067,7 +1120,9 @@ class Extractor:
             from .directories import settled_prompts
             settled = settled_prompts(self.s) - {"fit/venture_backed_stage"}
         return [pid for pid in dict.fromkeys(chosen)
-                if pid in known and pid not in settled and known[pid]["stage"] in ("site_text", "job_posts")
+                if pid in known and pid not in settled
+                and (known[pid]["stage"] in ("site_text", "job_posts")
+                     or (known[pid]["stage"] == "search_results" and self.phase == "signals"))
                 and icp_prompt(pid) == (self.phase == "icp")]
 
     def _job_snippets(self) -> str:
@@ -1121,6 +1176,31 @@ def clean_legal_name(name: str) -> str:
             body = body[i + 1:]
             break
     return " ".join(body + [suffix]) if body else name
+
+
+RE_NOT_OWN_MONEY = re.compile(r"\b(?:clients?|customers?|portfolio|collectively|combined|helped|our companies|founders (?:we|who)"
+                              r"|startups (?:we|that)|on behalf of|for (?:our|their) (?:clients|customers))\b", re.I)
+
+
+def _late_stage_amount(sentence: str, company: str = "") -> str | None:
+    """'we raised $750 million' or 'Acme reaches a $44 billion valuation' -> a short label, else None.
+    The company itself must be the subject: money raised by clients or a portfolio never counts."""
+    if not (RE_BIG_RAISE.search(sentence) or RE_VALUATION.search(sentence)) or RE_NOT_OWN_MONEY.search(sentence):
+        return None
+    name = re.escape(company.split()[0]) if company.split() else r"(?!x)x"
+    if not re.search(rf"\b(?:we|we've|we have|our|{name})\b", sentence, re.I):
+        return None
+    for m in RE_MONEY.finditer(sentence):
+        unit = m.group(2).lower()
+        usd = float(m.group(1)) * (1e9 if unit in ("billion", "b") else 1e6)
+        after = sentence[m.end(): m.end() + 15].lower()
+        before = sentence[max(0, m.start() - 20): m.start()].lower()
+        is_valuation = "valuation" in after or "valued at" in before or "valuation of" in before
+        if is_valuation and usd >= LATE_STAGE_VALUATION_USD:
+            return f"valued at ${m.group(1)} {m.group(2)}"
+        if not is_valuation and usd >= LATE_STAGE_ROUND_USD and RE_BIG_RAISE.search(sentence):
+            return f"raised ${m.group(1)} {m.group(2)} in one round"
+    return None
 
 
 def pricing_has_foreign_and_usd(text: str) -> bool:

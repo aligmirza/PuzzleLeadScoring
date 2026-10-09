@@ -7,3 +7,4 @@ fastapi>=0.110
 uvicorn[standard]>=0.30
 mcp>=2.3
 python-multipart>=0.0.9
+playwright  # real-browser fallback; uses your installed Google Chrome

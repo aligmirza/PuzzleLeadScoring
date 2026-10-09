@@ -71,7 +71,7 @@ def known_facts(result: dict) -> dict:
 
 # ---------------------------------------------------------------------------
 class Runner:
-    def __init__(self, store: Store, phase: str, web: bool, redo: bool, concurrency: int):
+    def __init__(self, store: Store, phase: str, web: bool, redo: bool, concurrency: int, search_signals: bool = True):
         import openai  # imported here so the rest of the tool works without the package
         self.openai = openai
         pv = P.provider()
@@ -83,6 +83,7 @@ class Runner:
                      f"It is read from the environment only and never saved to files or git.")
         self.client = openai.AsyncOpenAI(api_key=key, max_retries=4)
         self.pv, self.store, self.phase, self.web, self.redo = pv, store, phase, web, redo
+        self.search_signals = search_signals
         self.sem = asyncio.Semaphore(concurrency)
         self.c = Counter()
         self.cost = 0.0
@@ -137,41 +138,52 @@ class Runner:
             return
         done = {} if self.redo else self.store.get_ai(domain, self.phase)
         facts = known_facts(result)
-        for pid in ai_prompts(result):
-            if pid in done:
-                self.c["skipped"] += 1
-                continue
-            step1 = None
-            try:
-                if P.web_mode(pid) != "primary":
-                    msg = P.build(pid, result["company"], domain, facts, result.get("ai_context", {}))
-                    step1, usage, _ = await self.call(msg["model"], msg["system"], [msg["context"], msg["instruction"]],
-                                                      msg["schema"], cache_key=f"{self.phase}:{domain}")
-                    self.store.save_ai(domain, self.phase, pid, 1, step1, usage)
-                    self._log(domain, pid, 1, step1)
-                if self.web and not self.web_disabled_reason and P.needs_web(pid, step1):
-                    msg = P.build_search(pid, result["company"], domain, facts, result.get("legal_name"), step1)
-                    data, usage, sources = await self.call(msg["model"], msg["system"], [msg["instruction"]],
-                                                           msg["schema"], tools=msg["tools"])
-                    data["_sources_found"] = sources[:8]
-                    self.store.save_ai(domain, self.phase, pid, 2, data, usage)
-                    self._log(domain, pid, 2, data)
-            except self.openai.AuthenticationError:
-                sys.exit("OpenAI rejected the API key. Check OPENAI_API_KEY.")
-            except self.openai.BadRequestError as e:
-                if "web_search" in str(e) or "tool" in str(e).lower():
-                    self.web_disabled_reason = f"web search not available for {self.pv['web']}: {str(e)[:160]}"
-                self.c["errors"] += 1
-                self.store.save_ai(domain, self.phase, pid, 2 if step1 else 1, {"error": str(e)[:300]}, {})
-            except (self.openai.APIError, ValueError) as e:
-                self.c["errors"] += 1
-                self.store.save_ai(domain, self.phase, pid, 2 if step1 else 1, {"error": f"{type(e).__name__}: {str(e)[:250]}"}, {})
+        todo = [pid for pid in ai_prompts(result) if wanted(pid, self.search_signals)]
+        self.c["skipped"] += len(ai_prompts(result)) - len(todo)
+        step1: dict[str, dict | None] = {pid: (done.get(pid, {}).get(1) or {}).get("answer") for pid in todo}
+        try:
+            # step 1: our saved data, for data points that aren't web-first and haven't been answered yet
+            for pid in todo:
+                if P.web_mode(pid) != "primary" and pid not in done:
+                    step1[pid] = await self.step1(domain, result, facts, pid)
+            # step 2: web search, per data point, where step 1 found nothing (or the data point is web-first)
+            for pid in todo:
+                if 2 in done.get(pid, {}) or not (self.web and not self.web_disabled_reason):
+                    continue
+                if pid in done and 1 not in done[pid] and P.web_mode(pid) != "primary":
+                    continue
+                if not P.needs_web(pid, step1.get(pid)):
+                    continue
+                msg = P.build_search(pid, result["company"], domain, facts, result.get("legal_name"), step1.get(pid))
+                data, usage, sources = await self.call(msg["model"], msg["system"], [msg["instruction"]],
+                                                       msg["schema"], tools=msg["tools"])
+                data["_sources_found"] = sources[:8]
+                self.store.save_ai(domain, self.phase, pid, 2, data, usage)
+                self._log(domain, pid, 2, data)
+        except self.openai.AuthenticationError:
+            sys.exit("OpenAI rejected the API key. Check OPENAI_API_KEY.")
+        except self.openai.BadRequestError as e:
+            if "web_search" in str(e) or "tool" in str(e).lower():
+                self.web_disabled_reason = f"web search not available for {self.pv['web']}: {str(e)[:160]}"
+            self.c["errors"] += 1
+        except (self.openai.APIError, ValueError) as e:
+            self.c["errors"] += 1
+            self.feed.appendleft((domain, f"error: {type(e).__name__}", "", str(e)[:40], ""))
         # apply everything answered so far and save
         updated = ai_apply.apply(result, self.store.get_ai(domain, self.phase), self.phase)
         self.store.save_result(domain, updated, self.phase)
         self.c["companies"] += 1
         if self.phase == "icp":
             self.c[f"verdict_{updated.get('icp_verdict')}"] += 1
+
+    async def step1(self, domain: str, result: dict, facts: dict, pid: str) -> dict:
+        """Step 1: one data point, answered from our saved pages."""
+        m = P.build(pid, result["company"], domain, facts, result.get("ai_context", {}))
+        data, usage, _ = await self.call(m["model"], m["system"], [m["context"], m["instruction"]], m["schema"],
+                                         cache_key=f"{self.phase}:{domain}")
+        self.store.save_ai(domain, self.phase, pid, 1, data, usage)
+        self._log(domain, pid, 1, data)
+        return data
 
     def _log(self, domain, pid, step, data):
         ans = data.get("answer", data.get("value", ""))
@@ -198,27 +210,32 @@ class Runner:
 
 
 # ---------------------------------------------------------------------------
-def estimate(store: Store, domains: list[str], phase: str, redo: bool) -> dict:
+def wanted(pid: str, search_signals: bool) -> bool:
+    return search_signals or P.load()[1][pid]["stage"] != "search_results"
+
+
+def estimate(store: Store, domains: list[str], phase: str, redo: bool, search_signals: bool = True) -> dict:
     pv = P.provider()
     price = pv.get("price_per_million", {})
-    calls = tokens = cached = 0
+    calls = tokens = cached = search_first = 0
     companies = 0
     for d in domains:
         r = store.get_result(d, phase) or {}
         if not r.get("ai", {}).get("needed"):
             continue
         done = {} if redo else store.get_ai(d, phase)
-        todo = [p for p in ai_prompts(r) if p not in done]
+        todo = [p for p in ai_prompts(r) if p not in done and wanted(p, search_signals)]
         if not todo:
             continue
         companies += 1
         calls += len(todo)
+        search_first += sum(1 for p in todo if P.web_mode(p) == "primary")
         share = len(todo) / max(1, len(ai_prompts(r)))
         tokens += int(r["ai"].get("tokens_est", 0) * share)
         cached += int(r["ai"].get("cached_tokens_est", 0) * share)
     output = 150 * calls
     step1 = ((tokens - cached) * price.get("input", 0) + cached * price.get("cached_input", 0) + output * price.get("output", 0)) / 1e6
-    return {"companies": companies, "calls": calls, "tokens": tokens, "step1_cost": step1,
+    return {"companies": companies, "calls": calls, "tokens": tokens, "step1_cost": step1, "search_first": search_first,
             "web_cost_max": calls * 3 * (pv.get("price_per_web_search", 0) + 8000 * price.get("input", 0) / 1e6)}  # ~8,000 tokens of results per search (measured)
 
 
@@ -227,7 +244,7 @@ def money(x: float) -> str:
 
 
 def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool = False, concurrency: int = 8,
-        assume_yes: bool = False) -> None:
+        assume_yes: bool = False, search_signals: bool = True) -> None:
     store = Store(folder)
     rows, _ = load_leads(folder / "input.csv")
     domains = list(dict.fromkeys(r["domain"] for r in rows))
@@ -237,7 +254,7 @@ def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool =
                    ("No", "Unknown: site not reached")]
     if limit:
         domains = domains[:limit]
-    est = estimate(store, domains, phase, redo)
+    est = estimate(store, domains, phase, redo, search_signals and web)
     pv = P.provider()
     if not est["calls"]:
         console.print("Nothing left for AI in this phase (all answered, or no company needs it).")
@@ -246,7 +263,10 @@ def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool =
                   f"  {est['companies']} companies, {est['calls']} prompts, about {est['tokens']:,} input tokens\n"
                   f"  models: step 1 {pv['small']}" + (f", step 2 web search {pv['web']}" if web else ", web search off") + "\n"
                   f"  estimated cost: about {money(est['step1_cost'])} for step 1"
-                  + (f", plus up to {money(est['web_cost_max'])} if every prompt also needs web search" if web else ""))
+                  + (f", plus up to {money(est['web_cost_max'])} if every prompt also needs web search" if web else "")
+                  + (f"\n  {est['search_first']} of the prompts can only be answered by web search "
+                     f"(about {money(est['search_first'] * 0.011)} to {money(est['search_first'] * 0.033)}); "
+                     f"--no-search-signals skips them" if est.get("search_first") else ""))
     if not assume_yes:
         if not sys.stdin.isatty():
             console.print("[yellow]Not running: no terminal to confirm the cost. Add --yes to run without asking.[/]")
@@ -259,7 +279,7 @@ def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool =
             console.print("Cancelled. Nothing was sent.")
             return
 
-    runner = Runner(store, phase, web, redo, concurrency)
+    runner = Runner(store, phase, web, redo, concurrency, search_signals and web)
     progress = Progress(SpinnerColumn(), TextColumn("{task.description:<14}"), BarColumn(bar_width=36),
                         MofNCompleteColumn(), TimeElapsedColumn())
     task = progress.add_task("Companies", total=len(domains))
@@ -289,6 +309,10 @@ def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool =
     console.print(f"Done in {time.time() - start:.0f} s: {c['calls']} AI calls, {c['web_searches']} web searches, "
                   f"{c['input']:,} input tokens ({c['cached']:,} cached), {c['output']:,} output tokens, "
                   f"cost about [bold]${runner.cost:.4f}[/]" + (f", [red]{c['errors']} errors[/]" if c["errors"] else ""))
+    from .runlog import log
+    log(folder, f"AI, {'phase 1' if phase == 'icp' else 'phase 2'}", companies=len(domains), ai_calls=c["calls"],
+        web_searches=c["web_searches"], input_tokens=c["input"], output_tokens=c["output"], errors=c["errors"],
+        cost_usd=round(runner.cost, 4), seconds=round(time.time() - start), web=web, search_signals=search_signals and web)
     if runner.web_disabled_reason:
         console.print(f"[yellow]Web search was turned off during the run: {runner.web_disabled_reason}[/]\n"
                       f"Set a model that supports web search as 'web' in {rel(P.PROMPTS_DIR / '_shared.json')}.")

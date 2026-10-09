@@ -80,13 +80,15 @@ def directory_finder(store: Store, row: dict):
     if not directories.ENABLED:
         return None
 
-    def find(legal_name, us_clues, skip_sec):
+    def find(legal_name, us_clues, skip_sec, history=None):
         found = store.get_directory(row["domain"])
+        asked = found.get("history_asked", {}) if found else {}
         if (found and found.get("legal_name") == legal_name and found.get("complete")
                 and found.get("version") == directories.VERSION
-                and (skip_sec or not found.get("skipped_sec"))):
+                and (skip_sec or not found.get("skipped_sec"))
+                and all(asked.get(k) or not v for k, v in (history or {}).items())):
             return found
-        found = directories.lookup(row["domain"], row["company"], legal_name, us_clues, skip_sec)
+        found = directories.lookup(row["domain"], row["company"], legal_name, us_clues, skip_sec, history)
         found["skipped_sec"] = skip_sec
         store.save_directory(row["domain"], found)
         return found

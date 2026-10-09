@@ -13,6 +13,8 @@ Other commands:
   python -m enrich clean leads            delete raw pages that are no longer needed (asks first)
   python -m enrich prompts                list the AI prompts (one JSON file per data point in prompts/)
   python -m enrich directories            the free directories (YC, SEC, IRS): status, refresh, look up one company
+  python -m enrich evaluate leads         compare results with the right answers (Expected columns or --labels)
+  python -m enrich runs leads             the run log: when, what, counts and AI cost
 
 Each list gets its own folder: lists/<list>/ with input.csv, raw/, cache.sqlite and output/.
 Nothing is deleted without asking.
@@ -48,7 +50,8 @@ def cmd_run(args):
 
 def cmd_ai(args):
     from . import ai
-    ai.run(list_dir(args.list), args.phase, args.limit, not args.no_web, args.redo, args.concurrency, args.yes)
+    ai.run(list_dir(args.list), args.phase, args.limit, not args.no_web, args.redo, args.concurrency, args.yes,
+           not args.no_search_signals)
 
 
 def cmd_serve(args):
@@ -155,6 +158,49 @@ def cmd_directories(args):
     console.print(t)
     console.print("[dim]Downloaded on first use and refreshed automatically (YC weekly, IRS monthly, SEC lookups after 30 days). "
                   "Turn off for a run with --no-directories.[/]")
+
+
+def cmd_evaluate(args):
+    from . import evaluate
+    if args.template:
+        path = evaluate.write_template(Path(args.template))
+        console.print(f"Labels template written: {path}. Fill one row per company (Expected ICP: YES/NO; "
+                      f"Expected tier: Strong fit/Weak fit; Expected: <data point>: Yes/No), then run "
+                      f"python -m enrich evaluate <list> --labels {path}")
+        return
+    if not args.list:
+        raise SystemExit("Name a list: python -m enrich evaluate <list> [--labels labels.csv]")
+    folder = list_dir(args.list)
+    summary = evaluate.run(folder, Path(args.labels) if args.labels else None)
+    from .runlog import log
+    log(folder, "Evaluate", labels=args.labels or "columns in the list", **summary)
+
+
+def cmd_runs(args):
+    from .runlog import read
+    folder = list_dir(args.list)
+    rows = read(folder)
+    if not rows:
+        console.print("No runs logged yet for this list.")
+        return
+    t = Table(title=f"Runs: {folder.name}", title_justify="left", header_style="bold")
+    for c in ("When", "Step", "Companies", "Result", "AI cost", "Time"):
+        t.add_column(c)
+    for r in rows:
+        result = ""
+        if r.get("verdicts"):
+            result = ", ".join(f"{k} {v}" for k, v in r["verdicts"].items())
+        elif "strong_fit" in r:
+            result = f"Strong {r['strong_fit']}, Weak {r['weak_fit']}"
+        elif "ai_calls" in r:
+            result = f"{r['ai_calls']} calls, {r['web_searches']} searches" + (f", {r['errors']} errors" if r.get("errors") else "")
+        elif "icp" in r:
+            result = f"ICP right {r['icp']['right']}, wrong {r['icp']['wrong']} (wrongly NO {r['icp']['wrong_no']})"
+        t.add_row(r["time"].replace("T", " "), r["step"], str(r.get("companies", "")), result,
+                  f"${r['cost_usd']:.4f}" if "cost_usd" in r else "", f"{r['seconds']} s" if "seconds" in r else "")
+    console.print(t)
+    total = sum(r.get("cost_usd", 0) for r in rows)
+    console.print(f"Total AI cost for this list: ${total:.4f}")
 
 
 def cmd_clean(args):
@@ -285,6 +331,8 @@ def main(argv: list[str] | None = None):
                             "none (all raw pages), all (don't offer). Always asks first.")
         p.add_argument("--yes", action="store_true", help="delete without asking (for scheduled runs)")
         p.add_argument("--no-directories", action="store_true", help="skip the free directories (YC, SEC, IRS)")
+        p.add_argument("--no-browser", action="store_true",
+                       help="don't use the real browser (Chrome) for sites that need JavaScript or check for bots")
 
     p = sub.add_parser("icp", help="phase 1: is it our ICP? must-haves and exclusions only")
     p.add_argument("csv")
@@ -313,6 +361,9 @@ def main(argv: list[str] | None = None):
                    help="icp: settle must-haves and exclusions (run after phase 1); signals: run after phase 2")
     p.add_argument("--limit", type=int, default=0, help="only the first N companies that need AI")
     p.add_argument("--no-web", action="store_true", help="skip step 2 (web search)")
+    p.add_argument("--no-search-signals", action="store_true",
+                   help="phase 2: skip the signals only web search can answer (recent funding, new investors, "
+                        "QuickBooks complaints...), the most expensive part")
     p.add_argument("--redo", action="store_true", help="ask again even where an answer is saved")
     p.add_argument("--concurrency", type=int, default=8, help="AI calls at the same time")
     p.add_argument("--yes", action="store_true", help="don't ask before spending")
@@ -361,6 +412,16 @@ def main(argv: list[str] | None = None):
     p.add_argument("--no-directories", action="store_true", help="skip the free directories (YC, SEC, IRS)")
     p.set_defaults(fn=cmd_rules)
 
+    p = sub.add_parser("evaluate", help="compare results with the right answers (accuracy, and every disagreement)")
+    p.add_argument("list", nargs="?", help="list name")
+    p.add_argument("--labels", help="CSV with Domain and Expected columns (default: Expected columns in the list itself)")
+    p.add_argument("--template", metavar="FILE", help="write a blank labels file to fill in")
+    p.set_defaults(fn=cmd_evaluate)
+
+    p = sub.add_parser("runs", help="the run log of a list: when, what, counts and AI cost")
+    p.add_argument("list")
+    p.set_defaults(fn=cmd_runs)
+
     p = sub.add_parser("directories", help="free directories (YC, SEC, IRS): status, refresh, look up one company")
     p.add_argument("domain", nargs="?", help="look up one company, e.g. puzzle.io")
     p.add_argument("--company", help="company name, for the SEC and IRS lookup")
@@ -390,6 +451,9 @@ def main(argv: list[str] | None = None):
     p.set_defaults(fn=cmd_prompts)
 
     args = ap.parse_args(argv)
+    if getattr(args, "no_browser", False):
+        from . import crawl
+        crawl.BROWSER_ENABLED = False
     if getattr(args, "no_directories", False):
         from . import directories
         directories.ENABLED = False

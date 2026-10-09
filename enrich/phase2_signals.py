@@ -136,7 +136,13 @@ def report(results: list[dict], folder: Path, store: Store) -> None:
     signal_summary(results, GROUPS, "Phase 2: fit, buying and weak signals")
     ai_summary(results)
     files_and_disk(paths, store)
-    final.write(folder, store)
+    out = final.write(folder, store)
+    from .runlog import log
+    import csv
+    with open(out, newline="") as f:
+        tiers = [r.get("Lead tier", "") for r in csv.DictReader(f)]
+    log(folder, "Phase 2 (signals)", companies=len(results), strong_fit=sum(t.startswith("Strong") for t in tiers),
+        weak_fit=sum(t.startswith("Weak") for t in tiers))
 
 
 def run(folder: Path, only_yes: bool = False, workers: int = 50, max_requests: int = 200, refresh: bool = False,

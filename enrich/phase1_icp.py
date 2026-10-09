@@ -121,6 +121,9 @@ def report(results: list[dict], folder: Path, store: Store, input_report: dict |
     ai_summary(results)
     files_and_disk(paths, store)
     final.write(folder, store)
+    from .runlog import log
+    log(folder, "Phase 1 (ICP check)", companies=len(results), verdicts=counts,
+        browser_sites=sum(1 for r in results if (store.get_site(r["domain"]) or {}).get("via_browser")))
     nxt = sum(v for k, v in counts.items() if k.startswith("Yes") or k == "Needs AI check")
     console.print(f"\nNext: [bold]python -m enrich signals {folder.name}[/] checks signals for the {nxt} companies that passed.")
 

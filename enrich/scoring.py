@@ -54,4 +54,4 @@ def score(signals: dict, seg: str) -> dict:
     total = sum(p for _, p in parts)
     tier = "Strong fit" if total >= cfg["tiers"]["strong_fit_min_score"] else "Weak fit"
     breakdown = "; ".join(f"{name} {p:+d}" for name, p in parts)
-    return {"score": total, "tier": tier, "breakdown": breakdown}
+    return {"score": total, "tier": tier, "breakdown": breakdown, "parts": parts}

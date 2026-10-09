@@ -69,6 +69,8 @@ ATS_PATTERNS = [
 ]
 BAD_SLUGS = {"embed", "v1", "api", "j", "jobs", "js", "static", "assets"}
 _REQ_COUNT: contextvars.ContextVar[list] = contextvars.ContextVar("req_count")
+_VIA_BROWSER: contextvars.ContextVar[bool] = contextvars.ContextVar("via_browser", default=False)
+BROWSER_ENABLED = True  # switched off with --no-browser
 BLOCK_TITLES = re.compile(r"just a moment|attention required|access denied|verify you are human|ddos protection", re.I)
 
 
@@ -179,6 +181,82 @@ class PublicDNSFallback(httpcore.AsyncNetworkBackend):
         await self._doh.aclose()
 
 
+def text_chars(html: str) -> int:
+    tree = HTMLParser(html)
+    for n in tree.css("script, style, noscript, svg, template"):
+        n.decompose()
+    return len(" ".join((tree.body.text(separator=" ") if tree.body else "").split()))
+
+
+def needs_browser(html: str) -> bool:
+    """The page only shows its text after JavaScript runs (same test as the rules' 'needs JavaScript')."""
+    return len(html) > 2000 and text_chars(html) < 250
+
+
+class BrowserFallback:
+    """A real browser (your installed Google Chrome, driven by Playwright) for sites a plain download can't read:
+    pages that need JavaScript, and short "checking your browser" challenges. Started only when first needed, and
+    at most 3 pages at a time. Hard blocks (Cloudflare "Attention Required") usually stay blocked."""
+
+    UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+
+    def __init__(self):
+        self.sem = asyncio.Semaphore(3)
+        self._start_lock = asyncio.Lock()
+        self._pw = self._browser = self._ctx = None
+        self.unavailable = "" if BROWSER_ENABLED else "switched off"
+        self.pages = 0
+
+    async def _start(self) -> bool:
+        async with self._start_lock:
+            if self._ctx or self.unavailable:
+                return bool(self._ctx)
+            try:
+                from playwright.async_api import async_playwright
+                self._pw = await async_playwright().start()
+                try:
+                    self._browser = await self._pw.chromium.launch(channel="chrome", headless=True,
+                                                                   args=["--disable-blink-features=AutomationControlled"])
+                except Exception:  # noqa: BLE001  no Google Chrome: Playwright's own Chromium, if installed
+                    self._browser = await self._pw.chromium.launch(headless=True)
+                self._ctx = await self._browser.new_context(user_agent=self.UA, locale="en-US",
+                                                            viewport={"width": 1366, "height": 900})
+                await self._ctx.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                return True
+            except Exception as e:  # noqa: BLE001
+                self.unavailable = f"real browser not available: {str(e).splitlines()[0][:150]}"
+                return False
+
+    async def fetch(self, url: str) -> tuple[Fetched | None, str | None]:
+        if not await self._start():
+            return None, self.unavailable
+        async with self.sem:
+            page = await self._ctx.new_page()
+            try:
+                r = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                for _ in range(5):  # let JavaScript render, and give a "checking your browser" page time to pass
+                    await page.wait_for_timeout(1500)
+                    if not BLOCK_TITLES.search(await page.title()):
+                        break
+                html = await page.content()
+                self.pages += 1
+                status = r.status if r else 200
+                if BLOCK_TITLES.search(await page.title()):
+                    status = 403
+                return Fetched(page.url, status, "text/html", html, {"x-fetched-with": "real browser"}), None
+            except Exception as e:  # noqa: BLE001
+                return None, f"real browser: {str(e).splitlines()[0][:120]}"
+            finally:
+                await page.close()
+
+    async def close(self):
+        for thing in (self._ctx, self._browser):
+            if thing:
+                await thing.close()
+        if self._pw:
+            await self._pw.stop()
+
+
 class Crawler:
     def __init__(self, max_requests: int = 200, timeout: float = 15.0, respect_robots: bool = True):
         self.sem = asyncio.Semaphore(max_requests)
@@ -192,13 +270,20 @@ class Crawler:
         # httpx has no option for a custom resolver, so the fallback is set on its connection pool
         self.dns = PublicDNSFallback()
         self.client._transport._pool._network_backend = self.dns
+        self.browser = BrowserFallback()
         self.requests = 0
 
     async def close(self):
         await self.client.aclose()
         await self.dns.aclose()
+        await self.browser.close()
 
     async def fetch(self, url: str) -> tuple[Fetched | None, str | None]:
+        if _VIA_BROWSER.get():  # this site only works in a real browser: read every page that way
+            counter = _REQ_COUNT.get(None)
+            if counter is not None:
+                counter[0] += 1
+            return await self.browser.fetch(url)
         async with self.sem:
             self.requests += 1
             counter = _REQ_COUNT.get(None)
@@ -315,6 +400,7 @@ class Crawler:
                   "ats": None, "ats_slug": None, "jobs_count": None, "headers": {}, "robots_blocked": [], "requests": 0}
         counter = [0]
         _REQ_COUNT.set(counter)
+        _VIA_BROWSER.set(False)
         home, err = None, None
         for url in (f"https://{domain}/", f"https://www.{domain}/", f"http://{domain}/"):
             f, e = await self.fetch(url)
@@ -326,6 +412,14 @@ class Crawler:
                 err = "blocked by bot protection" if blocked else f"http {f.status}"
             else:
                 err = e
+        if (not home and err == "blocked by bot protection") or (home and needs_browser(home.text)):
+            f, e = await self.browser.fetch(f"https://{domain}/")
+            if f and f.status < 400 and not needs_browser(f.text):
+                home, err = f, None
+                record["via_browser"] = True
+                _VIA_BROWSER.set(True)
+            elif e and not home:
+                record["browser_error"] = e
         if not home:
             # dead = provably gone. Anything else (timeouts, odd status codes) is "unreachable": unknown, retry later
             if err == "domain does not resolve":
@@ -372,6 +466,7 @@ class Crawler:
         """Phase 2: fetch extra page kinds for a company phase 1 already downloaded, starting from its saved homepage."""
         counter = [0]
         _REQ_COUNT.set(counter)
+        _VIA_BROWSER.set(bool(record.get("via_browser")))
         have = set(record.get("pages", {}))
         want = {k for k in kinds if k not in have}
         pages = {}

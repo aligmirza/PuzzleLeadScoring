@@ -13,14 +13,26 @@
   },
   "segments": {
     "note": "From the employee count in your list. On a boundary use the lower band. Missing or unreadable: SMB (profile rule).",
-    "SMB": [1, 5],
-    "MM": [6, 25],
-    "ENT": [26, null]
+    "SMB": [
+      1,
+      5
+    ],
+    "MM": [
+      6,
+      25
+    ],
+    "ENT": [
+      26,
+      null
+    ]
   },
   "skip_rules": [
     {
       "if_yes": "Local professional services firm",
-      "skip": ["Serves one local area", "Sells hours of labour, not a product"],
+      "skip": [
+        "Serves one local area",
+        "Sells hours of labour, not a product"
+      ],
       "why": "Local professional services firms already get a smaller positive score; don't penalise them twice."
     }
   ],
@@ -37,8 +49,16 @@
     "AI is core to the product": "medium",
     "YC or similar accelerator": "medium",
     "Several open roles": "medium",
-    "No finance person visible": {"SMB": "medium", "MM": "low", "ENT": "none"},
-    "Has a finance lead (mid-size and up)": {"SMB": "none", "MM": "medium", "ENT": "medium"},
+    "No finance person visible": {
+      "SMB": "medium",
+      "MM": "low",
+      "ENT": "none"
+    },
+    "Has a finance lead (mid-size and up)": {
+      "SMB": "none",
+      "MM": "medium",
+      "ENT": "medium"
+    },
     "Publishes revenue or growth numbers": "medium",
     "Remote-first or hybrid": "medium",
     "Runs several US companies": "medium",
@@ -48,11 +68,24 @@
     "Cap table in Carta or Pulley": "low"
   },
   "buying_signals": {
+    "Raised money in the last 6 months": "high",
+    "New investor or accelerator": "high",
     "Hiring for several roles": "medium",
     "Hiring a finance lead": "medium",
     "Hiring ops or chief of staff": "medium",
+    "Converted from an LLC to a C-Corp": "high",
+    "Incorporated in the last 12 months": "medium",
+    "Registered a new subsidiary": "medium",
     "Lost or replacing a bookkeeper": "medium",
     "Tax deadline coming up": "medium",
+    "Complaining about QuickBooks": "medium",
+    "Recently launched paid pricing": "medium",
+    "New board member or investor updates": "low",
     "Preparing for a first audit": "low"
+  },
+  "late_stage_proof": {
+    "note": "Exclusion 'Series C or later': a confirmed single round or valuation at least this big counts as proof, because it is a stated fact rather than an estimated stage. Used by the rules and the AI prompt.",
+    "round_at_least_usd": 100000000,
+    "valuation_at_least_usd": 1000000000
   }
 }

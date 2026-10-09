@@ -44,7 +44,7 @@ from .rules import CHECK, NO, SIGNALS, UNKNOWN, US_STATES, YES, sig
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "cache"
 ENABLED = True  # switched off with --no-directories
-VERSION = 2  # raise when the matching rules change, so saved lookups are redone
+VERSION = 3  # raise when the matching rules change, so saved lookups are redone
 
 YC_URL = "https://yc-oss.github.io/api/companies/all.json"  # daily copy of ycombinator.com/companies
 YC_FILE = CACHE / "yc_companies.json"
@@ -54,6 +54,7 @@ IRS_FILE = CACHE / "irs_nonprofits.sqlite"
 IRS_MAX_AGE = 35  # the IRS updates Pub 78 monthly
 SEC_SEARCH = "https://efts.sec.gov/LATEST/search-index?keysTyped={q}"
 SEC_COMPANY = "https://data.sec.gov/submissions/CIK{cik}.json"
+SEC_DOC = "https://www.sec.gov/Archives/edgar/data/{cik}/{acc}/primary_doc.xml"  # needs SEC_CONTACT_EMAIL
 SEC_FILE = CACHE / "sec.sqlite"
 SEC_MAX_AGE = 30
 SEC_PER_SECOND = 8  # SEC allows 10
@@ -248,13 +249,16 @@ def _sec_get(url: str) -> dict:
 def _sec_slim(d: dict) -> dict:
     recent = d.get("filings", {}).get("recent", {})
     forms = list(zip(recent.get("form", []), recent.get("filingDate", [])))
+    form_d_docs = [(dt, acc) for f, dt, acc in zip(recent.get("form", []), recent.get("filingDate", []),
+                                                    recent.get("accessionNumber", [])) if f in ("D", "D/A")]
     biz = (d.get("addresses") or {}).get("business") or {}
     return {
         "cik": d.get("cik"), "name": d.get("name"), "tickers": d.get("tickers") or [],
         "exchanges": [e for e in d.get("exchanges") or [] if e], "state_of_incorporation": d.get("stateOfIncorporation"),
         "state_of_incorporation_name": d.get("stateOfIncorporationDescription"), "entity_type": d.get("entityType"),
         "industry": d.get("sicDescription"), "website": d.get("website"), "former_names": [
-            f.get("name") for f in d.get("formerNames") or []],
+            {"name": f.get("name"), "until": (f.get("to") or "")[:10]} for f in d.get("formerNames") or []],
+        "latest_form_d": max(form_d_docs)[1] if form_d_docs else None,
         "business_city": biz.get("city"), "business_state": biz.get("stateOrCountry"),
         "business_place": biz.get("stateOrCountryDescription"),
         "form_d": sorted({dt for f, dt in forms if f in ("D", "D/A")}, reverse=True),
@@ -286,12 +290,55 @@ def sec_lookup(domain: str, names: list[tuple[str, str]], site_places: str) -> d
             match, basis = "medium", "company name and city"
         else:
             match = "weak"
-        return {**c, "match": match, "basis": basis, "same_name_count": len(operating)}
+        out = {**c, "match": match, "basis": basis, "same_name_count": len(operating)}
+        if match != "weak" and c.get("latest_form_d") and os.environ.get("SEC_CONTACT_EMAIL", "").strip():
+            out["form_d_details"] = form_d_details(c["cik"], c["latest_form_d"])
+        return out
     return None
 
 
+def form_d_details(cik: str, accession: str) -> dict:
+    """Year of incorporation, date of first sale and amount sold from a Form D. SEC serves these documents only to
+    requests that carry a contact email, so this runs only when SEC_CONTACT_EMAIL is set."""
+    import xml.etree.ElementTree as ET
+    url = SEC_DOC.format(cik=int(cik), acc=accession.replace("-", ""))
+    with _db_lock:
+        db = _sec_cache()
+        row = db.execute("SELECT data FROM calls WHERE url = ?", (url,)).fetchone()
+        db.close()
+    if row:
+        return json.loads(row[0])
+    with _sec_lock:
+        time.sleep(1 / SEC_PER_SECOND)
+    with _http() as c:
+        r = c.get(url)
+    if r.status_code != 200:
+        return {"error": f"http {r.status_code}"}
+    root = ET.fromstring(r.content)
+
+    def first(path: str) -> str | None:
+        node = root.find(path)
+        return node.text.strip() if node is not None and node.text else None
+    out = {
+        "year_of_incorporation": first(".//primaryIssuer/yearOfInc/value"),
+        "incorporated_within_5_years": first(".//primaryIssuer/yearOfInc/withinFiveYears"),
+        "date_of_first_sale": first(".//offeringData/typeOfFiling/dateOfFirstSale/value"),
+        "total_amount_sold": first(".//offeringData/offeringSalesAmounts/totalAmountSold"),
+        "total_offering_amount": first(".//offeringData/offeringSalesAmounts/totalOfferingAmount"),
+        "url": url,
+    }
+    with _db_lock:
+        db = _sec_cache()
+        db.execute("INSERT OR REPLACE INTO calls VALUES (?, ?, ?)", (url, json.dumps(out), time.time()))
+        db.commit()
+        db.close()
+    return out
+
+
 # lookup + apply -----------------------------------------------------------
-def lookup(domain: str, company: str, legal_name: str | None, us_clues: list[str], skip_sec: bool = False) -> dict:
+def lookup(domain: str, company: str, legal_name: str | None, us_clues: list[str], skip_sec: bool = False,
+           history: dict | None = None) -> dict:
+    """history: phase 2 only, which old-site checks are worth doing, e.g. {"legal": True, "pricing": False}."""
     names = ([(legal_name, "legal name")] if legal_name else []) + ([(company, "company name")] if company else [])
     names = [(n, b) for i, (n, b) in enumerate(names) if name_key(n) not in {name_key(x) for x, _ in names[:i]}]
     places = " ".join(us_clues).lower()
@@ -304,6 +351,13 @@ def lookup(domain: str, company: str, legal_name: str | None, us_clues: list[str
             found[label] = fn()
         except Exception as e:  # noqa: BLE001  a directory being down must never stop the run
             found["errors"][label] = repr(e)[:200]
+    if history and (history.get("legal") or history.get("pricing")):
+        try:
+            from .history import old_site
+            found["Wayback"] = old_site(domain, bool(history.get("legal")), bool(history.get("pricing")))
+        except Exception as e:  # noqa: BLE001
+            found["errors"]["Wayback"] = repr(e)[:200]
+    found["history_asked"] = history or {}
     found["complete"] = not found["errors"]
     return found
 
@@ -365,6 +419,9 @@ def apply(x) -> None:
             _settle(s, "M1", CHECK, f"YC directory location: {where}", page, "HQ outside the US per YC", "strong")
         if yc.get("team_size"):
             facts["team_size_directory"] = {"value": yc["team_size"], "source": "YC directory"}
+        batch_date = _yc_batch_date(yc.get("batch") or "")
+        if batch_date and 0 <= (date.today() - batch_date).days <= 365:
+            _settle(s, "B2", YES, f"joined Y Combinator {yc.get('batch')} (YC directory)", page, "accelerator in the last 12 months", "strong")
 
     sec = found.get("SEC")
     if sec:
@@ -386,6 +443,29 @@ def apply(x) -> None:
             _settle(s, "F1", YES, f"raised private funding: SEC Form D filed {', '.join(sec['form_d'][:3])}", page,
                     "stage not shown in Form D", m)
             _settle(s, "E2", NO, f"disclosed funding: SEC Form D {sec['form_d'][0]}", page, "Form D on file", m)
+        recent_d = [d for d in sec.get("form_d", []) if _days_ago(d) <= 183]
+        if recent_d and not public:
+            _settle(s, "B1", YES, f"SEC Form D filed {recent_d[0]} (a filing is due within 15 days of a sale)", page,
+                    "raised money in the last 6 months", m)
+        for former in sec.get("former_names") or []:
+            fname = former.get("name") or ""
+            if (re.search(r"\bL\.?L\.?C\b", fname, re.I) and name_key(fname) == name_key(sec.get("name") or "")
+                    and re.search(r"\b(inc|corp|corporation|incorporated)\b", (sec.get("name") or "").lower())
+                    and former.get("until") and _days_ago(former["until"]) <= 548):
+                _settle(s, "B6", YES, f"SEC record: renamed from {fname} to {sec['name']} on {former['until']}", page,
+                        "LLC to corporation", m)
+        details = sec.get("form_d_details") or {}
+        if details and "error" not in details:
+            sold = _usd(details.get("total_amount_sold"))
+            if sold and sold >= _late_stage_round():
+                _settle(s, "E1", YES, f"SEC Form D: ${sold / 1e6:,.0f}M sold in one offering", details["url"],
+                        "a round of $100M+ is beyond Series B", m)
+            year = details.get("year_of_incorporation")
+            if year and year.isdigit() and int(year) == date.today().year:
+                funded = YES in (s.get("F1", {}).get("value"), s.get("B1", {}).get("value"))
+                if funded and s.get("M2", {}).get("value") == YES:
+                    _settle(s, "B7", YES, f"SEC Form D: incorporated in {year}, already raising, live product", details["url"],
+                            "year of incorporation on Form D", m)
         inc = sec.get("state_of_incorporation")
         corp = re.search(r"\b(inc|incorporated|corp|corporation)\b\.?$", (sec.get("name") or "").lower())
         if inc == "DE" and corp:
@@ -395,6 +475,26 @@ def apply(x) -> None:
         if sec.get("business_state") in US_STATES:
             _settle(s, "M1", YES, f"SEC business address: {sec.get('business_city')}, {sec['business_state']}", page,
                     "business address on SEC filings", m)
+
+    old = found.get("Wayback") or {}
+    if old.get("legal_name") and facts.get("entity_suffix") == "corp" and facts.get("legal_name"):
+        if (re.search(r"\bL\.?L\.?C\b", old["legal_name"], re.I)
+                and name_key(old["legal_name"]) == name_key(facts["legal_name"])):
+            _settle(s, "B6", YES, f"site footer on {old['home_date']}: {old['legal_name']}; today: {facts['legal_name']}",
+                    f"https://web.archive.org/web/{old['home_date'].replace('-', '')}/{x.domain}", "Internet Archive snapshot", "strong")
+    if facts.get("prices"):
+        before = None
+        if old.get("pricing_date") and old.get("pricing_prices") is False:
+            before = f"the pricing page on {old['pricing_date']} showed no prices"
+        elif old.get("home_date") and old.get("home_links_pricing") is False and old.get("home_prices") is False:
+            before = f"the homepage on {old['home_date']} had no pricing link or prices"
+        if before:
+            _settle(s, "B12", YES, f"{before}; today: {facts['prices'][0]}",
+                    f"https://web.archive.org/web/{(old.get('pricing_date') or old['home_date']).replace('-', '')}/{x.domain}",
+                    "Internet Archive snapshot", "strong")
+    if old:
+        summary.append("Internet Archive: " + ", ".join(
+            f"{k.replace('_', ' ')} {v}" for k, v in old.items() if k in ("home_date", "pricing_date", "legal_name")))
 
     irs = found.get("IRS")
     if irs:
@@ -411,6 +511,33 @@ def apply(x) -> None:
     facts["directories"] = "; ".join(summary)
     if found.get("errors"):
         facts["directory_errors"] = found["errors"]
+
+
+def _days_ago(iso: str) -> int:
+    try:
+        return (date.today() - date.fromisoformat(iso[:10])).days
+    except ValueError:
+        return 10 ** 6
+
+
+def _usd(text: str | None) -> float | None:
+    try:
+        return float(text) if text else None
+    except ValueError:
+        return None  # "Indefinite"
+
+
+def _late_stage_round() -> float:
+    from .rules import LATE_STAGE_ROUND_USD
+    return LATE_STAGE_ROUND_USD
+
+
+def _yc_batch_date(batch: str) -> date | None:
+    """'Winter 2026' -> 2026-01-01, 'Summer 2025' -> 2025-06-01."""
+    m = re.match(r"(Winter|Spring|Summer|Fall)\s+(\d{4})", batch)
+    if not m:
+        return None
+    return date(int(m.group(2)), {"Winter": 1, "Spring": 4, "Summer": 6, "Fall": 9}[m.group(1)], 1)
 
 
 def settled_prompts(s: dict) -> set[str]:
