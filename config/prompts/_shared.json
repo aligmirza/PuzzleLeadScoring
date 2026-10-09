@@ -1,7 +1,7 @@
 {
   "id": "_shared",
   "description": "Added to every prompt. Edit here to change rules for all data points at once.",
-  "version": 1,
+  "version": 2,
   "provider": "openai",
   "providers": {
     "note": "Switch AI company by changing 'provider'. 'small' answers step 1 (our saved data); 'web' answers step 2 (web search). Prices are per 1M tokens, used only for the cost estimate.",
@@ -40,6 +40,7 @@
       "Use only the text provided. Do not use outside knowledge about the company.",
       "Answer 'unknown' when the text does not prove the answer either way. Unknown is never a negative.",
       "Absence of evidence is not evidence of absence. Never treat missing information as proof.",
+      "Answer 'no' only when the text positively shows the opposite (for example a confirmed Seed round, or a US address). 'The text does not mention X' is 'unknown', never 'no'.",
       "Exclusions require positive evidence. Never exclude on an inference or estimate.",
       "Judge what the company itself is and does, not who its customers are or which words appear on its site.",
       "A product that integrates with a tool is not proof the company uses that tool.",

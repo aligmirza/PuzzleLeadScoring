@@ -1,0 +1,11 @@
+Company Name,Domain,Expected ICP,Expected reason,What it tests
+Mintlify,mintlify.com,YES,"US (San Francisco), YC W22, Series A, B2B SaaS",Clean early-stage ICP; should score Strong fit
+Pulley,pulley.com,YES,"US, YC W20, Series A, B2B SaaS (cap tables)",Early-stage ICP; YC directory and SEC lookups
+Ramp,ramp.com,NO,"Series C or later (Series D/E, valued in the billions)",Late-stage private company; no ticker to find
+Asana,asana.com,NO,Public company (NYSE: ASAN),Public company caught through SEC
+Khan Academy,khanacademy.org,NO,"Non-profit (501(c)(3)), legal name Khan Academy, Inc.","Non-profit with ""Inc."" in its name; IRS list"
+Givebutter,givebutter.com,YES,"For-profit fundraising software for non-profits, US",Trap: must NOT be excluded as a non-profit
+Kruze Consulting,kruzeconsulting.com,NO,Accounting / bookkeeping / fractional CFO firm for startups,Accounting firm exclusion
+Pennylane,pennylane.com,NO,"French company (Paris), operates mainly outside the US",Non-US company on a .com domain (no country domain clue)
+Brooklinen,brooklinen.com,NO,E-commerce holding physical stock (bedding),Physical inventory exclusion
+thoughtbot,thoughtbot.com,YES,"US consultancy selling billed hours; in scope but weak fit",Services firm: should pass but score low (weak fit signals)

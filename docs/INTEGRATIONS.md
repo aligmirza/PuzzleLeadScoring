@@ -46,6 +46,7 @@ All keys live in `.env` at the project root, each with a comment saying what it'
 | Clay | `CLAY_WEBHOOK_URL` | Default Clay table to push results to | Used |
 | Clay | `CLAY_WEBHOOK_TOKEN` | That webhook's auth token, if it has one | Used |
 | Clay | `CLAY_API_KEY` | Clay Public API (pull and push work without it, through `clay login`) | Not used yet |
+| Free directories | `SEC_CONTACT_EMAIL` | Contact email SEC EDGAR asks automated tools to send (YC, SEC and IRS need no key) | Optional |
 | Other data tools | `CRUNCHBASE_API_KEY`, `APOLLO_API_KEY`, `PDL_API_KEY`, `SEARCH_API_KEY` | Funding, headcount, company data, a separate web search service | Planned |
 
 Fill them in by editing `.env`, or from the terminal:

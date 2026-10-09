@@ -10,11 +10,11 @@ from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 
-from . import ai_apply
+from . import ai_apply, directories
 from . import prompts as prompt_files
 from .dashboard import ICON
 from .inputs import load_leads
-from .rules import SIGNALS, VALUE_NAMES, extract, signal_column
+from .rules import CELL_NAMES, SIGNALS, VALUE_NAMES, extract, signal_column
 from .store import Store
 
 console = Console()
@@ -66,12 +66,31 @@ def plain(text: str) -> str:
 def run_rules(store: Store, row: dict, record: dict, phase: str) -> dict:
     pages = {k: store.load_page(row["domain"], k) for k in record.get("pages", {})}
     pages = {k: v for k, v in pages.items() if v}
-    result = extract(row["domain"], row["company"], row["employees"], record, pages, store.load_jobs(row["domain"]), phase)
+    result = extract(row["domain"], row["company"], row["employees"], record, pages, store.load_jobs(row["domain"]), phase,
+                     directory_finder(store, row))
     answers = store.get_ai(row["domain"], phase)
     if answers:  # keep earlier AI answers when the rules are re-run
         result = ai_apply.apply(result, answers, phase)
     store.save_result(row["domain"], result, phase)
     return result
+
+
+def directory_finder(store: Store, row: dict):
+    """Directory lookups for one company: reuse saved findings unless the legal name changed or a lookup failed."""
+    if not directories.ENABLED:
+        return None
+
+    def find(legal_name, us_clues, skip_sec):
+        found = store.get_directory(row["domain"])
+        if (found and found.get("legal_name") == legal_name and found.get("complete")
+                and found.get("version") == directories.VERSION
+                and (skip_sec or not found.get("skipped_sec"))):
+            return found
+        found = directories.lookup(row["domain"], row["company"], legal_name, us_clues, skip_sec)
+        found["skipped_sec"] = skip_sec
+        store.save_directory(row["domain"], found)
+        return found
+    return find
 
 
 def ai_prompts(r: dict) -> list[str]:
@@ -80,7 +99,7 @@ def ai_prompts(r: dict) -> list[str]:
 
 def signal_columns(r: dict, groups: tuple[str, ...]) -> dict:
     s = r["signals"]
-    return {signal_column(sid): VALUE_NAMES[s[sid]["value"]] for sid in SIGNALS if SIGNALS[sid][0] in groups and sid in s}
+    return {signal_column(sid): CELL_NAMES[s[sid]["value"]] for sid in SIGNALS if SIGNALS[sid][0] in groups and sid in s}
 
 
 def ai_columns(r: dict) -> dict:
@@ -140,6 +159,12 @@ def ai_summary(results: list[dict]) -> None:
                   f"About {sum(r['ai']['tokens_est'] for r in ai):,} input tokens, of which "
                   f"{sum(r['ai'].get('cached_tokens_est', 0) for r in ai):,} read from cache; "
                   f"about {sum(r['ai'].get('output_tokens_est', 0) for r in ai):,} output tokens.")
+    if directories.ENABLED:
+        found = {k: sum(1 for r in ok if f"{k}" in (r.get("directories") or "")) for k in directories.ORDER}
+        settled = sum(1 for r in ok for v in r["signals"].values() if v.get("method") == "directory" and v["value"] in ("yes", "no"))
+        down = sorted({k for r in ok for k in (r.get("facts") or {}).get("directory_errors", {})})
+        console.print("Free directories: found in " + ", ".join(f"{k} {n}" for k, n in found.items())
+                      + f"; {settled} answers settled without AI" + (f". [yellow]Not reachable: {', '.join(down)}[/]" if down else ""))
     errs = [r for r in results if "signals" not in r]
     if errs:
         console.print(f"[red]{len(errs)} rule errors[/], first: {errs[0]['domain']}: {errs[0].get('error')}")

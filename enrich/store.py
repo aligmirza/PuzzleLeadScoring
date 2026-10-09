@@ -28,6 +28,8 @@ class Store:
         # AI answers are kept apart from rule results, so re-running the rules never loses them
         self.db.execute("CREATE TABLE IF NOT EXISTS ai_answers (domain TEXT, phase TEXT, prompt_id TEXT, step INTEGER, "
                         "answer TEXT, usage TEXT, created REAL, PRIMARY KEY (domain, phase, prompt_id, step))")
+        # findings from the free directories (YC, SEC, IRS), looked up once per company
+        self.db.execute("CREATE TABLE IF NOT EXISTS directories (domain TEXT PRIMARY KEY, found TEXT, updated_at REAL)")
         self.db.commit()
 
     # pages -------------------------------------------------------------
@@ -100,6 +102,15 @@ class Store:
     def delete_ai(self, domain: str, phase: str) -> None:
         self.db.execute("DELETE FROM ai_answers WHERE domain = ? AND phase = ?", (domain, phase))
         self.db.commit()
+
+    # directory findings ------------------------------------------------
+    def save_directory(self, domain: str, found: dict) -> None:
+        self.db.execute("INSERT OR REPLACE INTO directories VALUES (?, ?, ?)", (domain, json.dumps(found), time.time()))
+        self.db.commit()
+
+    def get_directory(self, domain: str) -> dict | None:
+        row = self.db.execute("SELECT found FROM directories WHERE domain = ?", (domain,)).fetchone()
+        return json.loads(row[0]) if row else None
 
     # space -------------------------------------------------------------
     def pages_size(self, domain: str) -> int:

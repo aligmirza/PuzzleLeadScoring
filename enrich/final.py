@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .common import console, plain, rel
 from .inputs import DOMAIN_COLS, normalize_domain
-from .rules import SIGNALS, VALUE_NAMES, signal_column
+from .rules import CELL_NAMES, SIGNALS, signal_column
 from .scoring import segment, score
 from .store import Store
 
@@ -45,7 +45,11 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
                   "failed must-have": "Failed a must-have: proof it doesn't meet one"}.get(icp.get("gate"), "Not ICP")
     seg, seg_basis = segment(employees)
     ai_seg = (sig or {}).get("segment_ai")
-    if not (employees or "").strip() and ai_seg:
+    team = ((sig or icp).get("facts") or {}).get("team_size_directory")
+    if not (employees or "").strip() and team:
+        seg, _ = segment(str(team["value"]))
+        seg_basis = f"{team['value']} people per the {team['source']}"
+    elif not (employees or "").strip() and ai_seg:
         seg = ai_seg["value"]
         seg_basis = f"AI estimate from the website ({ai_seg.get('headcount') or 'unknown'} people)"
     row = {
@@ -67,7 +71,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
     elif yes_no != "NO":
         row["Lead tier"] = "Scored after phase 2"
     src = sig or icp
-    s_all = {**icp.get("signals", {}), **(sig or {}).get("signals", {})}
+    s_all = {**(sig or {}).get("signals", {}), **icp.get("signals", {})}
     roles = src.get("crawl", {}).get("jobs_count")
     row.update({
         "Fit signals found": "; ".join(SIGNALS[k][1] for k, v in s_all.items() if SIGNALS[k][0] == "fit" and v["value"] == "yes"),
@@ -80,6 +84,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
         "Legal entity type": src.get("entity_type", ""),
         "Legal name": src.get("legal_name") or "",
         "Funding stage": sig.get("funding_stage", "") if sig else "",
+        "Found in directories": (sig or {}).get("directories") or icp.get("directories", ""),
         "Partners found": ", ".join(sig.get("partners", [])) if sig else "",
         "Competitor tools used": ", ".join(sig.get("competitors", [])) if sig else "",
         "Job board": (src.get("crawl", {}).get("ats") or "").capitalize(),
@@ -88,7 +93,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
     })
     for sid in SIGNALS:
         if sid in s_all:
-            row[signal_column(sid)] = VALUE_NAMES[s_all[sid]["value"]]
+            row[signal_column(sid)] = CELL_NAMES[s_all[sid]["value"]]
     return row
 
 

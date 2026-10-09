@@ -19,18 +19,20 @@ flowchart TD
         A1["Read the list<br/>leads.csv"]
         A2["Download only the pages must-haves and exclusions need<br/>home, about, pricing, careers, privacy, terms, legal, contact,<br/>security, investor relations, donate, shipping + open jobs"]
         A3["Must-have and exclusion rules<br/>(free)"]
+        A3b["Free directories: YC, SEC, IRS<br/>public company, non-profit, US address<br/>(free)"]
         A4{"Verdict per company"}
         A5["AI prompts for must-haves and exclusions,<br/>only where a rule said Needs check"]
         A6["output/icp_check.csv,<br/>icp_evidence.jsonl, icp_ai_queue.jsonl"]
-        A1 --> A2 --> A3 --> A4 --> A5 --> A6
+        A1 --> A2 --> A3 --> A3b --> A4 --> A5 --> A6
     end
 
     subgraph P2["Phase 2: Signals (signals_check.py leads)"]
         B1["Download the extra pages signals need<br/>team, blog, engineering blog, integrations,<br/>customers, locations, menu<br/>starting from phase 1's saved homepage"]
         B2["Fit, buying and weak signal rules<br/>(free)"]
+        B2b["Free directories: YC, SEC<br/>funding, Delaware, YC backing, team size<br/>(free, saved from phase 1)"]
         B3["AI prompts for signals<br/>business type, industry, AI core,<br/>plus anything marked Needs check"]
         B4["Lead score, tier, segment<br/>output/signals.csv,<br/>signals_evidence.jsonl, signals_ai_queue.jsonl"]
-        B1 --> B2 --> B3 --> B4
+        B1 --> B2 --> B2b --> B3 --> B4
     end
 
     A6 -->|"Yes, Yes (some unconfirmed),<br/>Needs AI check"| B1
@@ -75,6 +77,10 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 | A page links to Greenhouse, Lever, Ashby or Workable | That job board's free public feed is read |
 | The homepage doesn't load | Downloading stops for that company; public DNS decides its status |
 | A rule finds a clue but can't be sure | "Needs check", and that data point's AI prompt is added |
+| The rules finish for a company | The free directories are looked up (once per company, then saved in the list) |
+| A directory settles a Needs check or Unknown | That data point's AI prompt is dropped, so it isn't paid for |
+| The rules already made the company a NO | The SEC lookup is skipped (YC and IRS are local files, so they still run) |
+| You add `--no-directories` | The directories are skipped for that run |
 | Phase 1 verdict is No or site not reached | The company is left out of phase 2 |
 | Phase 1 verdict is Needs AI check | Included in phase 2, unless you add `--only-yes` |
 | Phase 1's pages for a company were deleted | Phase 2 downloads that company again from scratch |
@@ -169,9 +175,11 @@ Each check gives one of four answers. Every Yes and No is saved with a short quo
 | Answer | Meaning | Effect |
 |---|---|---|
 | **Yes** | Proof found | Counts |
-| **No** | Proof of the opposite found | Counts |
-| **Needs check** | A clue, but not certain | That data point's AI prompt is added |
-| **Unknown** | Nothing found | Never counts against the company |
+| **No** | Proof of the opposite found. Never a guess, and never "nothing found" | Counts |
+| **Needs check** | A clue, but not certain, or two sources disagree | That data point's AI prompt is added |
+| **Unknown** | Nothing found, or only a guess | Never counts against the company. Left **empty** in the output columns |
+
+Yes and No are only given when confirmed. A clue that points one way but isn't proof (for example "Inc." with California law in the terms, which many Delaware companies use) is a Needs check, never a No.
 
 The checks run in this order, because later checks use earlier answers:
 
@@ -201,7 +209,43 @@ The checks run in this order, because later checks use earlier answers:
 | "QuickBooks" in a job post | The company uses it, so **Yes** |
 | "QuickBooks" on the integrations page | Probably an integration, so only noted as "mentioned" |
 | "Series A, B and C" in one sentence | Not a confirmed early stage, so **Needs check** |
-| "Inc." in the footer but no Delaware law | **Needs check** (could be incorporated elsewhere) |
+| "Inc." in the footer but no Delaware law, or another state's law | **Needs check** (could still be a Delaware company); SEC can confirm it |
+| The site says the company is shutting down ("Pulley is shutting down on 12/8/26") | Live website with a real product: **No** (it's not an operating business going forward) |
+| Funding found (investors, Form D, YC) but no early stage confirmed | The AI is asked "Series C or later, or public?" in phase 1, with web search if needed. Without this, late-stage private companies like Ramp passed |
+| Only weak foreign clues (a .de domain, a foreign city, prices in euros) | **Needs check**. Outside the US only becomes proof with an official clue (foreign legal entity such as Ltd or GmbH, foreign governing law, or a foreign country in the site's structured data) plus another clue |
+
+### Free directories: YC, SEC, IRS
+
+**Code:** [enrich/directories.py](../enrich/directories.py). **Cost:** nothing; no account or key needed.
+
+Right after the rules, every company is looked up in three free official sources. A directory answer fills what the rules left open (Needs check or Unknown). When a strong directory match **disagrees** with the website (say the site's clues point to the UK but the YC directory says San Francisco), neither wins: the answer becomes Needs check with both proofs, and the AI step decides. The company is not made a NO on contested evidence. One exception: an IRS listing overrules the "it has Inc. in its name, so it's for-profit" guess, because many non-profits are incorporated.
+
+| Directory | Matched by | Answers |
+|---|---|---|
+| YC directory (about 6,300 companies; a daily copy of ycombinator.com/companies, refreshed weekly) | Website domain, and the YC entry's name must match the company and not be marked Acquired (Paribus's YC page points to ramp.com) | YC-backed, funded (YC invests in all), public, non-profit, US location (outside the US raises a Needs check), team size |
+| SEC EDGAR (company search and company records) | Legal name from the company's own site | Public (stock ticker on a US exchange), raised private funding (Form D), Delaware corporation, US business address |
+| IRS Publication 78 (1.4 million tax-exempt organisations, refreshed monthly) | Legal name from the company's own site, plus the same state | Non-profit |
+
+**How strong a match has to be:**
+
+| Match | When | Can do |
+|---|---|---|
+| Strong | YC by domain; SEC or IRS by the legal name found on the company's own site (IRS also needs the same state, or a single organisation with that name in the US) | Anything, including making a company NO |
+| Medium | The list's company name plus the same city or state as the site's address | Yes or No on fit signals; an exclusion only becomes a Needs check |
+| Weak | The list's company name alone | Nothing, except an exclusion clue becomes a Needs check for the AI step |
+
+Examples from the test list:
+
+| Company | Found | Effect |
+|---|---|---|
+| hubspot.com | SEC: HUBSPOT INC, NYSE: HUBS (legal name match) | Excluded as public. The site alone had missed it, so it used to pass |
+| puzzle.io | SEC: Puzzle Financial Inc., Delaware, Form D 2021 and 2023 | Delaware C-Corp and venture-backed confirmed; score 9 to 15 |
+| resend.com | YC Winter 2023, 45 people | Confirms YC backing and funding; team size for the segment if the list has none |
+| linear.app | SEC: "Linear LLC", a housewares company in California (name only) | Weak match, ignored and not shown |
+
+Shared downloads live in `cache/` at the project root (git-ignored): the YC list (2 MB), the IRS list (29 MB, stored as name fingerprints) and saved SEC answers. Each list saves its own companies' findings in its `cache.sqlite`, so `rules` never looks them up again. `python -m enrich directories` shows what's downloaded; `python -m enrich directories acme.com --legal-name "Acme, Inc."` looks up one company.
+
+SEC asks automated tools to include a contact email. Set `SEC_CONTACT_EMAIL` in `.env` (optional; lookups work without it). SEC allows 10 requests a second, and the tool stays at 8, which is about 3 lookups per company.
 
 ---
 
@@ -363,7 +407,15 @@ Example query for "Venture-backed": `"Resend" raises seed OR "Series A" OR "Seri
 | Medium | One reputable source (major press, Crunchbase, LinkedIn company page, YC directory, job board), with a domain or name-and-location match | Yes, but can't make a company NO |
 | Low | Name-only match, SEO or aggregator page, old information, or sources disagree | No; stays Unknown, kept as a hint |
 
-Step 2 never runs for a company that's already a NO, and each call is capped at 3 searches. The rules are in `config/prompts/_shared.json` (`two_steps`, `web_search_step`); each data point's queries and good sources are in its own file.
+On top of these, three checks apply to every AI answer (in [enrich/ai_apply.py](../enrich/ai_apply.py)):
+
+| Check | Why |
+|---|---|
+| A Yes or No needs an exact quote as proof; without one it stays empty | In testing, the AI called a bootstrapped consultancy "venture-backed (estimated)" with no quote at all |
+| "The text doesn't mention X" is never a No | The AI answered "not Series C" for companies whose pages simply didn't mention funding |
+| An estimated funding stage is shown in "Funding stage" but earns no points | Only a confirmed stage counts toward the score |
+
+Step 2 never runs for a company that's already a NO, phase 2's AI only runs on companies phase 1 (with its AI answers) hasn't ruled out, and each call is capped at 3 searches. The rules are in `config/prompts/_shared.json` (`two_steps`, `web_search_step`); each data point's queries and good sources are in its own file.
 
 ### How a message is built
 
@@ -450,6 +502,7 @@ lists/leads/output/
 | Score breakdown | Uses Stripe for billing +3; Delaware C-Corp +3; Several open roles +2; ... |
 | Segment, Segment based on | ENT, "120 employees from the list" |
 | Fit / Buying / Weak fit signals found | Plain lists of the signals answered Yes |
+| Found in directories | "YC: Winter 2023, Active, 45 people"; "SEC (strong match on legal name): Puzzle Financial Inc., incorporated in Delaware, Form D 2023, 2021" |
 | Website, legal entity, funding, partners, competitors, open roles, prices | The facts found |
 | One column per data point | "Fit: Uses Stripe for billing" = Yes |
 
@@ -473,6 +526,8 @@ lists/leads/
   cache.sqlite            answers and proof for both phases (compressed)
   output/                 the files in step 9
 ```
+
+Shared by all lists: `cache/` with the free directory downloads (about 31 MB, refreshed automatically).
 
 About 85 KB of pages and 4 KB of results per company; roughly 4 GB of pages and 200 MB of results for 50,000 rows, less after clean-up.
 
@@ -532,14 +587,14 @@ Phase 2 shows the same progress bars, then running counts of fit, buying and wea
 | Company website, read by code | Most must-haves, exclusions and signals (see SIGNALS.md) | Built |
 | Job board feeds | Open roles, job descriptions | Built |
 | AI reading our saved pages | Judgment calls: business type, industry, AI core, confirming "Needs check" | Built (OpenAI gpt-4o-mini); first real run pending |
-| Free directories | SEC Form D (funding, date, Delaware), SEC public-company list, YC directory, IRS non-profit list | Planned |
+| Free directories | YC directory, SEC EDGAR (public company, Form D funding, Delaware, address), IRS non-profit list | Built |
 | AI web search | Step 2 for data points our pages can't answer | Built (OpenAI web search tool); model support to confirm on the first run |
 | Paid data (Clay, Crunchbase, OpenCorporates) | Headcount, funding, entities, only for companies still missing them | Optional |
 
 ```mermaid
 flowchart TD
     S5["AI step (built)<br/>step 1 on our data, then web search where needed;<br/>settles PENDING verdicts"]
-    S5b["Free directories<br/>SEC Form D, SEC public-company list,<br/>YC directory, IRS non-profit list"]
+    S5b["Free directories (built)<br/>YC directory, SEC EDGAR,<br/>IRS non-profit list"]
     S5c["Group prompts per call<br/>several data points in one AI call<br/>to cut cost"]
     S6["Write the outputs (built)<br/>final list with ICP YES / NO, score, vertical;<br/>later also reasoning and outreach message"]
 
@@ -547,13 +602,13 @@ flowchart TD
 
     classDef plan stroke-dasharray: 6 4
     classDef key stroke:#2d55c8,stroke-width:2px
-    class S5,S6 key
-    class S5b,S5c plan
+    class S5,S5b,S6 key
+    class S5c plan
 ```
 
 | When this lands | Effect on the final list |
 |---|---|
-| Free directories | Fewer PENDING rows; public and late-stage companies caught (e.g. HubSpot); funding stage and Delaware status confirmed |
+| Free directories (built) | Public companies caught (HubSpot); funding and Delaware status confirmed (Puzzle); fewer AI calls |
 | First real AI run | PENDING becomes YES or NO; the highest-weighted signals start counting, so scores rise for real startups; industry filled in |
 | Grouped prompts | Same answers at roughly a third of the AI cost |
 | Web search | Buying signals such as recent funding start counting |

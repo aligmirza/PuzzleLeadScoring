@@ -10,6 +10,9 @@ out/
 *.sqlite
 *.sqlite-*
 
+# Free directory downloads (YC, IRS, SEC lookups), shared by all lists; refreshed automatically
+cache/
+
 # Secrets: API keys live here, set once with `python -m enrich settings`
 .env
 

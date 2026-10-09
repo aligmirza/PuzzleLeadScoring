@@ -117,6 +117,7 @@ def csv_row(r: dict) -> dict:
         "Legal entity type": r["entity_type"],
         "Funding stage": r["funding_stage"],
         "Partners found": ", ".join(r["partners"]),
+        "Found in directories": r.get("directories", ""),
         "Competitor tools used": ", ".join(r["competitors"]),
         "Competitor tools mentioned on site": ", ".join(r["competitors_mentioned"]),
         "Job board": (r["crawl"].get("ats") or "").capitalize(),

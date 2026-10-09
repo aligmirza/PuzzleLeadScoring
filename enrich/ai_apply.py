@@ -2,14 +2,23 @@
 
 Used after the AI step and every time the rules are re-run, so AI answers are never lost.
 
+Confidence rules (from config/prompts/_shared.json), plus: a Yes or No needs an exact quote as proof, "the text doesn't
+mention it" is never a No, and an estimated funding stage is shown but earns no points.
+
 Confidence rules (from config/prompts/_shared.json):
   - an exclusion "yes" or a must-have "no" needs HIGH confidence (and, from the web, a domain match)
   - any other yes / no needs MEDIUM or HIGH confidence (and, from the web, a domain or name-and-location match)
   - anything weaker is not proof: a clue the AI couldn't confirm becomes Unknown, which never counts against a company
   - AI only fills in what code left open (Needs check or Unknown); proof found by code is never overwritten
 """
+import re
+
 from . import prompts as P
 from .rules import CHECK, SIGNALS, UNKNOWN, decide
+
+
+NOT_MENTIONED = re.compile(r"\b(?:does|do|did) not (?:mention|indicate|state|show|say|provide|confirm)|\bno (?:mention|evidence|indication|information)\b"
+                           r"|\bnot (?:mentioned|stated|indicated)\b|\bthere is no\b", re.I)
 
 
 def _final_entry(steps: dict[int, dict]) -> tuple[int, dict] | None:
@@ -55,13 +64,13 @@ def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict
         if not sid or sid not in result["signals"]:
             continue
         current = result["signals"][sid]
+        if pid == "fit/venture_backed_stage" and data.get("value") not in (None, "Unknown") and data.get("confidence") != "low":
+            result["funding_stage"] = f"{data['value']} ({data.get('basis', 'estimated')})"
         if current["value"] not in (CHECK, UNKNOWN):
-            continue  # code already found proof; AI doesn't overrule it
+            continue  # code or a directory already found proof; AI doesn't overrule it
 
         if pid == "fit/venture_backed_stage":
             ans = data.get("venture_backed", "unknown")
-            if data.get("value") not in (None, "Unknown") and data.get("confidence") != "low":
-                result["funding_stage"] = f"{data['value']} ({data.get('basis', 'estimated')})"
         else:
             ans = data.get("answer", "unknown")
         conf = data.get("confidence", "low")
@@ -76,6 +85,12 @@ def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict
         if step == 2 and sources:
             url = sources[0].get("url", url)
         method = "AI, company website" if step == 1 else "AI, web search"
+        if ans == "no" and NOT_MENTIONED.search(data.get("reason", "")):
+            conf_ok = False  # "it doesn't mention X" is absence of evidence, not a confirmed No
+        if ans in ("yes", "no") and not (data.get("evidence_quote") or "").strip():
+            conf_ok = False  # a confirmed answer needs an exact quote as proof
+        if pid == "fit/venture_backed_stage" and data.get("basis") == "estimated":
+            conf_ok = False  # an estimated stage is reported in "Funding stage" but earns no points
         if ans in ("yes", "no") and conf_ok and entity_ok:
             value, note = ans, f"{method} ({conf} confidence): {data.get('reason', '')}"
         else:

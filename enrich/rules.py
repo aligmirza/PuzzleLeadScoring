@@ -78,6 +78,7 @@ SIGNALS = {
 
 GROUP_NAMES = {"must": "Must-have", "exclusion": "Exclusion", "fit": "Fit", "buying": "Buying signal", "weak": "Weak fit"}
 VALUE_NAMES = {"yes": "Yes", "no": "No", "check": "Needs check", "unknown": "Unknown"}
+CELL_NAMES = {**VALUE_NAMES, "unknown": ""}  # CSV cells: left empty until something is confirmed
 GATE_NAMES = {"pass": "Pass", "pass (some unknown)": "Pass (some checks unknown)", "failed must-have": "Failed a must-have",
               "excluded": "Excluded", "not reached (retry)": "Site not reached (retry)"}
 
@@ -137,6 +138,7 @@ RE_FOREIGN_PLACE = re.compile(r"\b(" + "|".join(sorted(FOREIGN_JURIS | {
     "Warsaw", "Lisbon", "Dublin", "Tel Aviv", "Karachi", "Lahore", "Lagos", "Nairobi", "Cape Town", "Bogota",
     "Buenos Aires", "Sao Paulo", "Manila", "Jakarta", "Istanbul", "Cairo", "Copenhagen", "Oslo", "Helsinki",
     "Brussels", "Vienna", "Prague", "Kyiv", "Bucharest"}, key=len, reverse=True)) + r")\b")
+STRONG_FOREIGN = ("foreign legal entity", "governing law", "structured data address country")
 FOREIGN_TLDS = (".uk", ".de", ".fr", ".in", ".ca", ".au", ".nl", ".es", ".it", ".se", ".ch", ".pk", ".br", ".mx",
                 ".pl", ".pt", ".ie", ".dk", ".no", ".fi", ".be", ".at", ".nz", ".sg", ".jp", ".cn", ".ru", ".za",
                 ".ng", ".ke", ".ae", ".il", ".tr", ".ar", ".cl", ".ee", ".lt", ".lv", ".cz", ".ro", ".gr", ".hu")
@@ -221,6 +223,9 @@ RE_METRIC = re.compile(
     r"|\b\d+(?:\.\d+)?[kKM]\+?\s+(?:customers|companies|businesses|teams|users)\b"
     r"|\bgrew\s+\d+(?:\.\d+)?\s?[%x]|\b\d+x\s+(?:growth|year[- ]over[- ]year)", re.I)
 RE_REMOTE = re.compile(r"remote[- ]first|fully remote|remote[- ]friendly|distributed (?:team|company)|work from anywhere|\bhybrid\b", re.I)
+RE_SHUTDOWN = re.compile(r"\b(?:is|are|will be)\s+(?:shutting down|winding down|sunsetting|closing (?:its|our) doors)"
+                         r"|\bshutting down on\b|\bwe(?:'re| are| have| 've)\s+(?:shut down|closed (?:our|the) (?:doors|company))"
+                         r"|\bceased operations\b", re.I)
 RE_HOLDING = re.compile(r"a portfolio company of|\bHoldings?,? (?:Inc|LLC)|family of (?:companies|brands)", re.I)
 
 RE_501 = re.compile(r"501\s?\(?c\)?\s?\(?3\)?", re.I)
@@ -356,8 +361,10 @@ def _key(s: str) -> str:
 # ---------------------------------------------------------------------------
 class Extractor:
     def __init__(self, domain: str, company: str, employees: str, record: dict, pages: dict[str, str], jobs: list[dict],
-                 phase: str = "icp"):
-        self.phase = phase  # "icp": must-haves and exclusions only; "signals": everything
+                 phase: str = "icp", directory_fn=None):
+        self.phase = phase
+        self.directory_fn = directory_fn  # (legal_name, us_clues, skip_sec) -> directory findings; see directories.py
+        self.directories_found = None  # "icp": must-haves and exclusions only; "signals": everything
         self.domain, self.company, self.employees = domain, company, employees
         self.record, self.jobs = record, jobs
         order = ["home", "about", "team", "pricing", "careers", "privacy", "terms", "legal", "contact", "security",
@@ -419,6 +426,7 @@ class Extractor:
         self.must_haves()
         if self.phase == "signals":
             self.weak_derived()
+        self.directories()
         return self._result()
 
     def _not_live(self, status) -> dict:
@@ -442,8 +450,20 @@ class Extractor:
         coming = len(text) < 600 and re.search(r"coming soon|launching soon|under construction", text, re.I)
         self.facts["text_chars"] = len(text)
         self.facts["needs_js"] = len(text) < 250 and len(home.html) > 2000
+        shutdown = None
+        for src in (home.header, text[:3000], home.footer):
+            for m in RE_SHUTDOWN.finditer(src or ""):
+                before = src[max(0, m.start() - 40): m.start()]
+                if self.mentions_company(before + m.group(0)) or RE_FIRST_PERSON.search(before + m.group(0)):
+                    shutdown = _snip(src, m, 60)
+                    break
+            if shutdown:
+                break
         if parked:
             self.s["M2"] = sig(NO, evidence=f"parked or for-sale page: {parked.group(0)}", url=home.url)
+        elif shutdown:
+            self.s["M2"] = sig(NO, evidence=f"the company says it is shutting down: {shutdown}", url=home.url)
+            self.facts["shutting_down"] = shutdown
         elif coming:
             self.s["M2"] = sig(NO, evidence="only a coming-soon page", url=home.url)
         elif self.facts["needs_js"]:
@@ -571,10 +591,10 @@ class Extractor:
             basis = "confirmed"
         elif legal_name and suffix_kind == "pbc":
             etype, basis, ev = "Public Benefit Corporation", "confirmed", legal_name
-        elif legal_name and suffix_kind == "corp" and gov_state:
-            etype = "Delaware C-Corp" if gov_state[0] == "Delaware" else "Other US C-Corp"
-            basis = "confirmed" if gov_state[0] == "Delaware" else "estimated from governing law"
-            ev = f"{legal_name} + {gov_state[1]}"
+        elif legal_name and suffix_kind == "corp" and gov_state and gov_state[0] == "Delaware":
+            etype, basis, ev = "Delaware C-Corp", "confirmed", f"{legal_name} + {gov_state[1]}"
+        # Inc. + another state's governing law proves nothing about where it's incorporated (many Delaware
+        # companies use California law in their terms), so it stays open: "Needs check" below, for SEC or AI
         elif legal_name and suffix_kind == "llc":
             etype, basis, ev = "LLC", "confirmed", legal_name
         elif legal_name and suffix_kind == "foreign" and len(foreign) >= 2:
@@ -597,7 +617,7 @@ class Extractor:
                 self.s["E4"] = sig(CHECK, evidence="; ".join(e for e, _ in foreign[:3]), note="both US and foreign clues")
             else:
                 self.s["E4"] = sig(NO, evidence=us[0][0])
-        elif len(foreign) >= 2:
+        elif len(foreign) >= 2 and any(e.startswith(STRONG_FOREIGN) for e, _ in foreign):
             self.s["M1"] = sig(NO, evidence="; ".join(e for e, _ in foreign[:3]))
             self.s["E4"] = sig(YES, evidence="; ".join(e for e, _ in foreign[:3]))
         elif foreign:
@@ -958,11 +978,23 @@ class Extractor:
         if self.facts.get("entity_type") == "LLC" and self.s.get("F1", {}).get("value") != YES:
             self.s["W4"] = sig(YES, self.facts.get("entity_evidence", ""), note="provisional until the funding search runs")
 
+    def directories(self):
+        """Free official directories (YC, SEC, IRS). They only fill what the rules above left open."""
+        if not self.directory_fn:
+            return
+        from . import directories
+        gate = decide(self.s, self.record.get("status"))["gate"]
+        self.directories_found = self.directory_fn(self.facts.get("legal_name"), self.facts.get("us_clues", []),
+                                                   gate in ("excluded", "failed must-have"))
+        directories.apply(self)
+
     # result ----------------------------------------------------------
     def _result(self) -> dict:
         for sid in SIGNALS:
             self.s.setdefault(sid, sig(UNKNOWN))
         live = self.record.get("status") == "live"
+        # funding found (site, Form D, YC) but no early stage confirmed: it could be Series C or later
+        self.facts["funded_stage_open"] = self.s.get("F1", {}).get("value") == YES and not self.facts.get("funding_stage")
         if self.phase == "icp":
             # phase 1 reports only must-haves and exclusions
             self.s = {sid: v for sid, v in self.s.items() if SIGNALS[sid][0] in ("must", "exclusion")}
@@ -997,6 +1029,7 @@ class Extractor:
             "entity_type": self.facts.get("entity_type", "Unknown"),
             "legal_name": self.facts.get("legal_name"),
             "funding_stage": f"{stage} ({basis})" if stage else "Unknown (not found)",
+            "directories": self.facts.get("directories", ""),
             "partners": sorted(self.partners),
             "competitors": sorted(self.competitors),
             "competitors_mentioned": sorted(set(self.competitor_mentions) - set(self.competitors)),
@@ -1015,8 +1048,11 @@ class Extractor:
         for sid, v in self.s.items():
             if v["value"] == CHECK and sid in signal_prompt:
                 chosen.append(signal_prompt[sid])
-        if self.s.get("F1", {}).get("value") == UNKNOWN:
-            chosen.append("fit/venture_backed_stage")
+        if self.phase == "icp" and self.facts.get("funded_stage_open") and self.s.get("E1", {}).get("value") == UNKNOWN:
+            chosen.append("exclusions/series_c_or_public")
+        if self.s.get("F1", {}).get("value") == UNKNOWN or (
+                self.s.get("F1", {}).get("method") == "directory" and not self.facts.get("funding_stage")):
+            chosen.append("fit/venture_backed_stage")  # a directory proves funding, but not the stage
         if self.facts.get("entity_type", "Unknown") == "Unknown":
             chosen.append("fields/legal_entity_type")
         if not self.employees:
@@ -1026,8 +1062,12 @@ class Extractor:
         # phase 1 asks only must-have and exclusion prompts; phase 2 asks everything else.
         # Only prompts that read the website or job posts; search and final-output prompts run in later steps.
         icp_prompt = lambda pid: pid.startswith(("must_haves/", "exclusions/"))  # noqa: E731
+        settled = set()
+        if self.directories_found:
+            from .directories import settled_prompts
+            settled = settled_prompts(self.s) - {"fit/venture_backed_stage"}
         return [pid for pid in dict.fromkeys(chosen)
-                if pid in known and known[pid]["stage"] in ("site_text", "job_posts")
+                if pid in known and pid not in settled and known[pid]["stage"] in ("site_text", "job_posts")
                 and icp_prompt(pid) == (self.phase == "icp")]
 
     def _job_snippets(self) -> str:
@@ -1088,5 +1128,5 @@ def pricing_has_foreign_and_usd(text: str) -> bool:
 
 
 def extract(domain: str, company: str, employees: str, record: dict, pages: dict[str, str], jobs: list[dict],
-            phase: str = "icp") -> dict:
-    return Extractor(domain, company, employees, record, pages, jobs, phase).run()
+            phase: str = "icp", directory_fn=None) -> dict:
+    return Extractor(domain, company, employees, record, pages, jobs, phase, directory_fn).run()

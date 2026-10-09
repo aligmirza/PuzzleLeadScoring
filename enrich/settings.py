@@ -26,6 +26,8 @@ ENV_KEYS = [
      "Clay table > Webhook source settings", True),
     ("Clay", "CLAY_API_KEY", "Clay Public API (search, tables, routines over HTTP). Pull and push work without it, through `clay login`",
      "`clay api-keys create --name puzzle-lead-scoring` (shown once)", False),
+    ("Free directories", "SEC_CONTACT_EMAIL", "Contact email sent to SEC EDGAR in the User-Agent, as SEC asks of automated tools (optional; lookups work without it)",
+     "any email the SEC can reach you at", True),
     ("Other data tools (planned)", "CRUNCHBASE_API_KEY", "Funding rounds and stage", "crunchbase.com > API", False),
     ("Other data tools (planned)", "APOLLO_API_KEY", "Headcount, LinkedIn, people at the company", "apollo.io > Settings > API", False),
     ("Other data tools (planned)", "PDL_API_KEY", "People Data Labs: company size, industry", "peopledatalabs.com > API keys", False),

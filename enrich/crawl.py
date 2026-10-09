@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
+import httpcore
 import httpx
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
@@ -126,6 +127,58 @@ def text_hash(html: str) -> str:
     return hashlib.md5(" ".join(text.split()).encode()).hexdigest()
 
 
+DNS_FAIL = ("nodename", "name or service", "name resolution", "getaddrinfo", "no address associated")
+
+
+class PublicDNSFallback(httpcore.AsyncNetworkBackend):
+    """Connects as usual; if this computer's DNS can't find a host, asks public DNS (Google, then Cloudflare) over
+    HTTPS and connects to that address. TLS still checks the certificate against the real host name, so this is as
+    safe as a normal connection. Some routers and Mac DNS caches fail on real domains; this keeps them from being
+    reported as unreachable."""
+
+    def __init__(self):
+        self.inner = httpcore.AnyIOBackend()
+        self.addresses: dict[str, str | None] = {}
+        self.used: set[str] = set()
+        self._doh = httpx.AsyncClient(timeout=8)
+
+    async def _lookup(self, host: str) -> str | None:
+        if host not in self.addresses:
+            self.addresses[host] = None
+            for url in (f"https://dns.google/resolve?name={host}&type=A", f"https://cloudflare-dns.com/dns-query?name={host}&type=A"):
+                try:
+                    data = (await self._doh.get(url, headers={"Accept": "application/dns-json"})).json()
+                except Exception:  # noqa: BLE001
+                    continue
+                ips = [a["data"] for a in data.get("Answer", []) if a.get("type") == 1]
+                if ips:
+                    self.addresses[host] = ips[0]
+                    break
+        return self.addresses[host]
+
+    async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        if host not in self.addresses:  # hosts that already failed locally go straight to public DNS
+            try:
+                return await self.inner.connect_tcp(host, port, timeout, local_address, socket_options)
+            except httpcore.ConnectError as e:
+                if not any(s in str(e).lower() for s in DNS_FAIL):
+                    raise
+        ip = await self._lookup(host)
+        if not ip:
+            raise httpcore.ConnectError(f"[Errno 8] nodename nor servname provided, or not known: {host}")
+        self.used.add(host)
+        return await self.inner.connect_tcp(ip, port, timeout, local_address, socket_options)
+
+    async def connect_unix_socket(self, path, timeout=None, socket_options=None):
+        return await self.inner.connect_unix_socket(path, timeout, socket_options)
+
+    async def sleep(self, seconds):
+        await self.inner.sleep(seconds)
+
+    async def aclose(self):
+        await self._doh.aclose()
+
+
 class Crawler:
     def __init__(self, max_requests: int = 200, timeout: float = 15.0, respect_robots: bool = True):
         self.sem = asyncio.Semaphore(max_requests)
@@ -136,10 +189,14 @@ class Crawler:
             headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9"},
             limits=httpx.Limits(max_connections=max_requests, max_keepalive_connections=max_requests // 4),
         )
+        # httpx has no option for a custom resolver, so the fallback is set on its connection pool
+        self.dns = PublicDNSFallback()
+        self.client._transport._pool._network_backend = self.dns
         self.requests = 0
 
     async def close(self):
         await self.client.aclose()
+        await self.dns.aclose()
 
     async def fetch(self, url: str) -> tuple[Fetched | None, str | None]:
         async with self.sem:
@@ -170,7 +227,7 @@ class Crawler:
                 msg = str(e).lower()
                 if "ssl" in msg or "certificate" in msg:
                     return None, "ssl error"
-                if "nodename" in msg or "name or service" in msg or "name resolution" in msg or "getaddrinfo" in msg:
+                if any(s in msg for s in DNS_FAIL):
                     return None, "domain does not resolve"
                 return None, "cannot connect"
             except Exception as e:  # noqa: BLE001  (bad redirects, broken encodings, etc.)

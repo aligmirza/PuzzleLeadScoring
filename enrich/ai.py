@@ -219,7 +219,7 @@ def estimate(store: Store, domains: list[str], phase: str, redo: bool) -> dict:
     output = 150 * calls
     step1 = ((tokens - cached) * price.get("input", 0) + cached * price.get("cached_input", 0) + output * price.get("output", 0)) / 1e6
     return {"companies": companies, "calls": calls, "tokens": tokens, "step1_cost": step1,
-            "web_cost_max": calls * (3 * pv.get("price_per_web_search", 0) + 4000 * price.get("input", 0) / 1e6)}
+            "web_cost_max": calls * 3 * (pv.get("price_per_web_search", 0) + 8000 * price.get("input", 0) / 1e6)}  # ~8,000 tokens of results per search (measured)
 
 
 def money(x: float) -> str:
@@ -232,6 +232,9 @@ def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool =
     rows, _ = load_leads(folder / "input.csv")
     domains = list(dict.fromkeys(r["domain"] for r in rows))
     domains = [d for d in domains if (store.get_result(d, phase) or {}).get("ai", {}).get("needed")]
+    if phase == "signals":  # only companies still in the running after phase 1 (and its AI answers)
+        domains = [d for d in domains if (store.get_result(d, "icp") or {}).get("icp_verdict") not in
+                   ("No", "Unknown: site not reached")]
     if limit:
         domains = domains[:limit]
     est = estimate(store, domains, phase, redo)

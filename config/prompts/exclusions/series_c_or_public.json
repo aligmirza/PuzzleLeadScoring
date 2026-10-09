@@ -8,7 +8,7 @@
   "version": 1,
   "stage": "site_text",
   "model": "small",
-  "run_when": "Code found a Series C+ mention, a stock ticker or an investor relations page.",
+  "run_when": "Code found a Series C+ mention, a stock ticker or an investor relations page; or the company is funded (investors named, SEC Form D, YC) but no pre-seed to Series B stage is confirmed.",
   "input": {
     "pages": [
       "home",

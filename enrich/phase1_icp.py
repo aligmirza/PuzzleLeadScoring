@@ -99,6 +99,7 @@ def csv_row(r: dict) -> dict:
         "Open roles": roles if roles is not None else "",
         "Prices found": " | ".join(r["facts"].get("prices", [])[:3]),
         **signal_columns(r, GROUPS),
+        "Found in directories": r.get("directories", ""),
         "Needs checking": "; ".join(r.get("icp_checks", [])),
         **ai_columns(r),
         "Pages read": ", ".join(r["crawl"]["pages"]),

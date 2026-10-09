@@ -12,6 +12,7 @@ Other commands:
   python -m enrich explain acme.com       every answer and its proof for one company
   python -m enrich clean leads            delete raw pages that are no longer needed (asks first)
   python -m enrich prompts                list the AI prompts (one JSON file per data point in prompts/)
+  python -m enrich directories            the free directories (YC, SEC, IRS): status, refresh, look up one company
 
 Each list gets its own folder: lists/<list>/ with input.csv, raw/, cache.sqlite and output/.
 Nothing is deleted without asking.
@@ -128,6 +129,32 @@ def cmd_rules(args):
         phase1_icp.rerun_rules(folder)
     if args.phase in ("signals", "both"):
         phase2_signals.rerun_rules(folder)
+
+
+def cmd_directories(args):
+    from . import directories
+    if args.refresh:
+        console.print("Downloading the YC directory and the IRS non-profit list...")
+        directories.refresh()
+    if args.domain:
+        domain = normalize_domain(args.domain) or args.domain
+        found = directories.lookup(domain, args.company or "", args.legal_name, [args.place] if args.place else [])
+        for name in directories.ORDER:
+            hit = found.get(name)
+            console.print(f"[bold]{name}[/]: " + ("not found" if not hit else
+                          ", ".join(f"{k}={v}" for k, v in hit.items() if v not in (None, "", [], {}))))
+        for name, err in found["errors"].items():
+            console.print(f"[yellow]{name} not reachable: {err}[/]")
+        return
+    t = Table(title="Free directories (shared by all lists, in cache/)", title_justify="left", header_style="bold")
+    for col in ("Directory", "Records", "Updated", "Size"):
+        t.add_column(col)
+    for row in directories.status():
+        t.add_row(row["name"], row.get("count", "not downloaded yet"), row.get("updated", ""),
+                  human(row["size"]) if row.get("size") else "")
+    console.print(t)
+    console.print("[dim]Downloaded on first use and refreshed automatically (YC weekly, IRS monthly, SEC lookups after 30 days). "
+                  "Turn off for a run with --no-directories.[/]")
 
 
 def cmd_clean(args):
@@ -257,6 +284,7 @@ def main(argv: list[str] | None = None):
                        help="after the run, offer to delete raw pages: useful (default: companies that are not ICP), "
                             "none (all raw pages), all (don't offer). Always asks first.")
         p.add_argument("--yes", action="store_true", help="delete without asking (for scheduled runs)")
+        p.add_argument("--no-directories", action="store_true", help="skip the free directories (YC, SEC, IRS)")
 
     p = sub.add_parser("icp", help="phase 1: is it our ICP? must-haves and exclusions only")
     p.add_argument("csv")
@@ -330,7 +358,16 @@ def main(argv: list[str] | None = None):
     p = sub.add_parser("rules", help="re-apply rules to saved pages, no downloading")
     p.add_argument("list", help="list name (or its CSV file)")
     p.add_argument("--phase", choices=["icp", "signals", "both"], default="both")
+    p.add_argument("--no-directories", action="store_true", help="skip the free directories (YC, SEC, IRS)")
     p.set_defaults(fn=cmd_rules)
+
+    p = sub.add_parser("directories", help="free directories (YC, SEC, IRS): status, refresh, look up one company")
+    p.add_argument("domain", nargs="?", help="look up one company, e.g. puzzle.io")
+    p.add_argument("--company", help="company name, for the SEC and IRS lookup")
+    p.add_argument("--legal-name", help="legal name as on the company's site, e.g. 'Puzzle Financial Inc.'")
+    p.add_argument("--place", help="address text from the site, e.g. 'San Francisco, CA 94107'")
+    p.add_argument("--refresh", action="store_true", help="download the YC directory and IRS list again now")
+    p.set_defaults(fn=cmd_directories)
 
     p = sub.add_parser("clean", help="delete raw pages that are no longer needed (asks first)")
     p.add_argument("list", help="list name (or its CSV file)")
@@ -353,6 +390,9 @@ def main(argv: list[str] | None = None):
     p.set_defaults(fn=cmd_prompts)
 
     args = ap.parse_args(argv)
+    if getattr(args, "no_directories", False):
+        from . import directories
+        directories.ENABLED = False
     args.fn(args)
 
 

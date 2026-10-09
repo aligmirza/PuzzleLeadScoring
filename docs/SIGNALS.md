@@ -22,7 +22,7 @@ The short codes in this file (M1, E3, F12...) are only used here and in the code
 
 ## How to read this file
 
-Every check answers **Yes**, **No**, **Needs check** or **Unknown**; Unknown never counts against a company ([PIPELINE.md, step 5](PIPELINE.md#5-apply-the-rules)). For each signal the methods are tried from cheapest to most expensive, stopping at the first clear answer:
+Every check answers **Yes**, **No**, **Needs check** or **Unknown**. Yes and No only when confirmed by proof; a guess is Needs check or Unknown, and Unknown is left empty in the output columns. Unknown never counts against a company ([PIPELINE.md, step 5](PIPELINE.md#5-apply-the-rules)). For each signal the methods are tried from cheapest to most expensive, stopping at the first clear answer:
 
 | Method | What it means | Cost |
 |---|---|---|
@@ -31,6 +31,8 @@ Every check answers **Yes**, **No**, **Needs check** or **Unknown**; Unknown nev
 | **AI read** | AI reads our saved pages (step 1 of the AI step) | Low |
 | **Search** | AI searches the web with the company name and domain (step 2, only if step 1 found nothing); confidence rules in [PIPELINE.md, step 7](PIPELINE.md#7-ai-one-prompt-per-data-point-in-two-steps) | Medium |
 | **Paid data** | A paid service such as Clay, Crunchbase or Apollo | Varies |
+
+**Directories (built):** the YC directory, SEC EDGAR and the IRS non-profit list are checked for every company right after the code rules. They only fill answers the code left open, and only when the match is tied to the company's own site; [PIPELINE.md, step 5](PIPELINE.md#free-directories-yc-sec-irs) has the matching rules.
 
 Each signal below lists:
 
@@ -116,7 +118,7 @@ Each signal below lists:
 - **No when:** the only address is outside the US and the company clearly runs from there. This shares its evidence with exclusion E4.
 - **How we check:**
   1. **Code:** look for US addresses (state name or abbreviation plus a 5-digit ZIP code), +1 phone numbers, prices in dollars and "laws of the State of ..." in the terms.
-  2. **Directory:** the SEC Form D filing lists the business address. The YC directory lists location.
+  2. **Directory (built):** the business address on the company's SEC record, and the HQ location in the YC directory. A YC location outside the US only raises a Needs check.
   3. **AI read:** the about and contact pages, if the code found nothing clear.
   4. **Paid data:** headquarters country from Clay or Apollo.
 - **Watch out for:** a US company with an offshore team still passes. A remote company with no address shown is Unknown, not No.
@@ -124,7 +126,7 @@ Each signal below lists:
 ### M2. Live website with a real product or service
 
 - **Yes when:** the site loads, has several real pages and describes something people can buy or use.
-- **No when:** the domain doesn't load, is parked, is listed for sale or shows only a "coming soon" page.
+- **No when:** the domain doesn't load, is parked, is listed for sale, shows only a "coming soon" page, or the company says on its own site that it's shutting down.
 - **How we check:**
   1. **Code:** does the domain resolve and load? We check for known parked-page and for-sale templates (GoDaddy, Sedo, HugeDomains and similar), count the pages and measure how much real text there is.
   2. **AI read:** "Does this site describe a real product or service a customer can buy or use?"
@@ -167,7 +169,7 @@ The tools: Mercury, Brex, Ramp, Stripe, Gusto, Rippling, Deel, Pulley and Chase 
 
 - **Exclude when:** there's a confirmed Series C or later round, an IPO or a public statement saying so.
 - **How we check:**
-  1. **Directory:** check the SEC list of public companies (company names and stock tickers).
+  1. **Directory (built):** SEC EDGAR shows a stock ticker on a US exchange (company matched by the legal name on its own site), or the YC directory lists the company as public. This caught HubSpot (NYSE: HUBS), which the site alone missed.
   2. **Code:** look on the site for words like "Series C", "Series D" or "NASDAQ" / "NYSE" plus a ticker.
   3. **Search:** "company name Series C" and "company name IPO", read by AI to confirm.
   4. **Paid data:** funding rounds from Crunchbase, if connected.
@@ -181,7 +183,7 @@ The tools: Mercury, Brex, Ramp, Stripe, Gusto, Rippling, Deel, Pulley and Chase 
 - **Exclude when:** all three are confirmed: the domain is dead or parked, no funding shows up anywhere, and the company is newly formed.
 - **How we check:**
   1. **Code:** the result from M2. Is the site dead or parked?
-  2. **Directory:** no Form D filing, no accelerator listing.
+  2. **Directory (built):** a Form D filing on SEC EDGAR is disclosed funding, so the answer becomes No.
   3. **Paid data:** incorporation date (OpenCorporates), if available.
 - **Watch out for:** in practice, a dead domain already fails M2. This exclusion mostly makes the reason clearer in the output.
 
@@ -202,8 +204,9 @@ The tools: Mercury, Brex, Ramp, Stripe, Gusto, Rippling, Deel, Pulley and Chase 
      - a foreign legal ending (Ltd, GmbH, SAS, Pty, BV) together with a foreign address
      - prices only in EUR, GBP, INR and similar currencies
      - a country domain (such as .de or .in) together with a site in that country's language
-  2. **AI read:** "Where is this company based and where does it mainly operate?"
-  3. **Paid data:** headquarters country.
+  2. **Directory (built):** a YC directory location outside the US raises a Needs check for the AI step; it never excludes on its own.
+  3. **AI read:** "Where is this company based and where does it mainly operate?"
+  4. **Paid data:** headquarters country.
 - **Watch out for:** many founders from abroad set up a Delaware "Inc." with a US headquarters. Those pass. A US company that also prices in euros for its EU customers also passes.
 
 ### E5. Non-profit, charity, foundation, religious group, membership association or government body
@@ -215,7 +218,7 @@ The profile is strict here: this exclusion depends on **what the company is**, n
   - there's direct proof of the company's own tax-exempt status: a 501(c)(3) or charity registration number, a tax ID shown for tax-deductible donations, or a published annual report or Form 990
   - the site's main call to action is to donate or volunteer, and nothing commercial is for sale
 - **How we check:**
-  1. **Directory:** match the name and state against the IRS list of tax-exempt organizations. ProPublica's free Nonprofit Explorer adds Form 990 filings.
+  1. **Directory (built):** the IRS list of tax-exempt organisations (Publication 78, 1.4 million entries), matched by the legal name on the company's site plus the same state, and the YC non-profit flag. A match on the list's company name alone only raises a Needs check. An IRS listing overrules the "Inc. means for-profit" guess, because many non-profits are incorporated (Khan Academy Inc.).
   2. **Code:** "501(c)(3)", "tax-deductible", "EIN" near donation wording, and a donate button in the main menu. Government domains (.gov, .mil) are excluded straight away.
   3. **AI read:** "Is this organisation itself a non-profit, or a for-profit company that serves non-profits?"
 - **Watch out for:**
@@ -262,7 +265,7 @@ General rule from the profile: check the company's own site first (homepage, abo
 
 - **Yes when:** we confirm a round at one of these stages, **or** the company clearly looks like a venture-backed startup based on several clues. Clues include team size, open roles, product maturity, published pricing and press coverage. In that case the stage is marked "estimated".
 - **How we check:**
-  1. **Directory:** SEC Form D filings show that a company raised money, when and how much. Accelerator lists (YC, Techstars and others) show backing.
+  1. **Directory (built):** an SEC Form D filing (raised private funding; the filing dates are shown) or a YC listing (YC invests in every company it backs). Neither shows the stage, so the AI still estimates the stage for the funding stage line. Form D amounts are not read yet.
   2. **Code:** investor logos or "backed by" text, and phrases like "our seed round" on the about and team pages.
   3. **Search:** funding announcements and press.
   4. **AI read:** if there's still no direct proof, estimate the stage from the clues and say which clues were used.
@@ -287,7 +290,7 @@ General rule from the profile: check the company's own site first (homepage, abo
 - **Yes when:** the legal name ends in "Inc." **and** the terms name Delaware law, **or** an official filing says Delaware.
 - **How we check:**
   1. **Code:** the legal name in the footer (for example "© 2025 Acme, Inc."), "laws of the State of Delaware" in the terms, and the company name in the privacy policy.
-  2. **Directory:** SEC Form D filings list the state of incorporation and entity type, which is strong proof. The developer's legal name on the Apple App Store helps too.
+  2. **Directory (built):** the state of incorporation on the company's SEC record. It's only used to confirm Delaware, never to rule it out, because the field can be out of date (HubSpot's record says New York). The developer's legal name on the Apple App Store would help too (not built).
   3. **AI read:** the legal and company information pages.
   4. **Paid data:** OpenCorporates.
 - **Output:** also fills `entity_type` with exactly one of: Delaware C-Corp, Other US C-Corp, LLC, Public Benefit Corporation, Non-US entity, Non-profit or Unknown.
@@ -355,8 +358,8 @@ Marketing or creative agencies, IT or managed-service shops, staffing firms and 
 
 - **How we check:**
   1. **Directory:**
-     - the YC company list, downloaded weekly from YC's official directory
-     - Techstars, 500 Global and a16z speedrun portfolio pages
+     - built: the YC company list (about 6,300 companies, refreshed weekly from a daily copy of YC's official directory), matched by website domain. It also gives the batch, team size and HQ location
+     - not built yet: Techstars, 500 Global and a16z speedrun portfolio pages
   2. **Code:** "Backed by Y Combinator" badges, or the YC batch shown on the site.
   3. **Search:** press about the accelerator.
 - **Also fills:** `partners` (Y Combinator, Techstars).
@@ -555,7 +558,7 @@ Restaurants, bars, cafés, bakeries, hotels, farms, shops, salons, gyms, studios
 #### W4. LLC or sole owner with no venture funding found
 
 - **Yes when:** `entity_type` is confirmed as LLC (or a sole owner), **and** the funding stage is Unknown or Bootstrapped.
-- **How we check:** reuse the results from F3 and F1. No extra research needed.
+- **How we check:** reuse the results from F3 and F1. No extra research needed. A Form D filing or YC listing turns this into No.
 - **Note:** the profile says this must never disqualify, because it's common among real customers.
 
 ### Product-fit limits
@@ -618,11 +621,11 @@ Digital goods, print-on-demand or dropshipping.
 
 | Signals | Answered by code today | Waiting on |
 |---|---|---|
-| All 4 must-haves, all 6 exclusions | Yes, with "Needs check" where unsure | AI step to settle the "Needs check" ones; SEC and IRS lists for Series C+ / public and non-profit |
-| Fit: Stripe, Delaware C-Corp, paid pricing, open roles, growth numbers, remote, early adopter, payroll and banking tools, YC | Yes | Directories (SEC Form D, YC list) to confirm funding and Delaware status |
+| All 4 must-haves, all 6 exclusions | Yes, with "Needs check" where unsure; directories add public companies (SEC, YC), non-profits (IRS, YC), US address (SEC, YC) | AI step to settle the "Needs check" ones |
+| Fit: Stripe, Delaware C-Corp, paid pricing, open roles, growth numbers, remote, early adopter, payroll and banking tools, YC | Yes; directories add funding (SEC Form D, YC), Delaware (SEC) and YC backing | |
 | Fit: startup selling nationally, B2B SaaS, local services, AI core, finance person, several companies | Clues only | AI step |
 | Buying: several roles, finance hire, ops hire, bookkeeper, audit, tax deadline | Yes, from job posts and the calendar | |
-| Buying: raised in last 6 months, new investor, LLC to C-Corp, incorporated recently, new subsidiary, QuickBooks complaints, launched pricing, board member | Not yet | Web search, SEC Form D, old site snapshots |
+| Buying: raised in last 6 months, new investor, LLC to C-Corp, incorporated recently, new subsidiary, QuickBooks complaints, launched pricing, board member | Not yet | Web search, SEC Form D dates (already downloaded), old site snapshots |
 | Weak: local area, physical business, LLC with no funding, pre-revenue, multi-currency, manufacturing, Shopify without stock, NetSuite | Yes or clues | AI step for the clue-only ones |
 | Weak: invoicing-heavy, accountant picks tools, no fintech tools | Not yet | AI step, web search |
 
