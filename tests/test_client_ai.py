@@ -112,5 +112,58 @@ class OpenAIFallback(unittest.TestCase):
         self.assertEqual(self.store.get_ai(DOMAIN, "icp")[self.q["id"]][2 if ans["answer_from"] == "web" else 1]
                          ["usage"]["model"], "attached MCP model")
 
+class Step5OverMCP(OpenAIFallback.__bases__[0]):
+    """The Prospeo finance check through MCP: only when asked, only when still open, never a second credit."""
+    setUp = OpenAIFallback.setUp
+
+    def _signals(self):
+        from enrich.pipeline.common import run_rules
+        record = self.store.get_site(DOMAIN)
+        run_rules(self.store, {"domain": DOMAIN, "company": "ExampleSaaS", "employees": "20", "input": {}}, record, "signals")
+
+    def _fake(self, calls):
+        def fetch(domain, seg=None):
+            calls.append((domain, seg))
+            return {"people": [{"name": "Ann", "title": "CEO", "person_id": "a"}, {"name": "Bo", "title": "Engineer", "person_id": "b"}],
+                    "company": {"name": "ExampleSaaS", "employee_count": 20}, "credits": 1.0, "search": "whole team"}
+        return fetch
+
+    def test_runs_once_when_open_and_allowed(self):
+        from enrich.providers import run as prun
+        self._signals()
+        folder = client_ai.LISTS / "prod"
+        calls = []
+        with mock.patch.object(prun.prospeo, "enabled", return_value=True), mock.patch.object(prun, "fetch_one", self._fake(calls)), \
+                mock.patch.object(prun, "_cap_check", return_value=None):
+            first = prun.step5_one(folder, self.store, DOMAIN)
+            second = prun.step5_one(folder, self.store, DOMAIN)
+        self.assertTrue(first["used"])
+        self.assertEqual(first["credits"], 1.0)
+        self.assertFalse(second["used"])
+        self.assertIn("already used", second["why"])
+        self.assertEqual(len(calls), 1)  # never a second credit
+        self.assertEqual(self.store.get_result(DOMAIN, "signals")["signals"]["F14"]["value"], "no")  # MM: 20 people, no finance title
+
+    def test_not_run_without_a_key_or_for_ruled_out_companies(self):
+        from enrich.providers import run as prun
+        self._signals()
+        folder = client_ai.LISTS / "prod"
+        with mock.patch.object(prun.prospeo, "enabled", return_value=False):
+            self.assertIn("PROSPEO_API_KEY", prun.step5_one(folder, self.store, DOMAIN)["why"])
+        icp = self.store.get_result(DOMAIN, "icp")
+        icp["icp_verdict"] = "No"
+        self.store.save_result(DOMAIN, icp, "icp")
+        with mock.patch.object(prun.prospeo, "enabled", return_value=True), \
+                mock.patch.object(prun, "fetch_one", side_effect=AssertionError("spent a credit on an ICP NO company")):
+            self.assertFalse(prun.step5_one(folder, self.store, DOMAIN)["used"])
+
+    def test_mcp_tools_offer_step5_only_on_request(self):
+        from enrich.integrations import mcp_server
+        tools = {t.name: t for t in asyncio.run(mcp_server.mcp.list_tools())}
+        for name in ("check_company", "enrich_list"):
+            prop = tools[name].input_schema["properties"]["use_prospeo"]
+            self.assertIs(prop.get("default"), False)
+
+
 if __name__ == "__main__":
     unittest.main()

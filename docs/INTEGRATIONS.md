@@ -213,7 +213,31 @@ The table needs a column the pipeline recognises as the domain (Domain, Website,
 
 ## MCP server (Claude Code, Claude Desktop)
 
-The project's `.mcp.json` registers it for Claude Code, so anyone who opens the project gets it. Claude Code asks once to approve it: run `claude` in the project folder, or open `/mcp`, and approve **puzzle-lead-scoring**.
+### Connect Claude Code (one time)
+
+**Option A, automatic (recommended):** register the server for this project in your own Claude Code config. It then
+connects by itself every time you open Claude Code in this folder (terminal or VS Code), with no approval prompt:
+
+```bash
+cd /path/to/ICP
+claude mcp add puzzle-lead-scoring --scope local -e PYTHONPATH="$PWD" -- "$PWD/.venv/bin/python" -m enrich mcp
+claude mcp list
+```
+
+`claude mcp list` should show `puzzle-lead-scoring ... ✔ Connected`. In a chat, `/mcp` shows it too; after code
+changes, reconnect it there (or restart Claude Code) so the new tools load.
+
+**Option B, shared with the team:** the repo's `.mcp.json` registers the same server for anyone who opens the
+project, and `.claude/settings.json` pre-approves it. Claude Code applies project settings only once the folder is
+trusted: run `claude` in the folder once and accept the trust prompt (or approve **puzzle-lead-scoring** in `/mcp`).
+If you also did option A, `claude mcp list` notes the server is defined in two places; that's harmless (yours wins).
+
+**Check it works:** ask Claude Code *"Use puzzle-lead-scoring to check linear.app"*. To remove it:
+`claude mcp remove puzzle-lead-scoring -s local`.
+
+**Claude Desktop:** add the same command to `~/Library/Application Support/Claude/claude_desktop_config.json` under
+`mcpServers` (command = the full path to `.venv/bin/python`, args `["-m", "enrich", "mcp"]`, env `PYTHONPATH` = the
+project folder), then quit (Cmd+Q) and reopen Claude Desktop.
 
 **Through MCP the model you're chatting with is the only AI** (Claude in Claude Code or Claude Desktop), at no API cost. The tool never calls OpenAI or any other AI API on this path:
 
@@ -221,17 +245,18 @@ The project's `.mcp.json` registers it for Claude Code, so anyone who opens the 
 2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ICP summary, ground rules, confidence scale), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
 3. The model answers, quoting its proof, and calls `submit_answers`.
 4. The answers pass the same quality checks as any AI answer (exact quote, confidence, domain match for web answers, dated events for recent signals). The result says which counted, the new verdict and score, and what's next.
-5. A question the model can't answer the way it asks (usually a web search in a client without a web tool) is sent back as `cannot_answer` and **stays open**; nothing is sent to another AI.
+5. Step 5, Prospeo, runs only for the finance-person check (F13, F14) and only when you agree: when the finance check is still open after the model's answers, `submit_answers` says so, and the model asks you before calling `check_company(..., use_prospeo=true)` (1 credit at most per company).
+6. A question the model can't answer the way it asks (usually a web search in a client without a web tool) is sent back as `cannot_answer` and **stays open**; nothing is sent to another AI.
 
 Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring and answer its open questions". The terminal, the API and Clay keep using OpenAI as configured.
 
 | Tool | What it does |
 |---|---|
-| `check_company` | One company through the free layers: ICP, score, tier, signals |
+| `check_company` | One company through the free waterfall steps (size, rules and code checks, YC, SEC, IRS, DNS): ICP, score, tier, signals. `use_prospeo=true` (after your yes) adds step 5, the Prospeo finance check, at most 1 credit |
 | `open_questions` | The questions still open for a company, for the model to answer (phase 1, then phase 2) |
 | `submit_answers` | Saves the model's answers through the quality checks; returns what counted and the new verdict and score. `cannot_answer` items stay open (no other AI is used) |
 | `questions_overview` | For a whole list: open questions per company |
-| `enrich_list` | Start a CSV file as a list in the background (free layers) |
+| `enrich_list` | Start a CSV file as a list in the background (free waterfall steps); `use_prospeo=true` adds step 5 for each company where the finance check is still open (1 credit each at most) |
 | `list_status` | Progress and counts of a list |
 | `list_results` | Rows of a finished list (ICP = YES by default) |
 | `explain_company` | Every answer with its proof |

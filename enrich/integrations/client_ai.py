@@ -192,9 +192,15 @@ def _finish(folder, store: Store, d: str, phase: str, saved: list[tuple[str, int
         outcome.append({"id": pid, "data_point": SIGNALS[sid][1], "result": f"counted as {VALUE_NAMES[v['value']]}" if counted
                         else f"not counted ({(v.get('note') or 'already decided by an earlier layer')[:160]})"})
     left = _pending(store, d, phase, result) if result else []
+    from ..providers import run as prun
+    step5 = (not left and phase == "signals" and prun.prospeo.enabled() and not prun.has_prospeo(store, d)
+             and prun.finance_open(store, d))
     nxt = (f"{len(left)} questions still open: call open_questions again." if left else
            "Phase 1 done. If ICP is YES and signals aren't checked yet, call check_company again with include_signals, "
            "then open_questions(phase='signals')." if phase == "icp" else "All questions answered.")
+    if step5:
+        nxt += (f" Step 5 is next: the Prospeo finance-person check ({', '.join(step5)}), 1 credit. Ask the user; only "
+                f"if they agree, call check_company('{d}', use_prospeo=true).")
     return {"domain": d, "phase": phase, "saved": len(saved), "answers": outcome,
             "icp": row_out.get("ICP"), "icp_status": row_out.get("ICP status"), "lead_score": row_out.get("Lead score"),
             "lead_tier": row_out.get("Lead tier"), "next": nxt}

@@ -125,7 +125,8 @@ def findings(store: Store, domain: str, company: str = "", employees: str = "") 
 
 # ---------------------------------------------------------------------------
 async def check_one(domain: str, company: str = "", employees: str = "", signals: bool = True, use_ai: bool = False,
-                    web: bool = True, refresh: bool = False, wait_seconds: float = 45, ai: dict | None = None) -> dict:
+                    web: bool = True, refresh: bool = False, wait_seconds: float = 45, ai: dict | None = None,
+                    use_prospeo: bool = False) -> dict:
     """Check one company. Results are cached, so asking again is instant. If the check takes longer than
     wait_seconds, it keeps running and the answer says to ask again."""
     d = normalize_domain(domain)
@@ -144,7 +145,14 @@ async def check_one(domain: str, company: str = "", employees: str = "", signals
     except asyncio.TimeoutError:
         return {"domain": d, "company": company, "status": "still running",
                 "message": f"Still checking {d}; call again in a minute for the result."}
-    return {"status": "done", **findings(store, d, company, employees)}
+    step5 = None
+    if use_prospeo:  # step 5: the Prospeo finance check, only if still open and allowed (1 credit at most)
+        from ..providers import run as prun
+        step5 = await asyncio.to_thread(prun.step5_one, folder, store, d)
+    out = {"status": "done", **findings(store, d, company, employees)}
+    if step5 is not None:
+        out["prospeo"] = step5
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +176,7 @@ def _status(folder: Path, **update) -> dict:
 
 def start_list(name: str | None, rows: list[dict], signals: bool = True, use_ai: bool = False, web: bool = True,
                push_to_clay: bool = False, clay_webhook_url: str | None = None, source: str = "api",
-               ai: dict | None = None, callback_url: str | None = None) -> dict:
+               ai: dict | None = None, callback_url: str | None = None, use_prospeo: bool = False) -> dict:
     """Save the rows as a new list and process it in the background. Must be called inside a running event loop."""
     if not rows:
         raise ValueError("No rows given")
@@ -181,11 +189,11 @@ def start_list(name: str | None, rows: list[dict], signals: bool = True, use_ai:
     status = _status(folder, list=name, state="queued", step="", rows=len(rows), source=source,
                      options={"signals": signals, "ai": use_ai, "web": web, "push_to_clay": push_to_clay,
                               "ai_options": {**ai_options(ai), "web": web} if use_ai else None, "callback_url": callback_url,
-                              "clay_webhook_url": clay_webhook_url},
+                              "clay_webhook_url": clay_webhook_url, "prospeo": use_prospeo},
                      started=time.strftime("%Y-%m-%d %H:%M:%S"), finished=None, error=None, push=None,
                      ai_phase1=None, ai_phase2=None, callback=None)
     _jobs[name] = asyncio.ensure_future(_run_list(folder, signals, use_ai, web, push_to_clay, clay_webhook_url,
-                                                  {**(ai or {}), "web": web}, callback_url))
+                                                  {**(ai or {}), "web": web}, callback_url, use_prospeo))
     return status
 
 
@@ -212,11 +220,21 @@ async def _callback(folder: Path, url: str | None) -> None:
         await asyncio.sleep(2 ** attempt * 5)
 
 
-async def _run_list(folder: Path, signals, use_ai, web, push_to_clay, webhook, ai=None, callback_url=None) -> None:
+async def _run_list(folder: Path, signals, use_ai, web, push_to_clay, webhook, ai=None, callback_url=None,
+                    use_prospeo: bool = False) -> None:
     try:
         _status(folder, state="running")
         rows, _ = load_leads(folder / "input.csv")
         store = await run_rows(folder, rows, signals, use_ai, web, on_step=_stepper(folder), ai=ai)
+        if use_prospeo and signals:  # step 5 for each company whose finance check is still open (1 credit at most each)
+            from ..providers import run as prun
+            _status(folder, step="step 5: Prospeo finance check")
+            used = []
+            for row in rows:
+                r = await asyncio.to_thread(prun.step5_one, folder, store, row["domain"])
+                if r.get("used"):
+                    used.append({"domain": row["domain"], "credits": r["credits"], "people": r["people_found"]})
+            _status(folder, prospeo={"companies": len(used), "credits": sum(u["credits"] for u in used)})
         _status(folder, step="writing results")
         icp = [r for r in (store.get_result(row["domain"], "icp") for row in rows) if r]
         phase1_icp.report(icp, folder, store, None)

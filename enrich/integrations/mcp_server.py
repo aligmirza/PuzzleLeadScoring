@@ -22,7 +22,10 @@ mcp = MCPServer(
     instructions=(
         "Checks companies against Puzzle's ideal customer profile (ICP) and scores them. Through MCP YOU are the only "
         "AI: you answer every AI question with the project's prompts; the tool never calls OpenAI or any other AI API. "
-        "A question you can't answer the way it asks (e.g. no web search tool) is sent back as cannot_answer and stays open. Workflow for a company: check_company(domain) runs the free layers "
+        "A question you can't answer the way it asks (e.g. no web search tool) is sent back as cannot_answer and stays open. "
+        "Each data point follows its own waterfall (config/datapoints): free steps in check_company / enrich_list, then "
+        "your answers (pages, then web), then step 5, Prospeo, only for the finance-person check: when submit_answers "
+        "says it's next, ask the user (1 credit per company) and only then call check_company with use_prospeo=true. Workflow for a company: check_company(domain) runs the free layers "
         "(website rules and directories); then open_questions(domain) lists what is still open, with the page text and "
         "instructions; answer each one yourself (read the page text, or search the web for answer_from = web if you can), "
         "quoting your proof exactly; then submit_answers. Answers pass the same quality checks as any AI answer, and the "
@@ -41,22 +44,29 @@ mcp = MCPServer(
 
 
 @mcp.tool()
-async def check_company(domain: str, company: str = "", employees: str = "", include_signals: bool = True) -> dict:
-    """Check one company against the ICP with the free layers (website rules, YC, SEC, IRS). Example: domain='linear.app'.
-    No OpenAI: questions still open are answered by you via open_questions and submit_answers."""
-    return await service.check_one(domain, company, employees, include_signals, False, wait_seconds=120)
+async def check_company(domain: str, company: str = "", employees: str = "", include_signals: bool = True,
+                        use_prospeo: bool = False) -> dict:
+    """Check one company against the ICP: the free waterfall steps (size, website rules and code checks, YC, SEC,
+    IRS, DNS). Example: domain='linear.app'. No OpenAI: questions still open are answered by you via open_questions
+    and submit_answers. use_prospeo=true (only after the user agrees: 1 Prospeo credit at most) runs step 5, the
+    finance-person check (F13, F14), if it is still open after your answers."""
+    return await service.check_one(domain, company, employees, include_signals, False, wait_seconds=120,
+                                   use_prospeo=use_prospeo)
 
 
 @mcp.tool()
-async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool = True, push_to_clay: bool = False) -> dict:
-    """Start enriching a CSV file of companies (needs a Domain or Website column). Runs in the background;
-    check progress with list_status. push_to_clay sends the results to the Clay webhook in settings when done."""
+async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool = True, push_to_clay: bool = False,
+                      use_prospeo: bool = False) -> dict:
+    """Start enriching a CSV file of companies (needs a Domain or Website column) with the free waterfall steps.
+    Runs in the background; check progress with list_status, then answer open questions (questions_overview).
+    push_to_clay sends the results to the Clay webhook in settings when done. use_prospeo=true (only after the user
+    agrees: at most 1 Prospeo credit per company) runs the finance-person check where it is still open."""
     import csv
     from pathlib import Path
     with open(Path(csv_path).expanduser(), newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     return service.start_list(list_name or Path(csv_path).stem, rows, include_signals, False, True, push_to_clay,
-                              source="mcp")
+                              source="mcp", use_prospeo=use_prospeo)
 
 
 @mcp.tool()

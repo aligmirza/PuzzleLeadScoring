@@ -209,6 +209,51 @@ def size_of(store: Store, domain: str) -> str | None:
     return None
 
 
+def finance_open(store: Store, domain: str) -> list[str]:
+    """Data points using Prospeo (the finance check) still open after steps 1-4 that can score for this size."""
+    from ..checks.rules import unscored
+    res = store.get_result(domain, "signals") or {}
+    seg = size_of(store, domain)
+    skip = set(unscored(seg)) if seg else set()
+    return [sid for sid in COVERS["signals"] if sid not in skip
+            and res.get("signals", {}).get(sid, {}).get("value") in (UNKNOWN, CHECK)]
+
+
+def step5_one(folder: Path, store: Store, domain: str) -> dict:
+    """Step 5 for one company (MCP and API): the Prospeo finance check, only when it's needed and allowed.
+    At most 1 credit; never a second one for the same company."""
+    if not prospeo.enabled():
+        return {"used": False, "why": "PROSPEO_API_KEY is not set"}
+    icp = (store.get_result(domain, "icp") or {}).get("icp_verdict")
+    if not icp or icp in OUT_OF_RUNNING:
+        return {"used": False, "why": f"not checked: ICP verdict is {icp or 'missing'}"}
+    if has_prospeo(store, domain):
+        return {"used": False, "why": "already used its one Prospeo credit (data reused)"}
+    open_ = finance_open(store, domain)
+    if not open_:
+        return {"used": False, "why": "the finance check is already answered (or can't score for this size)"}
+    over = _cap_check(1)
+    if over:
+        return {"used": False, "why": over}
+    got = fetch_one(domain, size_of(store, domain))
+    save_one(store, domain, got)
+    record = store.get_site(domain)
+    rows = load_leads(folder / "input.csv")[0] if (folder / "input.csv").exists() else []
+    row = next((r for r in rows if r["domain"] == domain), None) or {
+        "domain": domain, "company": ((record or {}).get("input") or {}).get("company", ""),
+        "employees": ((record or {}).get("input") or {}).get("employees", ""), "input": {}}
+    if record:
+        run_rules(store, row, record, "icp")
+        res = run_rules(store, row, record, "signals")
+        res["icp_verdict"] = (store.get_result(domain, "icp") or {}).get("icp_verdict")
+        store.save_result(domain, res, "signals")
+    contacts = write_contacts(folder, store)
+    log(folder, "Provider: Prospeo finance check (MCP)", companies=1, provider_credits=got["credits"],
+        matched=bool(got["company"]), people=len(got["people"]))
+    return {"used": True, "for": open_, "search": got["search"], "credits": got["credits"],
+            "people_found": len(got["people"]), "contacts_file": str(contacts)}
+
+
 def has_prospeo(store: Store, domain: str) -> bool:
     """This company already used its one Prospeo credit (company record or team search)."""
     have = store.get_provider(domain).get("prospeo", {})
@@ -233,14 +278,7 @@ def people_step(folder: Path, emails: bool = False, per_company: int = 3, strong
     out_rows = final.read_rows(folder)
     keep = {r["_domain"] for r in out_rows if r.get("ICP") == "YES"
             and (not strong_only or (r.get("Lead tier") or "").startswith("Strong"))}
-    def still_open(d):  # a data point using Prospeo (the finance check) is open and can score for this size
-        from ..checks.rules import unscored
-        res = store.get_result(d, "signals") or {}
-        seg = size_of(store, d)
-        skip = set(unscored(seg)) if seg else set()
-        return any(res.get("signals", {}).get(sid, {}).get("value") in (UNKNOWN, CHECK)
-                   for sid in COVERS["signals"] if sid not in skip)
-    candidates = [d for d in dict.fromkeys(r["domain"] for r in rows) if d in keep and still_open(d)]
+    candidates = [d for d in dict.fromkeys(r["domain"] for r in rows) if d in keep and finance_open(store, d)]
     used = [d for d in candidates if has_prospeo(store, d)]  # already spent their 1 credit: never a second one
     domains = [d for d in candidates if d not in used][: limit or None]
     if used:
