@@ -1,0 +1,29 @@
+{
+  "id": "F12",
+  "name": "Several open roles",
+  "group": "fit",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "fit/several_open_roles"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": true
+  }
+}

@@ -9,3 +9,4 @@ Kruze Consulting,kruzeconsulting.com,NO,,Accounting / bookkeeping / fractional C
 Pennylane,pennylane.com,NO,,"French company (Paris), operates mainly outside the US",,Non-US company on a .com domain (no country domain clue)
 Brooklinen,brooklinen.com,NO,,E-commerce holding physical stock (bedding),,Physical inventory exclusion
 thoughtbot,thoughtbot.com,YES,Weak fit,US consultancy selling billed hours; in scope but weak fit,,Services firm: should pass but score low (weak fit signals)
+Linear,linear.app,NO,,"Series C at a $1.25B valuation (2025), $99M tender offer at $2.5B; site never mentions funding",Yes,Late-stage company whose own site says nothing about funding (found in the trace)

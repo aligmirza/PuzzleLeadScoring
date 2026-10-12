@@ -61,6 +61,29 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 
 ---
 
+**The waterfall, per data point.** Every data point is answered by the cheapest layer that can, and a layer only runs when the ones before it left the answer open:
+
+| # | Layer | Cost | Strength |
+|---|---|---|---|
+| 1 | Rules on the scraped pages | free | proof from the company's own site |
+| 2 | Free directories (YC, SEC, IRS, Internet Archive) | free | strong when tied to the domain or legal name |
+| 3 | AI reading our saved pages | about $0.0003 a question | needs an exact quote |
+| 4 | AI web search | about $0.011 a search | needs a quote and a domain match to exclude |
+| 5 | Provider: Prospeo company data | 1 credit per matched company, covers several data points | medium: confirms fit signals and US location; a public company, non-profit or foreign HQ only becomes Needs check |
+
+**Each data point has its own waterfall file** in `config/datapoints/<group>/<name>.json`. Change a file to change how that data point is answered; the run still schedules everything together (pages downloaded once per company, free layers for all data points at once, AI questions in parallel, one provider call per company covering all its data points, and each data point stops at the first layer that confirms it).
+
+| Setting | Values |
+|---|---|
+| `rules.on`, `directories.on` | `true` / `false` |
+| `ai_pages.run` | `if_open` (still empty or Needs check), `if_clue` (only when a rule found a clue), `always`, `off`; optional `requires_page` (e.g. `team`) |
+| `ai_web.run` | `after_pages` (when the page answer found nothing), `if_open` (whenever still open, also when the page answer was rejected), `first` (web only), `off`; `when_site_unreached` (`true`: also for sites that couldn't be read) |
+| `provider.run` | `if_open` / `off` |
+
+`python -m enrich datapoints` lists all 57; `python -m enrich datapoints --show M3` shows one. The waterfall and review views show each data point's settings and the file to edit. **The default for every data point with an AI question:** if the rules and directories leave it open, AI reads our pages (`ai_pages.run: if_open`); if it is still open after that, AI searches the web (`ai_web.run: if_open`). Sites that couldn't be read get no web search unless `when_site_unreached` is `true`. Change one file to make a data point differ.
+
+Prospeo covers: based in the US, fintech tools (from its technology data: Stripe, Gusto, Rippling, Deel, Mercury, Brex, Ramp, Carta, Pulley), open roles, public / non-profit, outside the US, funding stage and date, QuickBooks and NetSuite, headcount (company size) and industry. Then, for companies that pass, `people` finds decision-makers (founder or CEO first, then the finance lead), which also answers "Has a finance lead" and "No finance person visible". `python -m enrich waterfall acme.com` shows all five layers for each data point. Provider credits per month are capped by `PROVIDER_MONTHLY_CREDITS`, and responses are cached for 90 days (Prospeo doesn't charge again for those either).
+
 **To see every step for one company:** `python -m enrich trace acme.com` runs the whole flow for that company and stops after each step, showing what it received, found (with proof) and decided. `--ai` adds the AI steps (it shows the cost and asks first). The trace is saved as a Markdown report.
 
 ## 2. What starts what
@@ -217,7 +240,7 @@ The checks run in this order, because later checks use earlier answers:
 | "Series A, B and C" in one sentence | Not a confirmed early stage, so **Needs check** |
 | "Inc." in the footer but no Delaware law, or another state's law | **Needs check** (could still be a Delaware company); SEC can confirm it |
 | The site says the company is shutting down ("Pulley is shutting down on 12/8/26") | Live website with a real product: **No** (it's not an operating business going forward) |
-| Funding found (investors, Form D, YC) but no early stage confirmed | The AI is asked "Series C or later, or public?" in phase 1, with web search if needed. Without this, late-stage private companies like Ramp passed |
+| "Series C or later, or public" still open after the free checks | The AI is asked in phase 1, for every company still in the running, with web search if needed. Linear's site never mentions funding; the web shows a Series C. If phase 2 later confirms a Series C or later round anyway, the final list marks the company PENDING |
 | Only weak foreign clues (a .de domain, a foreign city, prices in euros) | **Needs check**. Outside the US only becomes proof with an official clue (foreign legal entity such as Ltd or GmbH, foreign governing law, or a foreign country in the site's structured data) plus another clue |
 
 ### Free directories: YC, SEC, IRS
@@ -437,9 +460,9 @@ Example query for "Venture-backed": `"Resend" raises seed OR "Series A" OR "Seri
 
 | Confidence | Means | Counts? |
 | --- | --- | --- |
-| High | Official record (SEC, state registry, IRS), the company's own page, or 2+ independent reputable sources, with a domain match | Yes, including making a company NO |
-| Medium | One reputable source (major press, Crunchbase, LinkedIn company page, YC directory, job board), with a domain or name-and-location match | Yes, but can't make a company NO |
-| Low | Name-only match, SEO or aggregator page, old information, or sources disagree | No; stays Unknown, kept as a hint |
+| High | The source clearly states it in words (the quote shows it), with a domain match, not older than about 2 years. Any source type: news, the company, an official record | Yes, including making a company NO |
+| Medium | Clearly stated, but matched only by name and location or founders | Yes, but can't make a company NO |
+| Low | Only implied or indirect, name-only match, old information, or sources disagree | No; stays Unknown, kept as a hint |
 
 On top of these, three checks apply to every AI answer (in [enrich/ai/apply.py](../enrich/ai/apply.py)):
 
@@ -450,6 +473,10 @@ On top of these, three checks apply to every AI answer (in [enrich/ai/apply.py](
 | An estimated funding stage is shown in "Funding stage" but earns no points | Only a confirmed stage counts toward the score |
 | "Recent" signals (raised in 6 months, new investor, LLC to C-Corp, incorporated, launched pricing, board member) are decided by the date in the AI's own quote: Yes needs a dated, matching event inside the window | The AI found "closed a $45M Series B on 4/17/2026" and still said "not in the last 6 months"; it also called "the pricing page shows three tiers" a recent launch |
 | A confirmed recent round sets the funding stage | Mintlify's site says Seed; its April 2026 round is a Series B |
+| "Series C or later" needs the proof in the quote: the round letter, an IPO or listing, or one round of $100M+ / a $1B+ valuation. A tender offer is not a round | For Linear the AI quoted a "$99 million tender offer"; the deciding words came later in the same quote ("alongside our Series C at a $1.25 billion valuation") |
+| The funding stage and "Venture-backed, pre-seed to Series B" must agree: a stage of Series C or later makes it No | Linear was given +3 for pre-seed to Series B while its stage read "Series C or later" |
+| A tool named in a list of customers isn't a tool the company uses | "40,000 companies (including OpenAI, Coinbase, and Ramp)" was read as "uses Ramp cards" |
+| A company size estimate needs a headcount in the quote, and can't be below the number of open roles | "31 open roles" was read as "15 people" |
 
 Step 2 never runs for a company that's already a NO, phase 2's AI only runs on companies phase 1 (with its AI answers) hasn't ruled out, and each call is capped at 3 searches. The rules are in `config/prompts/_shared.json` (`two_steps`, `web_search_step`); each data point's queries and good sources are in its own file.
 
@@ -653,3 +680,54 @@ flowchart TD
 | Grouped prompts | Same answers at roughly a third of the AI cost |
 | Web search | Buying signals such as recent funding start counting |
 | Reasoning and outreach message | Two new text columns per ICP company |
+
+---
+
+## Architecture
+
+**In one paragraph:** every data point (57 of them) is answered by a waterfall of five layers, cheapest first: rules on the company's website, free official directories, AI reading the website, AI web search, and a data provider. A layer only runs while the data point is still open, and every answer must pass the same quality rules (proof required, guesses never count, official sources over inferences). Each data point's waterfall is a small settings file, so how a data point is answered can be changed without touching the code. The engine runs all companies and data points together, so the website is downloaded once, free layers answer everything they can at no cost, and paid layers only get what is left.
+
+| Part | What it does | Where |
+|---|---|---|
+| Waterfall engine | Runs a company through the layers in order and combines their answers with one set of quality rules | `enrich/engine/` (`layers.py`, `merge.py`, `resolve.py`) |
+| Layer 1: rules | Pattern checks on the scraped pages | `enrich/checks/rules.py` |
+| Layer 2: free directories | YC, SEC, IRS, Internet Archive | `enrich/sources/directories.py`, `history.py` |
+| Layers 3 and 4: AI | Questions about the pages, then web search; answers checked for proof | `enrich/ai/` |
+| Layer 5: provider | Prospeo company data and people | `enrich/providers/` |
+| Each data point's settings | Which layers run for it and when | `config/datapoints/` |
+| Collecting the website | Pages, job boards, real browser and DNS fallbacks | `enrich/sources/crawl.py` |
+| Verdict, score, final list | ICP YES / NO, lead score, tier, reasoning | `enrich/engine/merge.py`, `enrich/checks/scoring.py`, `enrich/pipeline/final.py` |
+| Ways in | Terminal, API, MCP, Clay | `enrich/__main__.py`, `enrich/integrations/` |
+
+**Adding a data point:** a settings file in `config/datapoints/`, a prompt in `config/prompts/`, and optionally a rule. **Adding a provider:** a module in `enrich/providers/` and its entry in `enrich/engine/layers.py`.
+
+Built for Puzzle at up to about 50,000 rows a month on one machine. Every piece below works the same whether the tool is run from the terminal, the API or MCP, and all of them can run at the same time.
+
+```mermaid
+flowchart LR
+    IN["Terminal, API, MCP, Clay"] --> P["Pipeline<br/>phase 1, AI, phase 2, AI, score"]
+    P <--> L[("Each list<br/>lists/&lt;list&gt;/: input, results,<br/>answers, run log")]
+    P <--> C[("Shared cache<br/>cache/: company pages, AI answers,<br/>directories, rate limits")]
+    P --> X["Outside sources<br/>websites, SEC, IRS, YC,<br/>Internet Archive, OpenAI"]
+    C -. "limits shared by every process" .-> X
+
+    classDef key stroke:#2d55c8,stroke-width:2px
+    class P,C key
+```
+
+| Piece | What it does | Where |
+|---|---|---|
+| One company cache for all lists | A company in several lists is downloaded and AI-checked once. Pages are hard-linked into each list (no extra disk); AI answers are reused only when made with the same prompt version and still fresh: pages 30 days, answers from pages 60, web answers 30, "recent" signals 14 (`SHARED_*_DAYS` in `.env`). `--refresh` skips it; `SHARED_CACHE=off` turns it off | `enrich/core/shared.py`, `cache/companies/`, `cache/ai_answers.sqlite` |
+| Shared rate limits | SEC (8 a second) and the Internet Archive (2 a second) are limited across every process on the machine, so the terminal, API and MCP together stay inside them. The Archive steps aside for 2 minutes after repeated refusals instead of slowing every company | `enrich/core/ratelimit.py`, `cache/ratelimits.sqlite` |
+| Version stamps | Every result records the rules version and every AI answer its prompt version, so a changed prompt is never answered from an old cache entry | `enrich/core/versions.py` |
+| Jobs that survive restarts | Lists started through the API keep their options in `status.json`; when the server starts it carries on with any list left queued or running, using the caches for work already done | `enrich/integrations/service.py` |
+| Cost controls | Per request: `max_cost_usd` (API) or the cost question (terminal). Per month: `AI_MONTHLY_BUDGET_USD` across everything. `python -m enrich usage` shows the month | `enrich/core/usage.py` |
+| Data folder | `DATA_DIR` in `.env` moves all lists and caches to another folder or disk | `enrich/core/paths.py` |
+
+**What stays simple on purpose:** one process per command, SQLite files (one per list, plus the shared ones), files on disk. At this volume they are fast and need no upkeep.
+
+**Next steps when needed:**
+1. **Docker** (no server needed): the same code as containers on this Mac (API, workers, browser) with one command.
+2. **A server** (Fly.io, Render or AWS): the same containers, so Clay can call the API row by row.
+3. **Postgres and a job queue**, only if volume grows well past 50,000 rows a month or several machines are needed. The storage and caches are kept behind small modules so this is a contained change.
+

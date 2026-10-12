@@ -7,9 +7,11 @@ or `Authorization: Bearer <key>`. Show it with `python -m enrich settings`.
 Safety: AI (which costs money) only runs when a request says so, and every AI run is estimated first and refused
 above `max_cost_usd` (default API_AI_MAX_COST_USD in .env, else $5). Nothing can be deleted through the API.
 """
+import asyncio
 import csv
 import io
 import secrets
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -26,9 +28,19 @@ TAGS = [
     {"name": "AI", "description": "Cost estimates and the AI step for an existing list. Always estimated first and capped."},
     {"name": "Quality", "description": "Accuracy against right answers, and the run log."},
     {"name": "Reference", "description": "Free directory lookups and the list of data points."},
+    {"name": "Providers", "description": "Paid data (Prospeo): company data for open data points, and decision-makers. "
+                                         "Always capped by max_credits."},
     {"name": "Clay", "description": "Pull lists from Clay and push results to a Clay table."},
 ]
-app = FastAPI(title="PuzzleLeadScoring API", version="2.0", openapi_tags=TAGS,
+@asynccontextmanager
+async def lifespan(_app):
+    resumed = service.resume_unfinished()
+    if resumed:
+        service.console.print(f"[yellow]Resumed after restart:[/] {', '.join(resumed)}")
+    yield
+
+
+app = FastAPI(title="PuzzleLeadScoring API", version="2.0", openapi_tags=TAGS, lifespan=lifespan,
               description="Check companies against Puzzle's ICP, score them, and exchange lists with other tools. "
                           "Every /v1 call needs the header `x-api-key`. AI only runs when asked, within a cost limit.")
 
@@ -99,6 +111,20 @@ class EvaluateIn(BaseModel):
                           "'Expected: <data point>' (Yes/No). Leave out to use Expected columns in the list itself",
         examples=[[{"Domain": "linear.app", "Expected ICP": "YES", "Expected tier": "Strong fit",
                     "Expected: Delaware C-Corp": "Yes"}]])
+
+
+class ProvidersIn(BaseModel):
+    phase: Literal["icp", "signals"] = Field("icp", description="icp: open must-haves and exclusions; signals: open fit and buying signals")
+    limit: int = Field(0, description="Only the first N companies (0 = all that need it)")
+    max_credits: float = Field(description="Refuse if this could use more Prospeo credits (1 per matched company)")
+
+
+class PeopleIn(BaseModel):
+    emails: bool = Field(False, description="Also reveal verified emails (1 credit each)")
+    per_company: int = Field(3, description="Contacts kept per company: founder/CEO first, then the finance lead")
+    strong_only: bool = Field(False, description="Only Strong fit companies")
+    limit: int = 0
+    max_credits: float = Field(description="Refuse if this could use more Prospeo credits")
 
 
 class PushIn(BaseModel):
@@ -246,6 +272,56 @@ async def ai_run(name: str, body: AiIn):
         _fail(e)
 
 
+# --- providers -----------------------------------------------------------------
+@app.post("/v1/lists/{name}/providers", dependencies=AUTH, tags=["Providers"])
+async def providers(name: str, body: ProvidersIn):
+    """Prospeo company data, the last layer of the waterfall, for companies whose data points the earlier layers left
+    open. Refused above max_credits."""
+    from ..pipeline.common import list_dir
+    from ..providers import run as prun
+    try:
+        out = await asyncio.to_thread(prun.company_step, list_dir(name), body.phase, body.limit, True, body.max_credits)
+    except SystemExit as e:
+        raise HTTPException(400, str(e))
+    if out.get("refused"):
+        raise HTTPException(402, out["refused"])
+    return out
+
+
+@app.post("/v1/lists/{name}/people", dependencies=AUTH, tags=["Providers"])
+async def people(name: str, body: PeopleIn):
+    """Decision-makers at the list's ICP companies from Prospeo (founders, C-suite, finance lead), with emails if asked.
+    Refused above max_credits."""
+    from ..pipeline.common import list_dir
+    from ..providers import run as prun
+    try:
+        out = await asyncio.to_thread(prun.people_step, list_dir(name), body.emails, body.per_company, body.strong_only,
+                                      body.limit, True, body.max_credits)
+    except SystemExit as e:
+        raise HTTPException(400, str(e))
+    if out.get("refused"):
+        raise HTTPException(402, out["refused"])
+    return out
+
+
+@app.get("/v1/lists/{name}/contacts", dependencies=AUTH, tags=["Providers"])
+def contacts(name: str, format: Literal["json", "csv"] = "json"):
+    """Contacts found for the list: one row per person, with the company's ICP, score and tier."""
+    from ..core.store import Store
+    from ..pipeline.common import list_dir
+    from ..providers import run as prun
+    try:
+        folder = list_dir(name)
+    except SystemExit as e:
+        raise HTTPException(404, str(e))
+    path = prun.write_contacts(folder, Store(folder))
+    if format == "csv":
+        return PlainTextResponse(path.read_text(), media_type="text/csv")
+    with open(path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    return {"list": folder.name, "count": len(rows), "contacts": rows}
+
+
 # --- quality -------------------------------------------------------------------
 @app.post("/v1/lists/{name}/evaluate", dependencies=AUTH, tags=["Quality"])
 def evaluate(name: str, body: EvaluateIn):
@@ -254,6 +330,19 @@ def evaluate(name: str, body: EvaluateIn):
         return service.evaluate_list(name, body.labels)
     except (ValueError, SystemExit) as e:
         _fail(ValueError(str(e)))
+
+
+@app.get("/v1/lists/{name}/costs", dependencies=AUTH, tags=["Quality"])
+def costs(name: str):
+    """The actual AI cost per company (phase 1, phase 2, answers, web searches, reused answers)."""
+    from ..core.store import Store
+    from ..pipeline.common import list_dir
+    try:
+        folder = list_dir(name)
+    except SystemExit as e:
+        raise HTTPException(404, str(e))
+    per = Store(folder).ai_costs()
+    return {"list": folder.name, "companies": per, "total_usd": round(sum(c["total_usd"] for c in per.values()), 4)}
 
 
 @app.get("/v1/lists/{name}/runs", dependencies=AUTH, tags=["Quality"])
@@ -274,6 +363,12 @@ def lookup(domain: str, company: str = "", legal_name: str | None = None, place:
         return service.lookup(domain, company, legal_name, place)
     except ValueError as e:
         _fail(e)
+
+
+@app.get("/v1/usage", dependencies=AUTH, tags=["Quality"])
+def usage(month: str | None = None):
+    """Companies checked and AI cost per list for a month (default this month), and the monthly budget left."""
+    return service.usage_report(month)
 
 
 @app.get("/v1/signals", dependencies=AUTH, tags=["Reference"])

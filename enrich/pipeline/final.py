@@ -78,7 +78,7 @@ def reasoning(icp: dict, sig: dict | None, row: dict, sc: dict | None) -> str:
     return "\n".join(lines)
 
 
-def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) -> dict:
+def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, contacts: list | None = None) -> dict:
     if not icp:
         return {"ICP": "PENDING", "ICP status": "Not checked yet (run phase 1)"}
     verdict = icp.get("icp_verdict", "")
@@ -86,15 +86,24 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
     if yes_no == "NO":
         status = {"excluded": "Excluded: proof of an exclusion was found",
                   "failed must-have": "Failed a must-have: proof it doesn't meet one"}.get(icp.get("gate"), "Not ICP")
+    if yes_no == "NO":
+        sig = None  # phase 2 answers saved before the company was ruled out are no longer relevant
+    late = (sig or {}).get("funding_stage", "").startswith("Series C or later (confirmed)")
+    if yes_no == "YES" and late and icp.get("signals", {}).get("E1", {}).get("value") != "yes":
+        # phase 2 found a late round that phase 1 didn't: don't keep a YES that may be an exclusion
+        yes_no, status = "PENDING", ("Phase 2 found a Series C or later round; confirm with the phase 1 AI check "
+                                     "(ai_check.py <list> --phase icp)")
+    # size, from proof: the list's count, a Prospeo headcount, the YC team size (all worked out by the rules), then
+    # the AI's estimate, then the profile default (SMB).
     seg, seg_basis = segment(employees)
+    facts = (sig or icp).get("facts") or {}
     ai_seg = (sig or {}).get("segment_ai")
-    team = ((sig or icp).get("facts") or {}).get("team_size_directory")
-    if not (employees or "").strip() and team:
-        seg, _ = segment(str(team["value"]))
-        seg_basis = f"{team['value']} people per the {team['source']}"
-    elif not (employees or "").strip() and ai_seg:
-        seg = ai_seg["value"]
-        seg_basis = f"AI estimate from the website ({ai_seg.get('headcount') or 'unknown'} people)"
+    if not re.search(r"\d", employees or ""):
+        if facts.get("segment"):
+            seg, seg_basis = facts["segment"], facts.get("segment_basis", "")
+        elif ai_seg:
+            seg = ai_seg["value"]
+            seg_basis = f"AI estimate from the website ({ai_seg.get('headcount') or 'unknown'} people)"
     row = {
         "ICP": yes_no,
         "ICP status": status or verdict,
@@ -114,8 +123,6 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
         row["Lead tier"] = "Not scored: website not reached (retry)"
     elif yes_no != "NO":
         row["Lead tier"] = "Scored after phase 2"
-    if yes_no == "NO":
-        sig = None  # phase 2 answers saved before the company was ruled out are no longer relevant
     src = sig or icp
     s_all = {**(sig or {}).get("signals", {}), **icp.get("signals", {})}
     roles = src.get("crawl", {}).get("jobs_count")
@@ -131,6 +138,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
         "Legal name": src.get("legal_name") or "",
         "Funding stage": sig.get("funding_stage", "") if sig else "",
         "Found in directories": (sig or {}).get("directories") or icp.get("directories", ""),
+        "Website technologies": (sig or {}).get("technologies") or icp.get("technologies", ""),
         "Partners found": ", ".join(sig.get("partners", [])) if sig else "",
         "Competitor tools used": ", ".join(sig.get("competitors", [])) if sig else "",
         "Job board": (src.get("crawl", {}).get("ats") or "").capitalize(),
@@ -140,6 +148,12 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None) ->
     for sid in SIGNALS:
         if sid in s_all:
             row[signal_column(sid)] = CELL_NAMES[s_all[sid]["value"]]
+    row["Found by providers"] = (sig or {}).get("providers") or icp.get("providers", "")
+    if contacts:
+        top = contacts[0]
+        row.update({"Key contact": top.get("name") or "", "Key contact title": top.get("title") or "",
+                    "Key contact email": top.get("email") or "", "Key contact LinkedIn": top.get("linkedin") or "",
+                    "Contacts found": len(contacts)})
     row["Reasoning"] = reasoning(icp, sig, row, sc)
     row["Funding stage"] = funding_line(icp, sig).removeprefix("Funding stage: ")
     return row
@@ -158,6 +172,7 @@ def write(folder: Path, store: Store) -> Path:
     ecol = next((lowered[c] for c in ("employee size", "employees", "employee count", "employee_count", "headcount",
                                       "size", "company size") if c in lowered), None)
 
+    costs = store.ai_costs()
     first_seen: dict[str, int] = {}
     cache: dict[str, dict] = {}
     added_cols: list[str] = []
@@ -169,8 +184,10 @@ def write(folder: Path, store: Store) -> Path:
                      "Lead tier": "Not ICP"}
         else:
             if domain not in cache:
+                people = (store.get_provider(domain).get("prospeo", {}).get("people") or {}).get("list")
                 cache[domain] = findings(domain, raw.get(ecol, "") if ecol else "",
-                                         store.get_result(domain, "icp"), store.get_result(domain, "signals"))
+                                         store.get_result(domain, "icp"), store.get_result(domain, "signals"), people)
+                cache[domain]["AI cost (USD)"] = costs.get(domain, {}).get("total_usd", 0)
             extra = dict(cache[domain])
             if domain in first_seen:
                 extra["Notes"] = f"Duplicate of row {first_seen[domain]}"
@@ -196,3 +213,21 @@ def write(folder: Path, store: Store) -> Path:
     console.print(f"[bold]Final list[/] {rel(out)}: all {len(out_rows)} rows kept, your {len(original_cols)} columns + "
                   f"{len(added_cols)} new. ICP YES {yes}, NO {no}, PENDING {pending}; {scored} rows scored.")
     return out
+
+
+def read_rows(folder: Path) -> list[dict]:
+    """The final list's rows, each with _domain and _company added for lookups."""
+    path = folder / "output" / f"{folder.name}_enriched.csv"
+    if not path.exists():
+        return []
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        cols = reader.fieldnames or []
+        rows = list(reader)
+    lowered = {c.strip().lower(): c for c in cols}
+    dcol = next((lowered[c] for c in DOMAIN_COLS if c in lowered), None)
+    ncol = next((lowered[c] for c in ("company name", "company", "name") if c in lowered), None)
+    for r in rows:
+        r["_domain"] = normalize_domain(r.get(dcol, "")) if dcol else None
+        r["_company"] = r.get(ncol, "") if ncol else ""
+    return rows

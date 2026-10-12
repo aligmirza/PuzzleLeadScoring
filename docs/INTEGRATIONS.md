@@ -46,6 +46,8 @@ All keys live in `.env` at the project root, each with a comment saying what it'
 | Clay | `CLAY_WEBHOOK_URL` | Default Clay table to push results to | Used |
 | Clay | `CLAY_WEBHOOK_TOKEN` | That webhook's auth token, if it has one | Used |
 | Clay | `CLAY_API_KEY` | Clay Public API (pull and push work without it, through `clay login`) | Not used yet |
+| Data providers | `PROSPEO_API_KEY` | Prospeo: company data (last layer of the waterfall) and people | Used when set |
+| Data providers | `PROVIDER_MONTHLY_CREDITS` | Cap on provider credits per month | Optional |
 | Free directories | `SEC_CONTACT_EMAIL` | Contact email SEC EDGAR asks automated tools to send (YC, SEC and IRS need no key) | Optional |
 | Other data tools | `CRUNCHBASE_API_KEY`, `APOLLO_API_KEY`, `PDL_API_KEY`, `SEARCH_API_KEY` | Funding, headcount, company data, a separate web search service | Planned |
 
@@ -108,6 +110,9 @@ The full description of every call (fields, types, examples) is in [docs/openapi
 | | `GET /v1/lists/{name}/runs` | Run log with AI cost per run and in total |
 | Reference | `GET /v1/lookup?domain=puzzle.io&legal_name=Puzzle Financial Inc.` | YC, SEC and IRS for one company. Free |
 | | `GET /v1/signals` | Every data point: its column name, group and points |
+| Providers | `POST /v1/lists/{name}/providers` | Prospeo company data for data points still open. Body: `{"phase": "icp", "max_credits": 50}` |
+| | `POST /v1/lists/{name}/people` | Decision-makers at ICP companies. Body: `{"emails": true, "per_company": 3, "max_credits": 100}` |
+| | `GET /v1/lists/{name}/contacts` | Contacts found, one row per person. `?format=csv` |
 | Clay | `POST /v1/lists/{name}/push` | Send a list to a Clay webhook. Body: `{"only_icp": false}` |
 | | `GET /v1/clay/tables` | Tables in the signed-in Clay workspace |
 | | `POST /v1/clay/pull` | Read a Clay table and run it as a new list. Body: `{"table_id": "t_abc123", "push_to_clay": true}` |
@@ -210,10 +215,23 @@ The table needs a column the pipeline recognises as the domain (Domain, Website,
 
 The project's `.mcp.json` registers it for Claude Code, so anyone who opens the project gets it. Claude Code asks once to approve it: run `claude` in the project folder, or open `/mcp`, and approve **puzzle-lead-scoring**.
 
+**Through MCP the model you're chatting with is the only AI** (Claude in Claude Code or Claude Desktop), at no API cost. The tool never calls OpenAI or any other AI API on this path:
+
+1. `check_company` (or `enrich_list`) runs the free layers: website rules and directories.
+2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ICP summary, ground rules, confidence scale), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
+3. The model answers, quoting its proof, and calls `submit_answers`.
+4. The answers pass the same quality checks as any AI answer (exact quote, confidence, domain match for web answers, dated events for recent signals). The result says which counted, the new verdict and score, and what's next.
+5. A question the model can't answer the way it asks (usually a web search in a client without a web tool) is sent back as `cannot_answer` and **stays open**; nothing is sent to another AI.
+
+Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring and answer its open questions". The terminal, the API and Clay keep using OpenAI as configured.
+
 | Tool | What it does |
 |---|---|
-| `check_company` | One company: ICP, score, tier, signals |
-| `enrich_list` | Start a CSV file as a list in the background |
+| `check_company` | One company through the free layers: ICP, score, tier, signals |
+| `open_questions` | The questions still open for a company, for the model to answer (phase 1, then phase 2) |
+| `submit_answers` | Saves the model's answers through the quality checks; returns what counted and the new verdict and score. `cannot_answer` items stay open (no other AI is used) |
+| `questions_overview` | For a whole list: open questions per company |
+| `enrich_list` | Start a CSV file as a list in the background (free layers) |
 | `list_status` | Progress and counts of a list |
 | `list_results` | Rows of a finished list (ICP = YES by default) |
 | `explain_company` | Every answer with its proof |

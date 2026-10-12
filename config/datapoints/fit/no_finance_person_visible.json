@@ -1,0 +1,30 @@
+{
+  "id": "F13",
+  "name": "No finance person visible",
+  "group": "fit",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "fit/no_finance_person_visible",
+      "requires_page": "team"
+    },
+    "ai_web": {
+      "run": "off",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "if_open",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": true
+  }
+}

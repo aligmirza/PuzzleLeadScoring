@@ -17,6 +17,7 @@ from . import final
 from ..core.dashboard import Dashboard
 from ..core.inputs import load_leads
 from ..checks.rules import SIGNALS
+from ..core import shared
 from ..core.store import Store
 
 OUTPUTS = {"csv": "signals.csv", "evidence": "signals_evidence.jsonl", "ai_queue": "signals_ai_queue.jsonl"}
@@ -58,6 +59,12 @@ async def _crawl_and_check(rows, store: Store, dash: Dashboard, workers: int, ma
             d = row["domain"]
             record = store.get_site(d) or {"domain": d, "pages": {}}
             cached = bool(record.get("signals_crawled")) and not refresh
+            if not cached and not refresh:  # another list may have this company's phase 2 pages already
+                adopted = shared.adopt_site(store, d, SIGNAL_KINDS, need_signals=True)
+                if adopted:
+                    record = {**adopted, "input": record.get("input") or {"company": row["company"], "employees": row["employees"]}}
+                    store.save_site(d, record)
+                    cached = True
             if not cached:
                 try:
                     home = store.load_page(d, "home")
@@ -78,6 +85,7 @@ async def _crawl_and_check(rows, store: Store, dash: Dashboard, workers: int, ma
                 record.pop("pages_deleted", None)
                 record.setdefault("input", {"company": row["company"], "employees": row["employees"]})
                 store.save_site(d, record)
+                shared.publish_site(store, d, record)
             dash.crawled(record, cached)
             dash.c["bytes_saved"] += store.pages_size(d)
             try:

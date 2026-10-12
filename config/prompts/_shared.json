@@ -89,6 +89,7 @@
     "search_results": "Web search results",
     "tool_mentions": "Tool mentions found by code",
     "job_titles": "Open job titles",
+    "job_posts": "Open job posts (title, location and text)",
     "job_snippets": "Relevant job post excerpts",
     "old_snapshot": "Older copy of the site"
   },
@@ -126,9 +127,9 @@
       "none": "Could not confirm the results are about this company."
     },
     "confidence": {
-      "high": "An official record (SEC, state registry, IRS), the company's own page, or 2+ independent reputable sources, AND entity match by domain.",
-      "medium": "One reputable source (major press, Crunchbase, LinkedIn company page, YC directory, job board), with entity match by domain or name and location.",
-      "low": "Name-only match, aggregator or SEO page, information older than about 2 years, or sources that disagree."
+      "high": "The source clearly states the fact in words (the evidence quote shows it), the source is about this company (entity match by domain), and the information is not older than about 2 years. Any source type counts: news, the company, an official record.",
+      "medium": "Clearly stated, but the company is matched only by name and location or founders (not by domain).",
+      "low": "Only implied or indirect, a name-only match, information older than about 2 years, or sources that disagree."
     },
     "counts_when": {
       "exclusion": "high confidence and entity match 'domain'",

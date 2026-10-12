@@ -1,0 +1,29 @@
+{
+  "id": "W5",
+  "name": "Not making money yet",
+  "group": "weak",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "weak/pre_revenue"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": false
+  }
+}

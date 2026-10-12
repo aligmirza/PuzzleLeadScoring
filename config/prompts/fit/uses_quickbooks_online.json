@@ -15,7 +15,8 @@
       "integrations"
     ],
     "extra": [
-      "job_snippets"
+      "job_snippets",
+      "job_posts"
     ],
     "max_chars_per_page": 4000
   },

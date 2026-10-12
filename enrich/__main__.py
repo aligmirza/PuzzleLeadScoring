@@ -17,11 +17,19 @@ Other commands:
   python -m enrich runs leads             the run log: when, what, counts and AI cost
   python -m enrich copy leads leads_cheap   clone a list without AI answers; compare leads leads_cheap shows differences
   python -m enrich trace acme.com         one company through every step, one at a time (--ai for the AI steps)
+  python -m enrich waterfall acme.com     each must-have through every layer: rules, directories, AI, provider
+  python -m enrich review leads           you check each data point's waterfall: right / wrong, saved for fixing and evaluate
+  python -m enrich providers leads        Prospeo company data for data points still open (asks first)
+  python -m enrich people leads           decision-makers at ICP companies from Prospeo, --emails for emails (asks first)
+  python -m enrich costs leads            the actual AI cost per company in a list
+  python -m enrich usage                  companies checked and AI cost this month, per list, and the budget left
+  python -m enrich cache                  the shared company cache (--clean-older 90 offers to delete old entries)
 
 Each list gets its own folder: lists/<list>/ with input.csv, raw/, cache.sqlite and output/.
 Nothing is deleted without asking.
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -54,7 +62,7 @@ def cmd_run(args):
 def cmd_ai(args):
     from .ai import runner as ai
     ai.run(list_dir(args.list), args.phase, args.limit, not args.no_web, args.redo, args.concurrency, args.yes,
-           not args.no_search_signals, args.mode)
+           not args.no_search_signals, args.mode, args.all_layers)
 
 
 def cmd_serve(args):
@@ -183,6 +191,133 @@ def cmd_evaluate(args):
 def cmd_trace(args):
     from .pipeline import trace
     trace.run(args.domain, args.company or "", args.employees or "", args.ai, args.mode, not args.no_pause, args.refresh, args.yes)
+
+
+def cmd_datapoints(args):
+    from .checks import datapoints
+    if args.init:
+        n = datapoints.write_defaults(overwrite=False)
+        console.print(f"Wrote {n} missing data point files to {rel(datapoints.DIR)} (existing files kept).")
+        return
+    if args.show:
+        sid = args.show.upper()
+        cfg = datapoints.load().get(sid)
+        if not cfg:
+            raise SystemExit(f"No data point {args.show}. Use an id like M1, E3, F12, B4, W10.")
+        p = datapoints.path(sid, cfg)
+        console.print(f"[bold]{sid} {cfg['name']}[/]  ({rel(p)})")
+        console.print_json(json.dumps(cfg["steps"]))
+        return
+    t = Table(title="Each data point's waterfall (edit the file to change it)", title_justify="left", header_style="bold")
+    for c in ("Id", "Data point", "Rules", "Directories", "AI pages", "AI web", "Provider", "File"):
+        t.add_column(c, overflow="fold")
+    for row in datapoints.summary_rows():
+        if args.group and not row[0].startswith({"must": "M", "exclusions": "E", "fit": "F", "buying": "B", "weak": "W"}[args.group]):
+            continue
+        t.add_row(*row)
+    console.print(t)
+    console.print("[dim]AI pages: if_open = when empty or Needs check, if_clue = only on a rule's clue, always, off. "
+                  "AI web: after_pages = when the page answer found nothing, if_open = whenever still open, first = web only, off. "
+                  "n/a = that layer can't answer this data point.[/]")
+
+
+def cmd_waterfall(args):
+    from .pipeline import waterfall
+    waterfall.run(normalize_domain(args.domain) or args.domain, args.company or "", args.group, args.ai, args.providers,
+                  args.yes, args.refresh)
+
+
+def cmd_review(args):
+    from .pipeline import review
+    review.run(args.target, args.group, args.redo, args.refresh, args.only.split(",") if args.only else None)
+
+
+def cmd_providers(args):
+    from .providers import run
+    run.company_step(list_dir(args.list), args.phase, args.limit, args.yes)
+
+
+def cmd_people(args):
+    from .providers import run
+    run.people_step(list_dir(args.list), args.emails, args.per_company, args.strong_only, args.limit, args.yes)
+
+
+def cmd_costs(args):
+    folder = list_dir(args.list)
+    store = Store(folder)
+    since = 0.0
+    from datetime import datetime
+    if args.since:
+        since = datetime.fromisoformat(args.since).timestamp()
+    elif args.last_runs:
+        from .core.runlog import read
+        ai_runs = [r for r in read(folder) if r["step"].startswith("AI") and "seconds" in r][-args.last_runs:]
+        if ai_runs:  # the log stores when a run ended and how long it took
+            since = min(datetime.fromisoformat(r["time"]).timestamp() - r["seconds"] for r in ai_runs) - 1
+            args.since = datetime.fromtimestamp(since).strftime("%Y-%m-%d %H:%M:%S") + f", the last {len(ai_runs)} AI run(s)"
+    costs = store.ai_costs(since)
+    rows, _ = __import__("enrich.core.inputs", fromlist=["load_leads"]).load_leads(folder / "input.csv")
+    names = {r["domain"]: r["company"] for r in rows}
+    t = Table(title=f"Actual AI cost per company: {folder.name}" + (f" (answers since {args.since})" if args.since else ""),
+              title_justify="left", header_style="bold")
+    for c in ("Company", "ICP", "Phase 1", "Phase 2", "Total", "AI answers", "Web searches", "Reused (free)", "Tokens in / out"):
+        t.add_column(c, justify="left" if c in ("Company", "ICP") else "right")
+    total = 0.0
+    for d, c in sorted(costs.items(), key=lambda x: -x[1]["total_usd"]):
+        icp = (store.get_result(d, "icp") or {}).get("icp_verdict", "")
+        t.add_row(names.get(d) or d, icp[:22], f"${c['phase1_usd']:.4f}", f"${c['phase2_usd']:.4f}", f"[bold]${c['total_usd']:.4f}[/]",
+                  str(c["answers"]), str(c["web_searches"]), str(c["reused"]), f"{c['tokens_in']:,} / {c['tokens_out']:,}")
+        total += c["total_usd"]
+    console.print(t)
+    n = len(costs)
+    console.print(f"Total AI cost for {n} companies: [bold]${total:.4f}[/]" + (f", average ${total / n:.4f} per company" if n else "")
+                  + ". Every AI answer's cost is saved with it; reused answers cost $0.")
+
+
+def cmd_usage(args):
+    from .core import usage
+    r = usage.report(args.month)
+    t = Table(title=f"Usage {r['month']}", title_justify="left", header_style="bold")
+    for c in ("List", "Companies", "AI runs", "AI calls", "Web searches", "AI cost", "Provider credits"):
+        t.add_column(c, justify="left" if c == "List" else "right")
+    for row in r["lists"]:
+        t.add_row(row["list"], str(row["companies_checked"]), str(row["ai_runs"]), str(row["ai_calls"]),
+                  str(row["web_searches"]), f"${row['ai_cost_usd']:.4f}", f"{row['provider_credits']:g}")
+    console.print(t)
+    cap = r["budget_usd"]
+    console.print(f"Total: {r['companies_checked']} companies checked, AI ${r['ai_cost_usd']:.4f}"
+                  + (f"; monthly budget ${cap:.2f}, left ${r['budget_left_usd']:.2f}" if cap is not None
+                     else "; no monthly budget set (AI_MONTHLY_BUDGET_USD in .env)"))
+
+
+def cmd_cache(args):
+    from .core import shared
+    if args.import_lists:
+        n = shared.import_lists(LISTS)
+        console.print(f"Added {n} companies' pages from existing lists to the shared cache (linked, no extra disk).")
+    if args.clean_older:
+        old, answers = shared.stale(args.clean_older)
+        console.print(f"Older than {args.clean_older:g} days: {len(old)} companies' pages and {answers} AI answers. "
+                      "Lists keep their own copies, so finished lists aren't affected.")
+        if not (old or answers):
+            return
+        ok = args.yes
+        if not ok and sys.stdin.isatty():
+            try:
+                from rich.prompt import Confirm
+                ok = Confirm.ask("Delete them from the shared cache?", default=False)
+            except (EOFError, KeyboardInterrupt):
+                ok = False
+        if not ok:
+            console.print("Kept everything.")
+            return
+        n, a = shared.delete_stale(args.clean_older)
+        console.print(f"[green]Deleted {n} companies' pages and {a} AI answers from the shared cache.[/]")
+        return
+    s = shared.status()
+    console.print(f"Shared company cache ({rel(shared.COMPANIES.parent)}): {s['companies']} companies, pages {human(s['pages_bytes'])} "
+                  f"(shared with lists by links, not copies); {s['ai_answers']} AI answers ({human(s['ai_bytes'])}). "
+                  f"{'On' if shared.enabled() else 'Off (SHARED_CACHE=off)'}.")
 
 
 def cmd_copy(args):
@@ -418,6 +553,8 @@ def main(argv: list[str] | None = None):
     p.add_argument("--mode", choices=["accurate", "cheap"],
                    help="accurate: one AI call per data point (default, set in _shared.json). cheap: a company's data "
                         "points grouped, up to 5 per call, and its web questions share one web search call")
+    p.add_argument("--all-layers", action="store_true",
+                   help="test mode: ask every data point every AI layer it has, even when an earlier layer decided it")
     p.add_argument("--no-search-signals", action="store_true",
                    help="phase 2: skip the signals only web search can answer (recent funding, new investors, "
                         "QuickBooks complaints...), the most expensive part")
@@ -485,6 +622,62 @@ def main(argv: list[str] | None = None):
     p.add_argument("--refresh", action="store_true", help="download the website again")
     p.add_argument("--yes", action="store_true", help="run the AI steps without asking about the cost")
     p.set_defaults(fn=cmd_trace)
+
+    p = sub.add_parser("datapoints", help="each data point's waterfall settings (config/datapoints/), or one in full")
+    p.add_argument("--show", metavar="ID", help="one data point's settings, e.g. M3")
+    p.add_argument("--group", choices=["must", "exclusions", "fit", "buying", "weak"])
+    p.add_argument("--init", action="store_true", help="write any missing data point files with today's defaults")
+    p.set_defaults(fn=cmd_datapoints)
+
+    p = sub.add_parser("waterfall", help="one company, each data point through every layer: rules, directories, AI, provider")
+    p.add_argument("domain")
+    p.add_argument("--company", help="company name")
+    p.add_argument("--group", choices=["must", "exclusions", "fit", "buying", "weak", "all"], default="must")
+    p.add_argument("--ai", action="store_true", help="run the AI layers (shows the cost and asks first)")
+    p.add_argument("--providers", action="store_true", help="run the provider layer: Prospeo (1 credit, asks first)")
+    p.add_argument("--refresh", action="store_true", help="download the website again")
+    p.add_argument("--yes", action="store_true", help="don't ask before spending")
+    p.set_defaults(fn=cmd_waterfall)
+
+    p = sub.add_parser("review", help="check each data point's waterfall yourself and mark it right or wrong")
+    p.add_argument("target", help="a list name, or one company's domain")
+    p.add_argument("--group", choices=["must", "exclusions", "fit", "buying", "weak", "all"], default="must")
+    p.add_argument("--redo", action="store_true", help="show data points you already reviewed again")
+    p.add_argument("--only", metavar="IDS", help="only these data points, e.g. M1 or M1,M2 (every company in the list)")
+    p.add_argument("--refresh", action="store_true", help="download the website again (one company only)")
+    p.set_defaults(fn=cmd_review)
+
+    p = sub.add_parser("providers", help="Prospeo company data for open data points (asks before spending credits)")
+    p.add_argument("list")
+    p.add_argument("--phase", choices=["icp", "signals"], default="icp")
+    p.add_argument("--limit", type=int, default=0, help="only the first N companies")
+    p.add_argument("--yes", action="store_true", help="don't ask before spending")
+    p.set_defaults(fn=cmd_providers)
+
+    p = sub.add_parser("people", help="decision-makers at ICP companies from Prospeo (asks before spending credits)")
+    p.add_argument("list")
+    p.add_argument("--emails", action="store_true", help="also reveal verified emails (1 credit each)")
+    p.add_argument("--per-company", type=int, default=3, help="contacts kept per company (default 3)")
+    p.add_argument("--strong-only", action="store_true", help="only Strong fit companies")
+    p.add_argument("--limit", type=int, default=0, help="only the first N companies")
+    p.add_argument("--yes", action="store_true", help="don't ask before spending")
+    p.set_defaults(fn=cmd_people)
+
+    p = sub.add_parser("costs", help="the actual AI cost per company in a list (phase 1, phase 2, web searches)")
+    p.add_argument("list")
+    p.add_argument("--since", metavar="TIME", help="only answers saved since then, e.g. '2026-10-10 14:00'")
+    p.add_argument("--last-runs", type=int, metavar="N", help="only the last N AI runs, e.g. 2 for phase 1 + phase 2")
+    p.set_defaults(fn=cmd_costs)
+
+    p = sub.add_parser("usage", help="companies checked and AI cost per list for a month, and the monthly budget")
+    p.add_argument("--month", help="e.g. 2026-10 (default: this month)")
+    p.set_defaults(fn=cmd_usage)
+
+    p = sub.add_parser("cache", help="the shared company cache: size, or delete old entries (asks first)")
+    p.add_argument("--clean-older", type=float, metavar="DAYS", help="offer to delete entries older than DAYS")
+    p.add_argument("--import", dest="import_lists", action="store_true", help="add pages your existing lists already downloaded")
+    p.add_argument("--yes", action="store_true", help="delete without asking")
+    p.set_defaults(fn=cmd_cache)
 
     p = sub.add_parser("copy", help="clone a list without its AI answers (to compare AI modes)")
     p.add_argument("list")

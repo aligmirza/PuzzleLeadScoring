@@ -45,6 +45,9 @@ PAGE_RULES = {
     "donate": (r"(^|/)(donate|donation|donations|give)(/|$|\.)", r"^(donate|give|give now|donate now)$"),
     "menu": (r"(^|/)(menu|menus|our-menu)(/|$|\.)", r"^(menu|our menu)$"),
 }
+# Catalogue and docs sections reuse words like "Engineering" or "Security" for listings, not company pages
+# (linear.app/integrations/engineering is a list of integrations, not an engineering blog).
+NOT_COMPANY_PAGE = re.compile(r"^(integrations|apps|marketplace|docs|templates|changelog)/")
 KEY_KINDS = ["about", "pricing", "careers", "privacy", "terms"]
 # Phase 1 (ICP check) reads only what must-haves and exclusions need.
 ICP_KINDS = {"about", "pricing", "careers", "privacy", "terms", "legal", "contact", "security", "investors",
@@ -53,7 +56,7 @@ ICP_KINDS = {"about", "pricing", "careers", "privacy", "terms", "legal", "contac
 SIGNAL_KINDS = {"team", "blog", "engineering", "integrations", "customers", "locations", "menu"}
 GUESSES = {
     "about": ["/about", "/about-us"],
-    "pricing": ["/pricing"],
+    "pricing": ["/pricing", "/plans"],
     "careers": ["/careers", "/jobs"],
     "privacy": ["/privacy", "/privacy-policy"],
     "terms": ["/terms", "/terms-of-service"],
@@ -117,6 +120,8 @@ def classify(links: list[tuple[str, str]]) -> dict[str, str]:
         if depth == 0 or depth > 3:
             continue
         for kind, (path_re, anchor_re) in PAGE_RULES.items():
+            if kind != "integrations" and NOT_COMPANY_PAGE.search(path):
+                continue
             if re.search(path_re, path) or (anchor and re.search(anchor_re, anchor)):
                 score = (depth, len(url), url)
                 if kind not in best or score < best[kind]:
@@ -459,8 +464,55 @@ class Crawler:
                 break
 
         record["pages"] = {"home": home.url, **record["pages"]}
+        await self.payment_scan(domain, home.url, pages, record)
         record["requests"] = counter[0]
         return record, pages, jobs
+
+    async def payment_scan(self, domain: str, home_url: str, pages: dict[str, str], record: dict) -> None:
+        """Payment gateways in the company's own code (sources/payments.py): raw pages, its JavaScript bundles, and its
+        product app's sign-in page with that page's bundles. At most ~12 extra requests; saved in record["payment_code"]."""
+        from . import payments
+        hosts = {strip_www(urlparse(home_url).hostname), domain}
+        urls = record.get("pages", {})
+        before = record.get("payment_code") or {}
+        found = [f for kind, html in pages.items() for f in payments.detect(html, urls.get(kind, home_url))]
+        checked = list(dict.fromkeys([*before.get("checked", []), *(urls.get(k, home_url) for k in pages)]))
+        scripts: list[str] = []
+        for kind in ("pricing", "home", *pages):  # pricing and home first: checkout code lives there
+            if kind in pages:
+                scripts += [s for s in payments.own_scripts(pages[kind], urls.get(kind, home_url), hosts) if s not in scripts]
+        app = []
+        for html in pages.values():
+            app += [u for u in payments.app_pages(html, home_url, hosts) if u not in app]
+        robots, _ = await self._robots(home_url)
+
+        async def scan(url, is_page):
+            if is_page and self.respect_robots and robots is not None and not robots.can_fetch("*", url):
+                return
+            f, _ = await self.fetch(url)
+            if not f or f.status >= 400:
+                return
+            checked.append(f.url)
+            found.extend(payments.detect(f.text, f.url))
+            if is_page:  # the app's own bundles, where loadStripe() and the billing screens live
+                for s in payments.own_scripts(f.text, f.url, hosts | {strip_www(urlparse(f.url).hostname)}, limit=4):
+                    if s not in scripts and s not in checked:
+                        checked.append(s)
+                        g, _ = await self.fetch(s)
+                        if g and g.status < 400:
+                            found.extend(payments.detect(g.text, s))
+
+        scripts = [s for s in scripts if s not in checked][:6]
+        app = [u for u in app if u not in checked][:2]
+        await asyncio.gather(*(scan(s, False) for s in scripts), *(scan(u, True) for u in app))
+        gateways = payments.summarize(found)
+        for g, v in before.get("gateways", {}).items():  # keep what an earlier scan found
+            gateways.setdefault(g, v)
+        record["payment_code"] = {"gateways": gateways, "checked": checked[:40]}
+        from . import wappalyzer
+        techs = await asyncio.to_thread(wappalyzer.analyze, {urls.get(k, home_url): h for k, h in pages.items()},
+                                        record.get("headers"), None, home_url)
+        record["technologies"] = {**(record.get("technologies") or {}), **techs}
 
     async def crawl_more(self, record: dict, home_html: str, kinds: set[str]) -> dict[str, str]:
         """Phase 2: fetch extra page kinds for a company phase 1 already downloaded, starting from its saved homepage."""
@@ -472,6 +524,10 @@ class Crawler:
         pages = {}
         if want and record.get("final_url"):
             pages = await self._fetch_kinds(record["domain"], record["final_url"], home_html, want, have, record, guess=False)
+        if record.get("final_url") and (pages or "payment_code" not in record):
+            # new pages, or a company downloaded before code checks existed (its saved homepage is slimmed, so
+            # inline code is gone, but script sources and links to the app remain)
+            await self.payment_scan(record["domain"], record["final_url"], {"home": home_html, **pages}, record)
         record["requests"] = record.get("requests", 0) + counter[0]
         record["requests_phase2"] = counter[0]
         return pages

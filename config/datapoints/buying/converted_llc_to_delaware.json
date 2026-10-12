@@ -1,0 +1,29 @@
+{
+  "id": "B6",
+  "name": "Converted from an LLC to a C-Corp",
+  "group": "buying",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "buying/converted_llc_to_delaware"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": false
+  }
+}

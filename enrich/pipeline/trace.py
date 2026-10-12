@@ -21,7 +21,8 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from ..ai import prompts as P
-from ..checks.rules import ALWAYS_PROMPTS, CHECK, SEARCH_SIGNALS, SIGNALS, UNKNOWN, VALUE_NAMES, decide, extract, signal_column
+from ..checks import datapoints
+from ..checks.rules import CHECK, SIGNALS, UNKNOWN, VALUE_NAMES, decide, extract, signal_column
 from ..core.inputs import normalize_domain
 from ..core.store import Store
 from ..sources.crawl import ICP_KINDS, SIGNAL_KINDS, Crawler, slim_html
@@ -100,14 +101,14 @@ def _why_asked(pid: str, result: dict) -> str:
     p = P.load()[1][pid]
     sid = p.get("signal_id")
     v = result["signals"].get(sid, {}) if sid else {}
-    if sid in SEARCH_SIGNALS:
+    if sid and datapoints.step(sid, "ai_web").get("run") == "first":
         return "only web search can answer it (news, registries, social posts)"
-    if pid in ALWAYS_PROMPTS:
-        return "a judgement call no rule can make; asked for every company in phase 2"
+    if sid and datapoints.step(sid, "ai_pages").get("run") in ("if_open", "always") and v.get("value") != CHECK:
+        return "still empty after the free layers; its waterfall asks AI when open"
     if v.get("value") == CHECK:
         return f"a rule found a clue but couldn't confirm it: {(v.get('evidence') or '')[:90]}"
     if pid == "exclusions/series_c_or_public":
-        return "funded (site, Form D or YC) but no early stage confirmed: could be Series C or later"
+        return "the most important exclusion, still open after the free checks: asked for every company that passes"
     if pid == "fit/venture_backed_stage":
         return "funding stage not found by the rules or directories"
     if pid.startswith("fields/"):
@@ -115,17 +116,27 @@ def _why_asked(pid: str, result: dict) -> str:
     return "the rules found nothing for it"
 
 
-def _ai_questions(result: dict) -> list[list[str]]:
-    return [[P.name(pid), P.step_plan(pid), _why_asked(pid, result)] for pid in result["ai"]["prompts"]]
+def _ai_questions(result: dict, answered: dict | None = None) -> list[list[str]]:
+    answered = answered or {}
+    return [[P.name(pid), P.step_plan(pid), _why_asked(pid, result), "answered" if pid in answered else "open"]
+            for pid in result["ai"]["prompts"]]
 
 
 async def _ai_step(store: Store, domain: str, phase: str, mode: str | None, assume_yes: bool) -> dict | None:
     """Estimate, ask, run, and return the answers for this company."""
     from ..ai import runner as ai
+    reused = ai.reuse_shared(store, [domain], phase)
+    if reused:
+        console.print(f"[green]Reused {reused} answers other lists already paid for[/] (same prompt, still fresh).")
     est = ai.estimate(store, [domain], phase, False, True, P.mode(mode))
     if not est["calls"]:
         return None
     worst = ai.worst_case(est)
+    from ..core import usage
+    over = usage.check(worst)
+    if over:
+        console.print(f"[red]{over}[/]")
+        return None
     console.print(f"AI for {phase}: {est['calls']} questions, about {ai.money(est['step1_cost'])} from our pages, "
                   f"at most {ai.money(worst)} if every question also needs web search ({P.mode(mode)['name']} mode).")
     if not assume_yes:
@@ -136,7 +147,10 @@ async def _ai_step(store: Store, domain: str, phase: str, mode: str | None, assu
                 return None
         except (EOFError, KeyboardInterrupt):
             return None
-    return await ai.run_async(store, [domain], phase, True, True, mode)
+    result = await ai.run_async(store, [domain], phase, True, True, mode)
+    from ..core.runlog import log
+    log(store.root, f"AI, {'phase 1' if phase == 'icp' else 'phase 2'} (trace)", **result)
+    return result
 
 
 def _ai_rows(store: Store, domain: str, phase: str, result: dict) -> list[list[str]]:
@@ -149,7 +163,7 @@ def _ai_rows(store: Store, domain: str, phase: str, result: dict) -> list[list[s
             ans = a.get("answer", a.get("venture_backed", a.get("value", a.get("error", ""))))
             extra = f" | match: {a.get('entity_match')}" if step == 2 and a.get("entity_match") else ""
             rows.append([P.name(pid), "our pages" if step == 1 else "web search", str(ans), a.get("confidence", ""),
-                         (a.get("evidence_quote") or a.get("reason") or "")[:120] + extra,
+                         (a.get("evidence_quote") or a.get("reason") or "")[:300] + extra,
                          (VALUE_NAMES.get(final_v.get("value"), "") + (f" ({final_v.get('note', '')[:70]})" if final_v else ""))
                          if step == max(steps) else ""])
     return rows
@@ -265,12 +279,12 @@ def run(domain_in: str, company: str = "", employees: str = "", use_ai: bool = F
     # 5. verdict (saved exactly as the pipeline does)
     result = run_rules(store, row, record, "icp")
     d = decide(result["signals"], record.get("status"))
-    q = _ai_questions(result)
+    q = _ai_questions(result, store.get_ai(domain, "icp"))
     tr.step("ICP verdict (phase 1)",
             f"Verdict: **{result.get('icp_verdict')}**. " + (f"Why: {result.get('exclusion_reason') or ''}" if d["excluded"] else "")
             + (f"Must-haves confirmed: {len(d['confirmed'])} of 4." if not d["excluded"] else ""),
-            _table(["AI question still open", "How it would be answered", "Why it's asked"], q) if q else None, q,
-            ["AI question still open", "How it would be answered", "Why it's asked"],
+            _table(["AI question", "How it's answered", "Why it's asked", "Status"], q) if q else None, q,
+            ["AI question", "How it's answered", "Why it's asked", "Status"],
             ["Still to confirm: " + (", ".join(result.get("icp_checks", [])) or "nothing"),
              "AI is only asked what the rules and directories couldn't answer." if q else "No AI needed for phase 1."])
     if tr.stopped:
@@ -332,11 +346,11 @@ def run(domain_in: str, company: str = "", employees: str = "", use_ai: bool = F
                  "Internet Archive: " + (", ".join(f"{k} {v}" for k, v in old.items()) if old else "not checked or no copy")])
         if tr.stopped:
             return None
-        q2 = _ai_questions(result2)
+        q2 = _ai_questions(result2, store.get_ai(domain, "signals"))
         if q2:
             tr.step("AI questions for phase 2", f"{len(q2)} questions the free checks couldn't answer.",
-                    _table(["AI question", "How it would be answered", "Why it's asked"], q2), q2,
-                    ["AI question", "How it would be answered", "Why it's asked"],
+                    _table(["AI question", "How it's answered", "Why it's asked", "Status"], q2), q2,
+                    ["AI question", "How it's answered", "Why it's asked", "Status"],
                     ["Run with --ai to answer them (shows the cost and asks first)." if not use_ai else "Next: the AI step."])
             if tr.stopped:
                 return None

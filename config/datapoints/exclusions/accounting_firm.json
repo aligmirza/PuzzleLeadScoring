@@ -1,0 +1,29 @@
+{
+  "id": "E3",
+  "name": "Accounting or bookkeeping firm",
+  "group": "exclusion",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "exclusions/accounting_firm"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": false
+  }
+}

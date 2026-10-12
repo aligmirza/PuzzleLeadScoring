@@ -1,0 +1,29 @@
+{
+  "id": "F20",
+  "name": "Uses Ramp or Brex cards",
+  "group": "fit",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "off",
+      "prompt": "fit/ramp_or_brex_cards"
+    },
+    "ai_web": {
+      "run": "off",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": true
+  }
+}

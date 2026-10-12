@@ -1,0 +1,29 @@
+{
+  "id": "F1",
+  "name": "Venture-backed, pre-seed to Series B",
+  "group": "fit",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "fit/venture_backed_stage"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": true
+  }
+}

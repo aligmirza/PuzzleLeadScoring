@@ -18,6 +18,7 @@ from pathlib import Path
 
 import httpx
 
+from ..core import usage as monthly
 from . import clay
 from ..pipeline import final
 from ..pipeline import phase1_icp
@@ -78,18 +79,22 @@ async def _ai(store: Store, domains: list[str], phase: str, opts: dict) -> dict:
     from ..ai import runner as ai
     from ..ai import prompts as P
     from ..core.runlog import log
+    reused = ai.reuse_shared(store, domains, phase)
     picked = ai.pick_domains(store, domains, phase)
-    if not picked:
-        return {"companies": 0, "cost_usd": 0, "note": "no open AI questions"}
+    if not picked or not ai.estimate(store, picked, phase, False, opts["search_signals"] and opts["web"])["calls"]:
+        return {"companies": 0, "cost_usd": 0, "reused_answers": reused, "note": "no open AI questions"}
     est = ai.estimate(store, picked, phase, False, opts["search_signals"] and opts["web"], P.mode(opts["mode"]))
     worst = ai.worst_case(est) if opts["web"] else est["step1_cost"]
+    over = monthly.check(worst)
+    if over:
+        raise CostLimit(over)
     if worst > opts["max_cost_usd"]:
         raise CostLimit(f"AI for {phase} could cost up to ${worst:.2f} for {len(picked)} companies, above the limit of "
                         f"${opts['max_cost_usd']:.2f}. Nothing was sent. Raise max_cost_usd, use mode 'cheap', or "
                         f"set search_signals false.")
     usage = await ai.run_async(store, picked, phase, opts["web"], opts["search_signals"], opts["mode"])
     log(store.root, f"AI, {'phase 1' if phase == 'icp' else 'phase 2'} (API)", **usage, estimate_worst_usd=round(worst, 4))
-    return {**usage, "estimate_worst_usd": round(worst, 4)}
+    return {**usage, "estimate_worst_usd": round(worst, 4), "reused_answers": reused}
 
 
 async def run_rows(folder: Path, rows: list[dict], signals: bool = True, use_ai: bool = False, web: bool = True,
@@ -175,7 +180,8 @@ def start_list(name: str | None, rows: list[dict], signals: bool = True, use_ai:
     _write_input(folder, rows)
     status = _status(folder, list=name, state="queued", step="", rows=len(rows), source=source,
                      options={"signals": signals, "ai": use_ai, "web": web, "push_to_clay": push_to_clay,
-                              "ai_options": {**ai_options(ai), "web": web} if use_ai else None, "callback_url": callback_url},
+                              "ai_options": {**ai_options(ai), "web": web} if use_ai else None, "callback_url": callback_url,
+                              "clay_webhook_url": clay_webhook_url},
                      started=time.strftime("%Y-%m-%d %H:%M:%S"), finished=None, error=None, push=None,
                      ai_phase1=None, ai_phase2=None, callback=None)
     _jobs[name] = asyncio.ensure_future(_run_list(folder, signals, use_ai, web, push_to_clay, clay_webhook_url,
@@ -324,6 +330,9 @@ def start_ai(name: str, phase: str, ai: dict | None = None) -> dict:
     if not chosen["data_points"]:
         return {"list": folder.name, "phase": phase, "state": "nothing to do", "estimate": est,
                 "message": "No open AI questions in this phase (all answered, or no company needs AI)."}
+    over = monthly.check(chosen["worst_case_usd"])
+    if over:
+        raise CostLimit(over)
     if chosen["worst_case_usd"] > opts["max_cost_usd"]:
         raise CostLimit(f"AI for {phase} could cost up to ${chosen['worst_case_usd']:.2f} ({est['chosen_mode']} mode, "
                         f"{est['companies']} companies), above the limit of ${opts['max_cost_usd']:.2f}. Nothing was sent. "
@@ -334,12 +343,12 @@ def start_ai(name: str, phase: str, ai: dict | None = None) -> dict:
         store = Store(folder)
         rows, _ = load_leads(folder / "input.csv")
         try:
-            _status(folder, state="running", step=f"AI for {phase}")
+            _status(folder, state="running", step=f"AI for {phase}", ai_job={"phase": phase, "options": opts})
             usage = await _ai(store, [r["domain"] for r in rows], phase, opts)
             results = [x for x in (store.get_result(r["domain"], phase) for r in rows) if x]
             (phase1_icp.report(results, folder, store, None) if phase == "icp" else phase2_signals.report(results, folder, store))
             final.write(folder, store)
-            _status(folder, state="done", step="", **{f"ai_{'phase1' if phase == 'icp' else 'phase2'}": usage},
+            _status(folder, state="done", step="", ai_job=None, **{f"ai_{'phase1' if phase == 'icp' else 'phase2'}": usage},
                     summary=summary(folder), finished=time.strftime("%Y-%m-%d %H:%M:%S"))
         except CostLimit as e:
             _status(folder, state="stopped: AI cost limit", step="", error=str(e))
@@ -409,3 +418,36 @@ def signals_reference() -> list[dict]:
                   {k: cfg["points"][v] for k, v in w.items()} if isinstance(w, dict) else cfg["points"].get(w) if w else None)
         out.append({"name": label, "group": GROUP_NAMES[group], "column": signal_column(sid), "points": points})
     return out
+
+
+def resume_unfinished() -> list[str]:
+    """After a restart: carry on with every list the API left queued or running. Work already done comes from the
+    caches (pages, directory findings, AI answers), so nothing is downloaded or paid for twice."""
+    resumed = []
+    for path in LISTS.glob("*/status.json"):
+        try:
+            st = json.loads(path.read_text())
+        except ValueError:
+            continue
+        if st.get("state") not in ("queued", "running"):
+            continue
+        folder, name = path.parent, path.parent.name
+        try:
+            if st.get("ai_job"):
+                _status(folder, state="queued", step="resumed after restart")
+                start_ai(name, st["ai_job"]["phase"], st["ai_job"]["options"])
+            else:
+                o = st.get("options") or {}
+                _status(folder, state="queued", step="resumed after restart",
+                        resumed=(st.get("resumed") or 0) + 1)
+                _jobs[name] = asyncio.ensure_future(_run_list(
+                    folder, o.get("signals", True), o.get("ai", False), o.get("web", True), o.get("push_to_clay", False),
+                    o.get("clay_webhook_url"), o.get("ai_options"), o.get("callback_url")))
+            resumed.append(name)
+        except Exception as e:  # noqa: BLE001  one broken list must not stop the server starting
+            _status(folder, state="error", error=f"could not resume: {e}"[:300])
+    return resumed
+
+
+def usage_report(month: str | None = None) -> dict:
+    return monthly.report(month)

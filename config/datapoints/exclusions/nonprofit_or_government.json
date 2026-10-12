@@ -1,0 +1,29 @@
+{
+  "id": "E5",
+  "name": "Non-profit or government body",
+  "group": "exclusion",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "exclusions/nonprofit_or_government"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": true
+  }
+}

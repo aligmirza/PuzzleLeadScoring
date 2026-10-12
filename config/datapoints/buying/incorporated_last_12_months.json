@@ -1,0 +1,29 @@
+{
+  "id": "B7",
+  "name": "Incorporated in the last 12 months",
+  "group": "buying",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "buying/incorporated_last_12_months"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": false
+  }
+}

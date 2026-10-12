@@ -1,0 +1,29 @@
+{
+  "id": "E2",
+  "name": "New company, no website, no funding",
+  "group": "exclusion",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "exclusions/new_company_no_website"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": false
+  }
+}

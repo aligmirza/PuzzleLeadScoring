@@ -1,0 +1,29 @@
+{
+  "id": "B5",
+  "name": "Hiring ops or chief of staff",
+  "group": "buying",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "buying/hiring_ops_or_chief_of_staff"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": false
+  }
+}

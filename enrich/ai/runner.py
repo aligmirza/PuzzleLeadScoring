@@ -30,6 +30,8 @@ from . import prompts as P
 from ..pipeline.common import ai_prompts, console, rel
 from ..core.inputs import load_leads
 from ..checks.rules import SIGNALS, VALUE_NAMES
+from ..checks import datapoints
+from ..core import shared, usage, versions
 from ..core.store import Store
 
 
@@ -147,24 +149,29 @@ class Runner:
         result = self.store.get_result(domain, self.phase)
         if not result or not result.get("ai", {}).get("needed"):
             return
+        if self.redo:  # ask again from scratch: an old web search answer must not outlive a new step 1 answer
+            self.store.delete_ai(domain, self.phase)
         done = {} if self.redo else self.store.get_ai(domain, self.phase)
         facts = known_facts(result)
-        todo = [pid for pid in ai_prompts(result) if wanted(pid, self.search_signals)]
+        todo = [pid for pid in ai_prompts(result) if wanted(pid, self.search_signals)
+                and (pid in done or datapoints.still_open(datapoints.sid_for_prompt(pid), result))]  # not settled since
         self.c["skipped"] += len(ai_prompts(result)) - len(todo)
         step1: dict[str, dict | None] = {pid: (done.get(pid, {}).get(1) or {}).get("answer") for pid in todo}
         try:
             # step 1: our saved data, for data points that aren't web-first and haven't been answered yet
-            ask = [pid for pid in todo if P.web_mode(pid) != "primary" and pid not in done]
+            site_ok = (result.get("crawl") or {}).get("status") == "live"
+            ask = [pid for pid in todo if site_ok and datapoints.ask_pages(pid, result) and pid not in done]
             for chunk in chunks(ask, self.mode["site_group"]):
                 step1.update(await self.step1(domain, result, facts, chunk))
             # step 2: web search where step 1 found nothing (or the data point is web-first)
             web = []
+            still_open = self._open_after_pages(domain, result)
             for pid in todo:
                 if 2 in done.get(pid, {}) or not (self.web and not self.web_disabled_reason):
                     continue
-                if pid in done and 1 not in done[pid] and P.web_mode(pid) != "primary":
+                if site_ok and pid in done and 1 not in done[pid] and datapoints.ask_pages(pid, result):
                     continue
-                if P.needs_web(pid, step1.get(pid)):
+                if datapoints.web_after(pid, step1.get(pid), still_open.get(pid, True), site_ok):
                     web.append(pid)
             for chunk in chunks(web, self.mode["web_group"], by_model=False):
                 await self.step2(domain, result, facts, chunk, step1)
@@ -183,6 +190,15 @@ class Runner:
         self.c["companies"] += 1
         if self.phase == "icp":
             self.c[f"verdict_{updated.get('icp_verdict')}"] += 1
+
+    def _open_after_pages(self, domain: str, result: dict) -> dict[str, bool]:
+        """For each question: is its data point still open after the page answers (also when one was rejected)?"""
+        import copy
+        applied = ai_apply.apply(copy.deepcopy(result), self.store.get_ai(domain, self.phase), self.phase)
+        out = {}
+        for pid in ai_prompts(result):
+            out[pid] = datapoints.still_open(datapoints.sid_for_prompt(pid), applied)
+        return out
 
     async def step1(self, domain: str, result: dict, facts: dict, pids: list[str]) -> dict[str, dict]:
         """Step 1 from our saved pages: one data point per call (accurate mode) or several (cheap mode)."""
@@ -221,7 +237,9 @@ class Runner:
                 ans = {"error": "missing from the grouped answer"}
             if step == 2:
                 ans["_sources_found"] = sources[:8]
-            self.store.save_ai(domain, self.phase, pid, step, ans, share)
+            usage_pid = {**share, "prompt_version": versions.prompt(pid)}
+            self.store.save_ai(domain, self.phase, pid, step, ans, usage_pid)
+            shared.put_ai(domain, self.phase, pid, step, ans, usage_pid)
             self._log(domain, pid, step, ans)
             out[pid] = ans
         return out
@@ -278,8 +296,9 @@ def estimate(store: Store, domains: list[str], phase: str, redo: bool, search_si
         every = ai_prompts(r)
         instr = {p: len(P.instruction_text(p)) // 4 for p in every}
         shared = max(0, (r["ai"].get("tokens_est", 0) - sum(instr.values())) // max(1, len(every)))
-        site = [p for p in todo if P.web_mode(p) != "primary"]
-        first = [p for p in todo if P.web_mode(p) == "primary"]
+        site_ok = (r.get("crawl") or {}).get("status") == "live"
+        site = [p for p in todo if site_ok and datapoints.ask_pages(p, r)]
+        first = [p for p in todo if p not in site]
         site_calls = len(chunks(site, mode["site_group"]))
         calls += site_calls
         tokens += shared * site_calls + sum(instr[p] for p in site)
@@ -299,10 +318,49 @@ def money(x: float) -> str:
     return f"${x:.2f}" if x >= 1 else f"${x:.4f}"
 
 
+def reuse_shared(store: Store, domains: list[str], phase: str) -> int:
+    """Answers other lists already paid for (same prompt version, still fresh): copy them in and apply them."""
+    total = 0
+    for d in domains:
+        result = store.get_result(d, phase)
+        if not result or not result.get("ai", {}).get("needed"):
+            continue
+        n = shared.adopt_ai(store, d, phase, ai_prompts(result))
+        if n:
+            store.save_result(d, ai_apply.apply(result, store.get_ai(d, phase), phase), phase)
+            total += n
+    return total
+
+
+def _all_layers(folder: Path, phase: str, limit, web, concurrency, assume_yes, search_signals, mode_name) -> None:
+    """Test mode: every data point gets every AI layer it has (page answer and web search), even when an earlier
+    layer already decided it, so the waterfall shows what each layer says. Answers never overrule a decided data
+    point; they only fill open ones, like a normal run."""
+    from ..pipeline import phase1_icp, phase2_signals
+    rerun = phase1_icp.rerun_rules if phase == "icp" else phase2_signals.rerun_rules
+    console.print("[bold]All-layers test[/]: asking every data point every AI layer it has, to compare layers.")
+    datapoints.ALL_LAYERS = True
+    try:
+        console.quiet = True
+        rerun(folder)  # free: rebuilds each company's questions and the page text they read
+        console.quiet = False
+        run(folder, phase, limit, web, False, concurrency, assume_yes, search_signals, mode_name)
+    finally:
+        console.quiet = False
+        datapoints.ALL_LAYERS = False
+        console.quiet = True
+        rerun(folder)  # back to normal question lists; the new answers are kept
+        console.quiet = False
+    console.print("Back to normal settings; the new answers are saved. Compare layers with "
+                  f"python -m enrich review {folder.name} --only M1 (or waterfall <domain> --group all).")
+
+
 def pick_domains(store: Store, domains: list[str], phase: str, limit: int = 0) -> list[str]:
     """Companies with open AI questions in this phase; phase 2 only those phase 1 (with its AI answers) kept."""
     out = [d for d in dict.fromkeys(domains) if (store.get_result(d, phase) or {}).get("ai", {}).get("needed")]
-    if phase == "signals":
+    # a company already ruled out (by rules, directories or an earlier AI answer) needs no more questions,
+    # except in the all-layers test, where phase 1 checks every company's layers
+    if not (datapoints.ALL_LAYERS and phase == "icp"):
         out = [d for d in out if (store.get_result(d, "icp") or {}).get("icp_verdict") not in ("No", "Unknown: site not reached")]
     return out[:limit] if limit else out
 
@@ -332,15 +390,23 @@ async def run_async(store: Store, domains: list[str], phase: str, web: bool = Tr
 
 
 def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool = False, concurrency: int = 8,
-        assume_yes: bool = False, search_signals: bool = True, mode_name: str | None = None) -> None:
+        assume_yes: bool = False, search_signals: bool = True, mode_name: str | None = None, all_layers: bool = False) -> None:
+    if all_layers:
+        _all_layers(folder, phase, limit, web, concurrency, assume_yes, search_signals, mode_name)
+        return
     store = Store(folder)
     rows, _ = load_leads(folder / "input.csv")
     domains = pick_domains(store, [r["domain"] for r in rows], phase, limit)
+    reused = 0 if redo else reuse_shared(store, domains, phase)
+    if reused:
+        console.print(f"[green]Reused {reused} answers other lists already paid for[/] (same prompt, still fresh). No cost.")
     mode = P.mode(mode_name)
     est = estimate(store, domains, phase, redo, search_signals and web, mode)
     pv = P.provider()
     if not est["calls"]:
         console.print("Nothing left for AI in this phase (all answered, or no company needs it).")
+        if reused:
+            _write_outputs(folder, store, rows, phase)
         return
     other = estimate(store, domains, phase, redo, search_signals and web, P.mode("cheap" if mode["name"] == "accurate" else "accurate"))
 
@@ -359,6 +425,10 @@ def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool =
                   f"  estimated cost: {summary(est)}\n"
                   f"  [dim]{other['mode']} mode would be: {summary(other)}[/]"
                   + ("\n  --no-search-signals skips the web-only questions" if web and est["search_first"] else ""))
+    over = usage.check(worst_case(est) if web else est["step1_cost"])
+    if over:
+        console.print(f"[red]{over}[/]")
+        return
     if not assume_yes:
         if not sys.stdin.isatty():
             console.print("[yellow]Not running: no terminal to confirm the cost. Add --yes to run without asking.[/]")
@@ -410,7 +480,11 @@ def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool =
         console.print(f"[yellow]Web search was turned off during the run: {runner.web_disabled_reason}[/]\n"
                       f"Set a model that supports web search as 'web' in {rel(P.PROMPTS_DIR / '_shared.json')}.")
 
-    # rewrite this phase's outputs and the final list with the new answers
+    _write_outputs(folder, store, rows, phase)
+
+
+def _write_outputs(folder: Path, store: Store, rows: list[dict], phase: str) -> None:
+    """Rewrite this phase's outputs and the final list with the new answers."""
     results = [store.get_result(d, phase) for d in dict.fromkeys(r["domain"] for r in rows)]
     results = [r for r in results if r]
     if phase == "icp":

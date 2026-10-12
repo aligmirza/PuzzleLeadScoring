@@ -11,40 +11,41 @@ The Archive rate-limits, so requests are spaced out (about 2 a second for the wh
 from __future__ import annotations
 
 import re
-import threading
 import time
 from datetime import date, timedelta
 
 import httpx
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
+from ..core import ratelimit
+
 CDX = "https://web.archive.org/cdx/search/cdx"
 SNAPSHOT = "https://web.archive.org/web/{ts}id_/{url}"
 PER_SECOND = 2
 WINDOW = (6, 18)  # months back
 
-_lock = threading.Lock()
-_last = 0.0
+
+
+_cooldown_until = 0.0  # after repeated refusals, skip the Archive for a while instead of slowing every company
 
 
 def _get(client: httpx.Client, endpoint: str, **params) -> httpx.Response | None:
-    global _last
-    for attempt in range(4):
-        with _lock:
-            wait = _last + 1 / PER_SECOND - time.time()
-            if wait > 0:
-                time.sleep(wait)
-            _last = time.time()
+    global _cooldown_until
+    if time.time() < _cooldown_until:
+        raise RuntimeError("Internet Archive paused after rate limits; retried on the next run")
+    for attempt in range(3):
+        ratelimit.wait("internet-archive", PER_SECOND)
         try:
-            r = client.get(endpoint, params=params or None)
+            r = client.get(endpoint, params=params or None, timeout=20)
         except httpx.HTTPError:
             r = None
         if r is not None and r.status_code == 200:
             return r
         if r is not None and r.status_code not in (429, 502, 503, 504):
             return None
-        time.sleep(2 ** attempt * 2)
-    raise RuntimeError("Internet Archive not responding (rate limit or outage)")
+        time.sleep(2 * (attempt + 1))
+    _cooldown_until = time.time() + 120
+    raise RuntimeError("Internet Archive not responding (rate limit or outage); paused 2 minutes, retried on the next run")
 
 
 def _snapshot(client: httpx.Client, url: str) -> tuple[str, str] | None:

@@ -37,11 +37,11 @@ from urllib.parse import quote
 
 import httpx
 
+from ..core import ratelimit
 from ..core.inputs import normalize_domain
-from ..checks.rules import CHECK, NO, SIGNALS, UNKNOWN, US_STATES, YES, sig
+from ..checks.rules import CHECK, NO, US_STATES, YES, sig
 
-ROOT = Path(__file__).resolve().parents[2]
-CACHE = ROOT / "cache"
+from ..core.paths import CACHE  # noqa: E402
 ENABLED = True  # switched off with --no-directories
 VERSION = 3  # raise when the matching rules change, so saved lookups are redone
 
@@ -61,12 +61,10 @@ SEC_PER_SECOND = 8  # SEC allows 10
 EXCHANGES = {"NYSE", "Nasdaq", "NASDAQ", "NYSE American", "NYSE Arca", "CBOE", "BATS"}
 NAME_SUFFIXES = {"inc", "incorporated", "corp", "corporation", "co", "llc", "lc", "ltd", "limited", "pbc", "plc", "lp",
                  "llp", "org", "the"}
-ORDER = ["YC", "SEC", "IRS"]
+ORDER = ["YC", "SEC", "IRS", "DNS"]
 
 _lock = threading.Lock()
 _yc: dict | None = None
-_sec_last = 0.0
-_sec_lock = threading.Lock()
 _db_lock = threading.Lock()
 
 
@@ -211,7 +209,6 @@ def _sec_cache() -> sqlite3.Connection:
 
 def _sec_get(url: str) -> dict:
     """GET with a shared cache (30 days) and SEC's rate limit."""
-    global _sec_last
     with _db_lock:
         db = _sec_cache()
         row = db.execute("SELECT data, fetched FROM calls WHERE url = ?", (url,)).fetchone()
@@ -219,11 +216,7 @@ def _sec_get(url: str) -> dict:
     if row and time.time() - row[1] < SEC_MAX_AGE * 86400:
         return json.loads(row[0])
     for attempt in range(4):
-        with _sec_lock:
-            wait = _sec_last + 1 / SEC_PER_SECOND - time.time()
-            if wait > 0:
-                time.sleep(wait)
-            _sec_last = time.time()
+        ratelimit.wait("sec", SEC_PER_SECOND)
         with _http() as c:
             r = c.get(url)
         if r.status_code == 404:
@@ -307,8 +300,7 @@ def form_d_details(cik: str, accession: str) -> dict:
         db.close()
     if row:
         return json.loads(row[0])
-    with _sec_lock:
-        time.sleep(1 / SEC_PER_SECOND)
+    ratelimit.wait("sec", SEC_PER_SECOND)
     with _http() as c:
         r = c.get(url)
     if r.status_code != 200:
@@ -345,7 +337,8 @@ def lookup(domain: str, company: str, legal_name: str | None, us_clues: list[str
     found: dict = {"checked": date.today().isoformat(), "version": VERSION, "legal_name": legal_name, "errors": {}}
     for label, fn in (("YC", lambda: yc_lookup(domain, [company, legal_name or ""])),
                       ("IRS", lambda: irs_lookup(names, states)),
-                      ("SEC", lambda: None if skip_sec else sec_lookup(domain, names, places))):
+                      ("SEC", lambda: None if skip_sec else sec_lookup(domain, names, places)),
+                      ("DNS", lambda: dns_lookup(domain))):
         try:
             found[label] = fn()
         except Exception as e:  # noqa: BLE001  a directory being down must never stop the run
@@ -361,30 +354,39 @@ def lookup(domain: str, company: str, legal_name: str | None, us_clues: list[str
     return found
 
 
-def _settle(s: dict, sid: str, value: str, evidence: str, url: str, note: str, match: str) -> bool:
-    """Write a directory answer into the signals if the quality rules allow it. Returns True when written."""
-    group = SIGNALS[sid][0]
-    strict = (group == "exclusion" and value == YES) or (group == "must" and value == NO)
-    if value in (YES, NO) and not (match == "strong" or (match == "medium" and not strict)):
-        if group != "exclusion" or value != YES:
-            return False
-        value, note = CHECK, f"possible match only, to confirm: {note}"
-    cur = s.get(sid, {"value": UNKNOWN, "evidence": ""})
-    overrule_guess = sid == "E5" and value == YES and cur["value"] == NO and cur["evidence"].startswith("for-profit legal entity")
-    if cur["value"] in (YES, NO) and value in (YES, NO) and value != cur["value"] and match == "strong" and not overrule_guess:
-        # the website and an official directory disagree: neither is confirmed, so the AI step (or a person) decides
-        s[sid] = sig(CHECK, f"website: {cur['evidence']} | directory: {evidence}", url,
-                     f"website said {cur['value']}, directory said {value} ({note})", method="directory")
-        if sid == "M1" and s.get("E4", {}).get("value") == YES:
-            s["E4"] = sig(CHECK, s["E4"]["evidence"], s["E4"]["url"], f"directory shows a US location: {evidence}",
-                          method="directory")
-        return True
-    if cur["value"] not in (CHECK, UNKNOWN) and not overrule_guess:
-        return False
-    if cur["value"] == CHECK and value == CHECK:
-        return False
-    s[sid] = sig(value, evidence, url, f"directory, {match} match: {note}", method="directory")
-    return True
+from ..engine.merge import settle as _settle  # noqa: E402  (the one set of merge rules, shared with providers)
+
+
+def dns_lookup(domain: str) -> dict:
+    from .dns_check import lookup as dns
+    return dns(domain)
+
+
+# a domain verified with a tool is an account there: which data points that proves (medium: the account is stated,
+# what it is used for is not)
+DNS_SIGNALS = {"Rippling": ["F9", "M3"], "Gusto": ["F9", "M3"], "Deel": ["F9", "M3"], "Stripe": ["F2", "M3"],
+               "Mercury": ["F19", "M3"], "Brex": ["F19", "F20", "M3"], "Ramp": ["F20", "M3"], "Carta": ["F21", "M3"],
+               "Pulley": ["F21", "M3"], "QuickBooks Online": ["F4"]}
+
+
+def apply_dns(x, dns: dict, summary: list) -> None:
+    from .dns_check import proof_url
+    if not dns:
+        return
+    x.facts["dns"] = {k: dns.get(k) for k in ("verified_with", "spf_includes", "email", "tools")}
+    from . import wappalyzer
+    for name, v in wappalyzer.analyze(dns={"TXT": dns.get("txt") or [], "MX": dns.get("mx") or []}).items():
+        x.facts.setdefault("technologies", {}).setdefault(name, v)
+        if name in DNS_SIGNALS and name not in (dns.get("tools") or {}):
+            dns.setdefault("tools", {})[name] = v["how"]
+    if dns.get("verified_with") or dns.get("email"):
+        summary.append("DNS: " + ", ".join(([dns["email"]] if dns.get("email") else []) + dns.get("verified_with", [])))
+    url = proof_url(x.domain)
+    for tool, rec in (dns.get("tools") or {}).items():
+        ev = f"DNS TXT record on {x.domain}: {rec[:70]} (the company verified its domain with {tool})"
+        for sid in DNS_SIGNALS.get(tool, []):
+            _settle(x.s, sid, YES, ev, url, f"has a {tool} account; what it uses it for is not stated", "medium")
+        x.partners.setdefault(tool, ev)
 
 
 def apply(x) -> None:
@@ -394,6 +396,8 @@ def apply(x) -> None:
         return
     s, facts = x.s, x.facts
     summary = []
+
+    apply_dns(x, found.get("DNS"), summary)
 
     yc = found.get("YC")
     if yc and yc.get("match") == "strong":

@@ -1,0 +1,29 @@
+{
+  "id": "F9",
+  "name": "Payroll on Gusto, Rippling or Deel",
+  "group": "fit",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "fit/payroll_gusto_rippling_deel"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": true
+  }
+}

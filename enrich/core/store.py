@@ -28,6 +28,9 @@ class Store:
         # AI answers are kept apart from rule results, so re-running the rules never loses them
         self.db.execute("CREATE TABLE IF NOT EXISTS ai_answers (domain TEXT, phase TEXT, prompt_id TEXT, step INTEGER, "
                         "answer TEXT, usage TEXT, created REAL, PRIMARY KEY (domain, phase, prompt_id, step))")
+        # data bought from providers (Prospeo company data, people), kept per list
+        self.db.execute("CREATE TABLE IF NOT EXISTS providers (domain TEXT, provider TEXT, kind TEXT, data TEXT, "
+                        "created REAL, PRIMARY KEY (domain, provider, kind))")
         # findings from the free directories (YC, SEC, IRS), looked up once per company
         self.db.execute("CREATE TABLE IF NOT EXISTS directories (domain TEXT PRIMARY KEY, found TEXT, updated_at REAL)")
         self.db.commit()
@@ -99,9 +102,43 @@ class Store:
             out.setdefault(pid, {})[step] = {"answer": json.loads(ans), "usage": json.loads(usage)}
         return out
 
+    def ai_costs(self, since: float = 0) -> dict[str, dict]:
+        """Actual AI spend per company, from the cost saved with every answer (reused answers cost 0).
+        since: only answers saved after this time (a Unix timestamp), e.g. one test run."""
+        out: dict[str, dict] = {}
+        for domain, phase, step, usage in self.db.execute(
+                "SELECT domain, phase, step, usage FROM ai_answers WHERE created >= ?", (since,)):
+            u = json.loads(usage or "{}")
+            row = out.setdefault(domain, {"phase1_usd": 0.0, "phase2_usd": 0.0, "answers": 0, "web_searches": 0,
+                                          "reused": 0, "tokens_in": 0, "tokens_out": 0})
+            cost = float(u.get("cost") or 0)
+            row["phase1_usd" if phase == "icp" else "phase2_usd"] += cost
+            row["answers"] += 1
+            row["web_searches"] += u.get("web_searches", 0) or 0
+            row["reused"] += 1 if u.get("reused_from_cache") else 0
+            row["tokens_in"] += u.get("input", 0) or 0
+            row["tokens_out"] += u.get("output", 0) or 0
+        for row in out.values():
+            row["total_usd"] = round(row["phase1_usd"] + row["phase2_usd"], 4)
+            row["phase1_usd"], row["phase2_usd"] = round(row["phase1_usd"], 4), round(row["phase2_usd"], 4)
+        return out
+
     def delete_ai(self, domain: str, phase: str) -> None:
         self.db.execute("DELETE FROM ai_answers WHERE domain = ? AND phase = ?", (domain, phase))
         self.db.commit()
+
+    # provider data -----------------------------------------------------
+    def save_provider(self, domain: str, provider: str, kind: str, data: dict) -> None:
+        self.db.execute("INSERT OR REPLACE INTO providers VALUES (?, ?, ?, ?, ?)",
+                        (domain, provider, kind, json.dumps(data), time.time()))
+        self.db.commit()
+
+    def get_provider(self, domain: str) -> dict[str, dict[str, dict]]:
+        """{provider: {kind: data}}"""
+        out: dict[str, dict[str, dict]] = {}
+        for prov, kind, data in self.db.execute("SELECT provider, kind, data FROM providers WHERE domain = ?", (domain,)):
+            out.setdefault(prov, {})[kind] = json.loads(data)
+        return out
 
     # directory findings ------------------------------------------------
     def save_directory(self, domain: str, found: dict) -> None:

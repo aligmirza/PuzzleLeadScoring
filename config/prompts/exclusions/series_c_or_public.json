@@ -8,7 +8,7 @@
   "version": 1,
   "stage": "site_text",
   "model": "small",
-  "run_when": "Code found a Series C+ mention, a stock ticker or an investor relations page; or the company is funded (investors named, SEC Form D, YC) but no pre-seed to Series B stage is confirmed.",
+  "run_when": "Phase 1, for every company still in the running when the free checks (site, SEC, YC) left it open. A site that never mentions funding can still be Series C or later (Linear: Series C in June 2025).",
   "input": {
     "pages": [
       "home",
@@ -37,7 +37,9 @@
     "watch_out_for": [
       "A company that merely looks large or mature is not excluded",
       "Total raised across all rounds is not one round: only a single round of $100M+ or a $1B+ valuation counts",
-      "A subsidiary of a public company: answer 'unknown' and explain in the reason"
+      "A subsidiary of a public company: answer 'unknown' and explain in the reason",
+      "A tender offer or secondary sale (employees selling shares) is not a funding round",
+      "The evidence quote must itself show the round letter, the IPO or listing, or the round size or valuation"
     ],
     "where_to_look": [
       "About page",

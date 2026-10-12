@@ -1,0 +1,29 @@
+{
+  "id": "F19",
+  "name": "Banks with Mercury or Brex",
+  "group": "fit",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": true
+    },
+    "ai_pages": {
+      "run": "off",
+      "prompt": "fit/banks_mercury_or_brex"
+    },
+    "ai_web": {
+      "run": "off",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": true,
+    "provider": true
+  }
+}

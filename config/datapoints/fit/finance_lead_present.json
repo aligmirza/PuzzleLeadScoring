@@ -1,0 +1,30 @@
+{
+  "id": "F14",
+  "name": "Has a finance lead (mid-size and up)",
+  "group": "fit",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "fit/finance_lead_present",
+      "requires_page": "team"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "if_open",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": true
+  }
+}

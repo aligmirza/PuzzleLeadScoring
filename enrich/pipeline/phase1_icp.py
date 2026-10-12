@@ -17,6 +17,7 @@ from . import final
 from ..core.dashboard import Dashboard
 from ..core.inputs import load_leads
 from ..checks.rules import SIGNALS
+from ..core import shared
 from ..core.store import Store
 
 OUTPUTS = {"csv": "icp_check.csv", "evidence": "icp_evidence.jsonl", "ai_queue": "icp_ai_queue.jsonl"}
@@ -38,6 +39,11 @@ async def _crawl_and_check(rows, store: Store, dash: Dashboard, workers: int, ma
                 return
             d = row["domain"]
             record = None if refresh else store.get_site(d)
+            if record is None and not refresh:  # another list may have this company already
+                record = shared.adopt_site(store, d, ICP_KINDS)
+                if record:
+                    record["input"] = {"company": row["company"], "employees": row["employees"]}
+                    store.save_site(d, record)
             cached = record is not None
             if not cached:
                 try:
@@ -52,6 +58,7 @@ async def _crawl_and_check(rows, store: Store, dash: Dashboard, workers: int, ma
                     store.save_jobs(d, jobs)
                 record["input"] = {"company": row["company"], "employees": row["employees"]}
                 store.save_site(d, record)
+                shared.publish_site(store, d, record)
             dash.crawled(record, cached)
             if cached and record.get("pages_deleted") and store.get_result(d, "icp"):
                 result = store.get_result(d, "icp")  # pages were cleaned up earlier; reuse the saved result

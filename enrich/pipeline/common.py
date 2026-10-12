@@ -10,17 +10,15 @@ from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 
-from ..ai import apply as ai_apply
 from ..sources import directories
 from ..ai import prompts as prompt_files
 from ..core.dashboard import ICON
 from ..core.inputs import load_leads
-from ..checks.rules import CELL_NAMES, SIGNALS, VALUE_NAMES, extract, signal_column
+from ..checks.rules import CELL_NAMES, SIGNALS, VALUE_NAMES, signal_column
 from ..core.store import Store
 
 console = Console()
-ROOT = Path(__file__).resolve().parents[2]
-LISTS = ROOT / "lists"
+from ..core.paths import LISTS, ROOT  # noqa: E402
 
 
 # lists and folders -------------------------------------------------------
@@ -65,15 +63,9 @@ def plain(text: str) -> str:
 
 # rules -------------------------------------------------------------------
 def run_rules(store: Store, row: dict, record: dict, phase: str) -> dict:
-    pages = {k: store.load_page(row["domain"], k) for k in record.get("pages", {})}
-    pages = {k: v for k, v in pages.items() if v}
-    result = extract(row["domain"], row["company"], row["employees"], record, pages, store.load_jobs(row["domain"]), phase,
-                     directory_finder(store, row))
-    answers = store.get_ai(row["domain"], phase)
-    if answers:  # keep earlier AI answers when the rules are re-run
-        result = ai_apply.apply(result, answers, phase)
-    store.save_result(row["domain"], result, phase)
-    return result
+    """The waterfall for one company with what's known and bought so far (engine/resolve.py); saved and returned."""
+    from ..engine.resolve import resolve
+    return resolve(store, row, record, phase)
 
 
 def directory_finder(store: Store, row: dict):
@@ -88,6 +80,12 @@ def directory_finder(store: Store, row: dict):
                 and found.get("version") == directories.VERSION
                 and (skip_sec or not found.get("skipped_sec"))
                 and all(asked.get(k) or not v for k, v in (history or {}).items())):
+            if "DNS" not in found:  # saved before the DNS check existed: add only that part
+                try:
+                    found["DNS"] = directories.dns_lookup(row["domain"])
+                except Exception as e:  # noqa: BLE001
+                    found.setdefault("errors", {})["DNS"] = repr(e)[:200]
+                store.save_directory(row["domain"], found)
             return found
         found = directories.lookup(row["domain"], row["company"], legal_name, us_clues, skip_sec, history)
         found["skipped_sec"] = skip_sec

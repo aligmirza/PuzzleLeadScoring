@@ -1,0 +1,29 @@
+{
+  "id": "B13",
+  "name": "New board member or investor updates",
+  "group": "buying",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "buying/new_board_member_or_investor_updates"
+    },
+    "ai_web": {
+      "run": "if_open",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": false
+  }
+}

@@ -18,6 +18,7 @@ from datetime import date
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
 from ..ai import prompts as prompt_files
+from ..sources import wappalyzer
 
 YES, NO, UNKNOWN, CHECK = "yes", "no", "unknown", "check"
 
@@ -98,18 +99,6 @@ def signal_column(sid: str) -> str:
     return f"{GROUP_NAMES[group]}: {label}"
 
 
-# Signals only the web can answer (news, registries, social posts). Asked in phase 2 with web search when the free
-# checks left them open; skip them with `ai_check.py <list> --phase signals --no-search-signals`.
-SEARCH_SIGNALS = ["B1", "B2", "B6", "B7", "B8", "B11", "B12", "B13", "W11"]
-
-# AI prompts live in prompts/<group>/<data point>.json. These run for every company still in the running;
-# others are added when a rule returns "Needs check" or a condition in Extractor._ai_prompts matches.
-ALWAYS_PROMPTS = [
-    "fit/startup_selling_nationally", "fit/b2b_saas_or_tech_service", "fit/local_professional_services",
-    "weak/billed_labour_not_product", "fields/vertical", "fit/ai_core_to_product",
-    "weak/manufacturing_hardware", "weak/heavy_ar_ap",
-]
-
 US_STATES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado",
     "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
@@ -162,6 +151,9 @@ RE_PRICE = re.compile(
     r"(?:mo\b|month|yr\b|year|annum|user|seat|member|editor|license|week|employee|location)", re.I)
 RE_PRICE_LOOSE = re.compile(r"(?:US\$|\$)\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?(?=[^$]{0,60}\b(?:month|monthly|year|yearly|annually|/mo|/yr)\b)", re.I)
 RE_FOREIGN_PRICE = re.compile(r"(?:€|£|₹|¥|A\$|C\$|R\$)\s?\d|\d\s?(?:€|£)|\b\d+(?:[.,]\d+)?\s?(?:EUR|GBP|INR|AUD|CAD)\b")
+RE_PRICING_WORDS = re.compile(r"\b(?:pricing|price[sd]?|plans? (?:and|&) pricing|per (?:month|year|user|seat)|"
+                              r"/mo\b|/month\b|monthly plan|annual plan|subscriptions?|subscribe|free trial|start (?:your )?trial|"
+                              r"buy now|add to cart|checkout)\b", re.I)
 RE_CONTACT_ONLY = re.compile(r"contact (?:us|sales)|talk to (?:sales|us)|request a (?:quote|demo)|get a quote|custom pricing", re.I)
 RE_WAITLIST = re.compile(r"join (?:the|our)? ?wait ?list|request (?:early )?access|get early access|coming soon|launching soon|private beta|join the beta|sign up for early access", re.I)
 
@@ -198,6 +190,9 @@ TOOL_RULES = {
     "Chase": {"raw": None, "text": r"\bChase (?:Bank|Business|for Business|business banking)\b|\bJPMorgan Chase\b"},
     "Wise": {"raw": None, "text": r"\bWise (?:Business|Platform)\b|\bTransferWise\b"},
 }
+JOB_BOARDS = {"ashby": "https://jobs.ashbyhq.com/{slug}", "greenhouse": "https://boards.greenhouse.io/{slug}",
+              "lever": "https://jobs.lever.co/{slug}", "workable": "https://apply.workable.com/{slug}",
+              "rippling": "https://ats.rippling.com/{slug}/jobs"}
 COMPETITOR_RULES = {
     "QuickBooks Online": r"\bQuickBooks\b(?! Enterprise)|\bQBO\b",
     "QuickBooks Enterprise": r"\bQuickBooks Enterprise\b",
@@ -235,6 +230,14 @@ LATE_STAGE_ROUND_USD = _late.get("round_at_least_usd", 100_000_000)          # a
 LATE_STAGE_VALUATION_USD = _late.get("valuation_at_least_usd", 1_000_000_000)
 RE_STAGE = re.compile(r"\b(pre-?seed|seed|series ([a-h]))\b", re.I)
 RE_FIRST_PERSON = re.compile(r"\b(we|we've|we're|our|us)\b", re.I)
+# "Backed by X": an investor's name right after the phrase (fund words, or well-known names). Logos are images, so
+# "Backed by" followed by footer text names no one.
+RE_NAMED_INVESTOR = re.compile(
+    r"(?i:backed by|investors include|funded by|led by)\W{0,3}(?:[^.]{0,80}?)\b(?:[A-Z][\w&'.-]*\s){0,4}"
+    r"(?:Capital|Ventures|Venture Partners|Partners|Fund|VC|Investments|Angels|Equity|Combinator)\b"
+    r"|(?i:backed by|investors include|funded by|led by)\W{0,3}(?:[^.]{0,80}?)\b(?:Y Combinator|a16z|Andreessen Horowitz|"
+    r"Sequoia|Accel|Benchmark|Greylock|Khosla|Lightspeed|Index Ventures|General Catalyst|Founders Fund|Kleiner Perkins|"
+    r"Bessemer|Insight Partners|Tiger Global|Coatue|SV Angel|Techstars|500 Global|First Round|Initialized|Pioneer Fund)\b")
 RE_TICKER = re.compile(r"\b(?:NASDAQ|Nasdaq|NYSE(?: American)?)\s?:\s?[A-Z]{1,5}\b")
 RE_YC_STRONG = re.compile(r"\b(?:backed by|funded by|part of|alum(?:ni)? of|graduated from|went through|participated in|member of)\s+(?:the\s+)?(?:Y Combinator|YC)\b"
                           r"|\b(?:Y Combinator|YC)[- ]backed\b|\bYC\s?[WSFX]\d{2}\b|\b(?:Y Combinator|YC)\s+\(?(?:Winter|Summer|Fall|Spring|[WSFX])\s?'?\d{2,4}\)?", re.I)
@@ -244,7 +247,14 @@ RE_METRIC = re.compile(
     r"\$\s?\d+(?:\.\d+)?\s?(?:M|MM|million|B|billion)\+?\s+(?:in\s+)?(?:ARR|annual recurring revenue|revenue|in sales)"
     r"|\b\d{1,3}(?:,\d{3})+\+?\s+(?:customers|companies|businesses|teams|paying)"
     r"|\b\d+(?:\.\d+)?[kKM]\+?\s+(?:customers|companies|businesses|teams|users)\b"
-    r"|\bgrew\s+\d+(?:\.\d+)?\s?[%x]|\b\d+x\s+(?:growth|year[- ]over[- ]year)", re.I)
+    r"|\bgrew\s+\d+(?:\.\d+)?\s?[%x]|\b\d+x\s+(?:growth|year[- ]over[- ]year)"
+    r"|\b(?:six|seven|eight|nine|\d)[- ]figure\s+(?:ARR|MRR|revenue|annual recurring revenue)"
+    r"|\b(?:ARR|MRR|revenue)\b[^.]{0,40}?\b(?:up|grew|growing|grown)\s+\d+(?:\.\d+)?\s?(?:x|%)"
+    r"|\b\d+(?:\.\d+)?\s?%\s+(?:year[- ]over[- ]year|YoY|MoM|month[- ]over[- ]month)\s+(?:growth|revenue growth)", re.I)
+# a metric about someone else: the market, customers' own results, audiences
+RE_NOT_OWN_METRIC = re.compile(r"\b(?:market|industry|TAM|addressable|customers? (?:save|saw|see|grew|raised|achieve)|"
+                               r"clients? (?:save|saw|see|grew|raised|achieve)|helped \w+ (?:grow|raise)|followers|"
+                               r"downloads|subscribers on|views)\b", re.I)
 RE_REMOTE = re.compile(r"remote[- ]first|fully remote|remote[- ]friendly|distributed (?:team|company)|work from anywhere|\bhybrid\b", re.I)
 RE_SHUTDOWN = re.compile(r"\b(?:is|are|will be)\s+(?:shutting down|winding down|sunsetting|closing (?:its|our) doors)"
                          r"|\bshutting down on\b|\bwe(?:'re| are| have| 've)\s+(?:shut down|closed (?:our|the) (?:doors|company))"
@@ -384,10 +394,9 @@ def _key(s: str) -> str:
 # ---------------------------------------------------------------------------
 class Extractor:
     def __init__(self, domain: str, company: str, employees: str, record: dict, pages: dict[str, str], jobs: list[dict],
-                 phase: str = "icp", directory_fn=None):
+                 phase: str = "icp"):
         self.phase = phase
-        self.directory_fn = directory_fn  # (legal_name, us_clues, skip_sec) -> directory findings; see directories.py
-        self.directories_found = None  # "icp": must-haves and exclusions only; "signals": everything
+        self.directories_found = None  # set by the engine's directories layer (engine/resolve.py)  # "icp": must-haves and exclusions only; "signals": everything
         self.domain, self.company, self.employees = domain, company, employees
         self.record, self.jobs = record, jobs
         order = ["home", "about", "team", "pricing", "careers", "privacy", "terms", "legal", "contact", "security",
@@ -432,12 +441,20 @@ class Extractor:
 
     # run -------------------------------------------------------------
     def run(self) -> dict:
+        """Rules only (layer 1). The engine (engine/resolve.py) runs the other layers in between collect() and finish()."""
+        self.collect()
+        return self.finish()
+
+    def collect(self) -> bool:
+        """Layer 1, the rules: every check on the scraped pages. Returns whether the site was read."""
         status = self.record.get("status")
         if status != "live":
-            return self._not_live(status)
+            self._not_live(status)
+            return False
         self.site()
         self.location_and_entity()
         self.pricing_and_transactions()
+        self.technologies()
         self.tools()
         self.jobs_signals()
         self.funding()
@@ -449,12 +466,15 @@ class Extractor:
         self.must_haves()
         if self.phase == "signals":
             self.weak_derived()
-        self.directories()
-        if self.phase == "signals":
+        return True
+
+    def finish(self) -> dict:
+        """After the free layers: derived signals, the verdict and the AI questions still open."""
+        if self.phase == "signals" and self.record.get("status") == "live":
             self.tax_deadline()
         return self._result()
 
-    def _not_live(self, status) -> dict:
+    def _not_live(self, status) -> None:
         err = self.record.get("error") or ""
         if status == "blocked":
             self.s["M2"] = sig(UNKNOWN, note=f"site blocks automated visits ({err}); retry with a real browser")
@@ -464,7 +484,6 @@ class Extractor:
             self.s["M2"] = sig(NO, evidence=f"site did not load: {err}")
             self.s["E2"] = sig(CHECK, evidence=f"site did not load: {err}",
                                note="also needs proof of no funding and a new incorporation")
-        return self._result()
 
     # checks ----------------------------------------------------------
     def site(self):
@@ -495,6 +514,8 @@ class Extractor:
             self.s["M2"] = sig(UNKNOWN, note="page content needs JavaScript; retry with a real browser", url=home.url)
         elif len(self.pages) >= 3 or len(text) > 1500:
             self.s["M2"] = sig(YES, evidence=f"site loads with {len(self.pages)} key pages found", url=home.url)
+            # E2 needs a dead or parked site AND no funding AND a new company: a live site alone rules it out
+            self.s["E2"] = sig(NO, evidence=f"site is live: loads with {len(self.pages)} key pages", url=home.url)
         else:
             self.s["M2"] = sig(CHECK, evidence=f"thin site: {len(text)} characters of text", url=home.url)
 
@@ -636,18 +657,20 @@ class Extractor:
         # M1 / E4
         self.facts["us_clues"] = [e for e, _ in us]
         self.facts["foreign_clues"] = [e for e, _ in foreign]
+        # both keep the page the proof came from (the first clue's page), so every answer links to its source
         if us:
             self.s["M1"] = sig(YES, evidence=us[0][0], url=us[0][1])
             if len(foreign) >= 2:
-                self.s["E4"] = sig(CHECK, evidence="; ".join(e for e, _ in foreign[:3]), note="both US and foreign clues")
+                self.s["E4"] = sig(CHECK, evidence="; ".join(e for e, _ in foreign[:3]), url=foreign[0][1],
+                                   note="both US and foreign clues")
             else:
-                self.s["E4"] = sig(NO, evidence=us[0][0])
+                self.s["E4"] = sig(NO, evidence=us[0][0], url=us[0][1])
         elif len(foreign) >= 2 and any(e.startswith(STRONG_FOREIGN) for e, _ in foreign):
-            self.s["M1"] = sig(NO, evidence="; ".join(e for e, _ in foreign[:3]))
-            self.s["E4"] = sig(YES, evidence="; ".join(e for e, _ in foreign[:3]))
+            self.s["M1"] = sig(NO, evidence="; ".join(e for e, _ in foreign[:3]), url=foreign[0][1])
+            self.s["E4"] = sig(YES, evidence="; ".join(e for e, _ in foreign[:3]), url=foreign[0][1])
         elif foreign:
-            self.s["M1"] = sig(CHECK, evidence=foreign[0][0])
-            self.s["E4"] = sig(CHECK, evidence=foreign[0][0])
+            self.s["M1"] = sig(CHECK, evidence=foreign[0][0], url=foreign[0][1])
+            self.s["E4"] = sig(CHECK, evidence=foreign[0][0], url=foreign[0][1])
         if self.s.get("M1", {}).get("value", UNKNOWN) in (UNKNOWN, CHECK):
             self.ai.append("must_haves/based_in_us")
 
@@ -662,6 +685,8 @@ class Extractor:
                 self.s["F8"] = sig(NO, evidence="pricing page says contact sales, no prices", url=p.url)
             else:
                 self.s["F8"] = sig(CHECK, note="pricing page found but no prices read; may be in images or scripts", url=p.url)
+        elif self.record.get("status") == "live":
+            self.no_pricing_page()
         self.facts["prices"] = list(dict.fromkeys(prices))
         self.facts["checkout"] = [n for n, rx in CHECKOUT_FP.items() if re.search(rx, self.raw_all)]
         self.facts["app_store"] = bool(re.search(r"apps\.apple\.com/[^\"']*app/", self.raw_all))
@@ -678,10 +703,68 @@ class Extractor:
         if m:
             self.facts["waitlist_evidence"] = _snip(home.text, m)
 
+    def technologies(self) -> None:
+        """Website technologies (sources/wappalyzer.py): from the crawl's scan of the raw pages, else from the saved
+        pages (slimmed: script sources, meta tags and links survive). The DNS check adds its own in the directories."""
+        found = dict(self.record.get("technologies") or {})
+        if not found:
+            found = wappalyzer.analyze({p.url: p.html for p in self.pages.values()}, self.record.get("headers"),
+                                       url=self.record.get("final_url") or "")
+        self.facts["technologies"] = found
+
+    def no_pricing_page(self) -> None:
+        """No pricing page after the full search (homepage links, sitemap, one level deeper, /pricing and /plans):
+          prices on another page -> Needs check; pricing words but no prices (e.g. "free trial") -> Needs check;
+          otherwise No: either a contact-only way to buy, or no prices and no pricing words on any downloaded page.
+        Not when robots.txt kept us off a pricing page, or the site needs JavaScript and its text wasn't read."""
+        if any(re.search(r"/(?:pricing|plans|prices)\b", u, re.I) for u in self.record.get("robots_blocked") or []):
+            return
+        if self.facts.get("needs_js") or self.s.get("M2", {}).get("value") in (UNKNOWN, NO):
+            return  # the page text wasn't read (needs JavaScript) or the site isn't a real live site
+        priced = next((p for p in self.pages.values() if RE_PRICE.search(p.text)), None)
+        if priced:
+            self.s["F8"] = sig(CHECK, evidence=RE_PRICE.search(priced.text).group(0), url=priced.url,
+                               note="prices shown outside a pricing page; check they are plans")
+            return
+        searched = "no pricing page (searched homepage links, sitemap, /pricing, /plans)"
+        for kind in ("home", "contact", "about"):
+            p = self.page(kind)
+            m = RE_CONTACT_ONLY.search(p.text) if p else None
+            if m:
+                self.s["F8"] = sig(NO, evidence=f"{searched}; the only way to buy is '{m.group(0)}'", url=p.url)
+                return
+        words = next(((p, m) for p in self.pages.values() for m in [RE_PRICING_WORDS.search(p.text)] if m), None)
+        if words:
+            self.s["F8"] = sig(CHECK, evidence=_snip(words[0].text, words[1], 50), url=words[0].url,
+                               note="pricing words but no prices or pricing page")
+            return
+        self.s["F8"] = sig(NO, evidence=f"{searched}; no prices or pricing words on {len(self.pages)} pages",
+                           url=self.page("home").url)
+
+    def payment_code(self) -> dict[str, dict]:
+        """Payment gateways proven in code: the crawl's scan of raw pages, bundles and the app (sources/payments.py),
+        plus the saved pages (slimmed: script sources and links only), so lists downloaded earlier still count."""
+        from ..sources import payments
+        found = [f for p in self.pages.values() for f in payments.detect(p.html, p.url)]
+        gateways = payments.summarize(found)
+        for g, v in ((self.record.get("payment_code") or {}).get("gateways") or {}).items():
+            gateways.setdefault(g, v)
+        self.facts["payment_gateways"] = {g: v["methods"] for g, v in gateways.items()}
+        return gateways
+
     def tools(self):
+        code = self.payment_code()
         for name, rule in TOOL_RULES.items():
             hit = None
-            if rule["raw"]:
+            if name in code:  # proof in code beats any wording on a page
+                c = code[name]
+                hit = (YES, f"{name} in the site's code ({', '.join(c['methods'][:3])}): {c['snippet']}", c["where"])
+            tech = (self.facts.get("technologies") or {}).get(name)
+            if not hit and tech and not tech["how"].startswith("implied"):  # a Wappalyzer fingerprint in the site's code
+                where = tech["how"].split(" on ")[-1] if " on " in tech["how"] else ""
+                hit = (YES, f"{name} in the site's code (Wappalyzer fingerprint: {tech['how'][:120]})",
+                       where if where.startswith("http") else "")
+            if not hit and rule["raw"]:
                 m = re.search(rule["raw"], self.raw_all)
                 if m:
                     hit = (YES, f"page code loads {m.group(0)}", "")
@@ -717,7 +800,11 @@ class Extractor:
         tools = self.facts.get("tools", {})
         stripe = tools.get("Stripe")
         if stripe:
-            self.s["F2"] = sig(stripe["value"], stripe["evidence"], stripe["url"])
+            checked = len((self.record.get("payment_code") or {}).get("checked") or [])
+            basis = ("found in code" if "Stripe" in code else
+                     "stated on the site, not seen in code" + (f" ({checked} pages and scripts checked)" if checked else
+                                                              " (code not scanned for this download)"))
+            self.s["F2"] = sig(stripe["value"], stripe["evidence"], stripe["url"], note=basis)
 
         def combine(sid, names):
             found = [(n, tools[n]) for n in names if n in tools]
@@ -750,12 +837,28 @@ class Extractor:
                     self.competitor_mentions[name] = snip
         qbo = self.competitors.get("QuickBooks Online")
         if qbo:
-            self.s["F4"] = sig(YES, qbo)
+            self.s["F4"] = sig(YES, qbo, self.job_board_url())
         elif "QuickBooks Online" in self.competitor_mentions:
             self.s["F4"] = sig(CHECK, self.competitor_mentions["QuickBooks Online"], note="mentioned on site; may be an integration")
+        else:  # say what was checked, so "nothing found" shows the job posts were read
+            self.s["F4"] = sig(UNKNOWN, url=self.job_board_url(), note=self.jobs_checked("QuickBooks"))
         erp = self.competitors.get("NetSuite") or self.competitors.get("QuickBooks Enterprise")
         if erp:
             self.s["W10"] = sig(CHECK, erp, note="ERP found in job posts; confirm a full in-house finance team")
+
+    def job_board_url(self) -> str:
+        ats, slug = self.record.get("ats"), self.record.get("ats_slug")
+        return JOB_BOARDS.get(ats, "").format(slug=slug) if ats and slug else ""
+
+    def jobs_checked(self, what: str) -> str:
+        """What the job-post check covered, for answers that found nothing."""
+        ats, count = self.record.get("ats"), self.record.get("jobs_count")
+        if self.jobs:
+            titles = "; ".join(j["title"] for j in self.jobs[:8]) + ("; ..." if len(self.jobs) > 8 else "")
+            return f"no {what} in {len(self.jobs)} job posts on {ats} ({titles}) or on the site's pages"
+        if ats and count is None:
+            return f"job board on {ats} found but its jobs couldn't be read; no {what} on the site's pages"
+        return f"no job posts found (no job board); no {what} on the site's pages"
 
     def jobs_signals(self):
         ats, count = self.record.get("ats"), self.record.get("jobs_count")
@@ -843,8 +946,11 @@ class Extractor:
         elif best:
             self.s["F1"] = sig(YES, best_ev, best_url, note=f"{label[best]} (confirmed on own site)")
             self.facts["funding_stage"], self.facts["funding_basis"] = label[best], "confirmed"
-        elif backed:
+        elif backed and RE_NAMED_INVESTOR.search(backed[0]):
             self.s["F1"] = sig(YES, backed[0], backed[1], note="investors named, stage not stated")
+        elif backed:  # "Backed by" followed by logos (images): a clue, not proof of the stage
+            self.s["F1"] = sig(CHECK, backed[0], backed[1],
+                               note="'backed by' without a readable investor name (logos are images); stage not stated")
         ticker = self.find(RE_TICKER, kinds=["home", "about", "investors"])
         if ticker[0]:
             self.s["E1"] = sig(YES, f"publicly traded: {ticker[1]}", ticker[0].url)
@@ -967,10 +1073,26 @@ class Extractor:
         if any(self.s.get(k, {}).get("value") in (YES, CHECK) for k in ("W1", "W3")):
             self.ai.append("weak/serves_one_local_area")
 
+    def growth_numbers(self) -> None:
+        """F15: a sentence stating the company's own ARR, revenue, customer count or growth, on its pages or in its job
+        posts. Yes only when the sentence is about the company ("we", "our" or its name); otherwise Needs check."""
+        texts = [(p.text, p.url, p.kind) for k in ("home", "about", "customers", "blog", "careers")
+                 for p in [self.page(k)] if p]
+        texts += [(j.get("description") or "", self.job_board_url(), f"job post '{j['title']}'") for j in self.jobs]
+        clue = None
+        for text, url, where in texts:
+            for sent in re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text)):
+                if len(sent) > 400 or not RE_METRIC.search(sent) or RE_NOT_OWN_METRIC.search(sent):
+                    continue
+                if RE_FIRST_PERSON.search(sent) or self.mentions_company(sent):
+                    self.s["F15"] = sig(YES, sent.strip(), url, note=f"stated in the {where}")
+                    return
+                clue = clue or (sent.strip(), url, where)
+        if clue:
+            self.s["F15"] = sig(CHECK, clue[0], clue[1], note=f"a number in the {clue[2]}, but not clearly about the company")
+
     def misc_fit(self):
-        p, snip = self.find(RE_METRIC, kinds=["home", "about", "customers", "blog", "careers"])
-        if p:
-            self.s["F15"] = sig(YES, snip, p.url)
+        self.growth_numbers()
         if "producthunt.com" in self.raw_all:
             self.s["F18"] = sig(YES, "links to a Product Hunt launch")
         elif self.page("engineering"):
@@ -1027,19 +1149,6 @@ class Extractor:
                 self.s["B10"] = sig(YES, f"{days} days to the {deadline:%b %d} C-Corp filing deadline",
                                     note=f"calendar based, for a confirmed C-Corp ({self.facts.get('entity_type')})")
 
-    def directories(self):
-        """Free official directories (YC, SEC, IRS). They only fill what the rules above left open."""
-        if not self.directory_fn:
-            return
-        from ..sources import directories
-        gate = decide(self.s, self.record.get("status"))["gate"]
-        history = None
-        if self.phase == "signals":  # old copies of the site, only where they could show a change
-            history = {"legal": self.facts.get("entity_suffix") == "corp", "pricing": bool(self.facts.get("prices"))}
-        self.directories_found = self.directory_fn(self.facts.get("legal_name"), self.facts.get("us_clues", []),
-                                                   gate in ("excluded", "failed must-have"), history)
-        directories.apply(self)
-
     # result ----------------------------------------------------------
     def _result(self) -> dict:
         for sid in SIGNALS:
@@ -1047,13 +1156,21 @@ class Extractor:
         live = self.record.get("status") == "live"
         # funding found (site, Form D, YC) but no early stage confirmed: it could be Series C or later
         self.facts["funded_stage_open"] = self.s.get("F1", {}).get("value") == YES and not self.facts.get("funding_stage")
+        from . import datapoints
+        for sid in list(self.s):  # a data point whose rules are switched off in its file ignores the rules' answer
+            if not datapoints.rules_on(sid) and self.s[sid].get("method", "code") == "code" and self.s[sid]["value"] != UNKNOWN:
+                self.s[sid] = sig(UNKNOWN, note="rules switched off for this data point")
         if self.phase == "icp":
             # phase 1 reports only must-haves and exclusions
             self.s = {sid: v for sid, v in self.s.items() if SIGNALS[sid][0] in ("must", "exclusion")}
         d = decide(self.s, self.record.get("status"))
         gate, verdict, checks, excluded, confirmed = d["gate"], d["verdict"], d["checks"], d["excluded"], d["confirmed"]
 
-        ai_prompts = self._ai_prompts() if live and gate not in ("excluded", "failed must-have") else []
+        from . import datapoints as _dp
+        ai_prompts = self._ai_prompts() if live and (gate not in ("excluded", "failed must-have") or _dp.ALL_LAYERS) else []
+        if not live and self.phase == "icp":  # site not read: web-only questions for data points set to search anyway
+            from . import datapoints
+            ai_prompts = datapoints.unreached_questions(self.s)
         ai_context = self._ai_context(ai_prompts) if ai_prompts else {}
         tokens = cached = output = 0
         if ai_prompts:
@@ -1081,7 +1198,9 @@ class Extractor:
             "entity_type": self.facts.get("entity_type", "Unknown"),
             "legal_name": self.facts.get("legal_name"),
             "funding_stage": f"{stage} ({basis})" if stage else "Unknown (not found)",
+            "versions": {"rules": _rules_version()},
             "directories": self.facts.get("directories", ""),
+            "technologies": wappalyzer.summary(self.facts.get("technologies") or {}),
             "partners": sorted(self.partners),
             "competitors": sorted(self.competitors),
             "competitors_mentioned": sorted(set(self.competitor_mentions) - set(self.competitors)),
@@ -1094,19 +1213,16 @@ class Extractor:
 
     def _ai_prompts(self) -> list[str]:
         """Which data-point prompts this company still needs (one AI call each)."""
+        from . import datapoints
         known = prompt_files.load()[1]
-        chosen = (list(ALWAYS_PROMPTS) if self.phase == "signals" else []) + self.ai
-        signal_prompt = prompt_files.by_signal()
-        for sid, v in self.s.items():
-            if v["value"] == CHECK and sid in signal_prompt:
-                chosen.append(signal_prompt[sid])
+        # each data point's own waterfall settings (config/datapoints/) decide its AI questions
+        chosen = datapoints.questions(self.s, self.page)
+        silenced = {cfg["steps"]["ai_pages"].get("prompt") for cfg in datapoints.load().values()
+                    if cfg["steps"]["ai_pages"].get("run") == "off" and cfg["steps"]["ai_web"].get("run") == "off"}
+        chosen += [pid for pid in self.ai if pid not in silenced]  # questions a rule asked for after finding a clue
         if self.phase == "signals":
-            chosen += [signal_prompt[sid] for sid in SEARCH_SIGNALS
-                       if sid in signal_prompt and self.s.get(sid, {}).get("value") in (UNKNOWN, CHECK)]
-        if self.phase == "icp" and self.facts.get("funded_stage_open") and self.s.get("E1", {}).get("value") == UNKNOWN:
-            chosen.append("exclusions/series_c_or_public")
-        if self.s.get("F1", {}).get("value") == UNKNOWN or (
-                self.s.get("F1", {}).get("method") == "directory" and not self.facts.get("funding_stage")):
+            chosen.append("fields/vertical")
+        if self.s.get("F1", {}).get("method") == "directory" and not self.facts.get("funding_stage"):
             chosen.append("fit/venture_backed_stage")  # a directory proves funding, but not the stage
         if self.facts.get("entity_type", "Unknown") == "Unknown":
             chosen.append("fields/legal_entity_type")
@@ -1122,8 +1238,18 @@ class Extractor:
         known_prompts = prompt_files.load()[1]
         settled = {pid for pid in chosen if known_prompts.get(pid, {}).get("signal_id") in self.s
                    and self.s[known_prompts[pid]["signal_id"]]["value"] in (YES, NO)}
-        if self.facts.get("team_size_directory") or self.employees:
+        if datapoints.ALL_LAYERS:
+            settled = set()  # test mode: ask even what the free layers already decided, to compare
+        seg, basis = self.size()
+        self.facts["segment"], self.facts["segment_basis"] = seg, basis
+        if seg:  # size known with proof: no headcount question, and no question for a data point this size can't score
             settled.add("fields/segment_headcount")
+            for sid in unscored(seg):
+                if self.s.get(sid, {}).get("value") in (UNKNOWN, CHECK):
+                    self.s[sid] = {**self.s[sid], "note": f"not scored for {seg} companies ({basis}), so not checked"}
+                pid = datapoints.step(sid, "ai_pages").get("prompt")
+                if pid:
+                    settled.add(pid)
         if self.facts.get("entity_type", "Unknown") != "Unknown":
             settled.add("fields/legal_entity_type")
         if not self.facts.get("funding_stage") and self.s.get("F1", {}).get("value") == YES:
@@ -1133,6 +1259,35 @@ class Extractor:
                 and (known[pid]["stage"] in ("site_text", "job_posts")
                      or (known[pid]["stage"] == "search_results" and self.phase == "signals"))
                 and icp_prompt(pid) == (self.phase == "icp")]
+
+    def size(self) -> tuple[str | None, str]:
+        """(segment, basis) from proof, in order: the list's employee count, the headcount from a Prospeo search already
+        bought, the YC directory's team size. None while not known (the AI estimate and the SMB default come later)."""
+        from . import scoring
+        if re.search(r"\d", self.employees or ""):
+            return scoring.segment(self.employees)
+        hint = self.record.get("headcount_hint")
+        if hint:
+            return scoring.segment(str(hint["value"]))[0], f"{hint['value']} people per the {hint['source']}"
+        yc = self.facts.get("team_size_directory")
+        if yc and yc.get("value"):  # free, step 2; after Prospeo because YC's number is often the founding team
+            return scoring.segment(str(yc["value"]))[0], f"{yc['value']} people per the {yc['source']}"
+        return None, "no employee count yet"
+
+    def _job_posts(self, head: int = 600, facts: int = 700, total: int = 9000) -> str:
+        """Each open job: its opening, plus the later sentences that carry facts (numbers, revenue and growth, funding,
+        tools, finance), so a fact deep in a long post isn't cut off ("7-figure ARR up 5x year-to-date")."""
+        tool_rx = "|".join(r["text"] for r in TOOL_RULES.values()) + "|" + "|".join(COMPETITOR_RULES.values())
+        fact_rx = re.compile(r"\d|\b(?:ARR|MRR|revenue|customers?|clients?|growth|growing|grew|profitable|raised|funding|"
+                             r"series [a-d]|seed|backed|payroll|benefits|finance|accounting|bookkeep)\b|" + tool_rx, re.I)
+        out = []
+        for j in self.jobs[:15]:
+            text = re.sub(r"\s+", " ", j.get("description") or "")
+            rest = [s for s in re.split(r"(?<=[.!?])\s+", text[head:]) if fact_rx.search(s) and len(s) < 400]
+            extra = " ".join(rest)[:facts]
+            where = f" ({j['location']})" if j.get("location") else ""
+            out.append(f"{j['title']}{where}: {text[:head]}" + (f" [...] {extra}" if extra else ""))
+        return "\n\n".join(out)[:total]
 
     def _job_snippets(self) -> str:
         tool_rx = re.compile("|".join(r["text"] for r in TOOL_RULES.values()) + "|" + "|".join(COMPETITOR_RULES.values()))
@@ -1162,6 +1317,8 @@ class Extractor:
             ctx["job_titles"] = ", ".join(j["title"] for j in self.jobs[:40])
         if "job_snippets" in extras and self.jobs:
             ctx["job_snippets"] = self._job_snippets()
+        if "job_posts" in extras and self.jobs:  # every open job's text, not only finance roles
+            ctx["job_posts"] = self._job_posts()
         if "employees_from_list" in extras and self.employees:
             ctx["employees_from_list"] = f"Employee count given in the lead list: {self.employees}"
         return {k: v for k, v in ctx.items() if v}
@@ -1191,6 +1348,11 @@ RE_NOT_OWN_MONEY = re.compile(r"\b(?:clients?|customers?|portfolio|collectively|
                               r"|startups (?:we|that)|on behalf of|for (?:our|their) (?:clients|customers))\b", re.I)
 
 
+def _rules_version() -> str:
+    from ..core import versions
+    return versions.rules()
+
+
 def _late_stage_amount(sentence: str, company: str = "") -> str | None:
     """'we raised $750 million' or 'Acme reaches a $44 billion valuation' -> a short label, else None.
     The company itself must be the subject: money raised by clients or a portfolio never counts."""
@@ -1212,10 +1374,21 @@ def _late_stage_amount(sentence: str, company: str = "") -> str | None:
     return None
 
 
+def unscored(seg: str) -> list[str]:
+    """Data points worth nothing for this segment (scoring.json weight 'none'), e.g. F14 for SMB, F13 for ENT."""
+    from . import scoring
+    cfg = scoring.config()
+    pts = {**cfg["fit_signals"], **cfg["buying_signals"]}
+    by_name = {name: sid for sid, (_, name) in SIGNALS.items()}
+    return [by_name[n] for n, w in pts.items() if isinstance(w, dict) and w.get(seg) == "none" and n in by_name]
+
+
 def pricing_has_foreign_and_usd(text: str) -> bool:
     return bool(RE_FOREIGN_PRICE.search(text)) and bool(re.search(r"\$\s?\d", text))
 
 
 def extract(domain: str, company: str, employees: str, record: dict, pages: dict[str, str], jobs: list[dict],
             phase: str = "icp", directory_fn=None) -> dict:
-    return Extractor(domain, company, employees, record, pages, jobs, phase, directory_fn).run()
+    """The free layers for one company: rules, and directories when a directory finder is given (see engine)."""
+    from ..engine.resolve import free_layers
+    return free_layers(domain, company, employees, record, pages, jobs, phase, directory_fn)

@@ -19,6 +19,8 @@ flowchart LR
 | [PIPELINE.md](docs/PIPELINE.md) | How the pipeline works, step by step with diagrams: downloading, rules, verdict, AI, scoring, outputs, storage |
 | [SIGNALS.md](docs/SIGNALS.md) | How each must-have, exclusion and signal is checked |
 | [INTEGRATIONS.md](docs/INTEGRATIONS.md) | The API, the MCP server, and exchanging lists with Clay |
+| [TESTING.md](docs/TESTING.md) | How to test and evaluate everything: smoke test, AI run, trace, waterfall, manual review of every data point, accuracy, regression checklist |
+| [MANUAL_REVIEW.md](docs/MANUAL_REVIEW.md) | The data point by data point review through MCP: standing instructions, decisions per data point, open items, how to resume |
 
 ---
 
@@ -93,12 +95,18 @@ AI options:
 |---|---|
 | See all lists: ICP yes / needs check / no, signals done, disk use | `python -m enrich lists` |
 | See every answer and its proof for one company | `python -m enrich explain linear.app` |
+| See each must-have (or any group) through every layer: rules, directories, AI on pages, AI web search, Prospeo | `python -m enrich waterfall linear.app` (add `--ai`, `--providers`; each asks before spending; `--group exclusions/fit/buying/weak/all`) |
+| Check each data point's waterfall yourself and mark it right or wrong (Enter / n / s / q); saved to `review.csv`, and as labels for `evaluate` | `python -m enrich review accuracy_test` (or one company: `review linear.app`; `--group all`) |
+| Fill data points still open with Prospeo company data (1 credit per matched company) | `python -m enrich providers leads --phase icp` (asks first) |
+| Find decision-makers at ICP companies (founder/CEO, finance lead), with emails if wanted | `python -m enrich people leads --emails` (asks first; writes `leads_contacts.csv`) |
 | Follow one company through every step, one at a time (input, download, rules, directories, verdict, AI, signals, score) | `python -m enrich trace linear.app` (add `--ai` for the AI steps; asks before spending). Saved as a report in `lists/trace_linear_app/output/` |
 | Re-check saved pages after changing a rule (no downloading) | `python -m enrich rules leads` (add `--phase icp` or `--phase signals`) |
 | Continue a stopped run | Run the same command again; finished companies come from the cache |
 | Delete raw pages no longer needed (always asks first) | `python -m enrich clean leads` |
 | Measure accuracy against the right answers | `python -m enrich evaluate leads --labels labels.csv` (blank file: `python -m enrich evaluate --template labels.csv`) |
 | See every run of a list: when, counts, AI cost | `python -m enrich runs leads` |
+| AI cost and companies checked this month, per list, and the budget left | `python -m enrich usage` |
+| The shared company cache: size, add existing lists, delete old entries (asks first) | `python -m enrich cache`, `cache --import`, `cache --clean-older 90` |
 | Compare AI modes on the same companies | `python -m enrich copy leads leads_cheap`, run `ai_check.py leads_cheap --mode cheap`, then `python -m enrich compare leads leads_cheap` |
 | List the AI prompts | `python -m enrich prompts` |
 | See the exact AI message for a company | `python -m enrich prompts --show fit/venture_backed_stage --domain resend.com` (add `--step 2` for the web search step) |
@@ -129,7 +137,7 @@ Other tools can use the pipeline too. Details and setup steps: [docs/INTEGRATION
 | Start the API for Clay, scripts and other tools (docs at http://127.0.0.1:8787/docs; all calls in [INTEGRATIONS.md](docs/INTEGRATIONS.md#api), importable description in [docs/openapi.json](docs/openapi.json)) | `python -m enrich serve` |
 | List Clay tables / run one as a list | `python -m enrich pull` / `python -m enrich pull t_abc123 --list q4` |
 | Send a finished list to a Clay table | `python -m enrich push leads` |
-| Use it from Claude Code | Approve **puzzle-lead-scoring** once in `/mcp` (registered in `.mcp.json`) |
+| Use it from Claude Code or Claude Desktop (the chat model answers the AI questions itself: no OpenAI cost) | Approve **puzzle-lead-scoring** once in `/mcp` (registered in `.mcp.json`); Claude Desktop setup in [INTEGRATIONS.md](docs/INTEGRATIONS.md) |
 
 ---
 
@@ -149,6 +157,7 @@ Other tools can use the pipeline too. Details and setup steps: [docs/INTEGRATION
 | File | What it holds | Change it when |
 |---|---|---|
 | [enrich/checks/rules.py](enrich/checks/rules.py) | The pattern-matching rules: what counts as proof for each data point | A rule finds wrong answers or misses clear ones |
+| [config/datapoints/](config/datapoints/) | Each data point's own waterfall (57 files): which layers run and when (rules, directories, AI on pages, AI web search, provider). See them all: `python -m enrich datapoints` | You want a data point answered differently, cheaper or more thoroughly |
 | [config/prompts/](config/prompts/) | One JSON prompt file per data point (62), plus shared rules, the AI provider and model names in `_shared.json` | AI should judge a data point differently, or you want another model |
 | [config/scoring.json](config/scoring.json) | Points per signal (high 3, medium 2, low 1, weak fit -2), Strong fit cut-off (12), size bands | You want different weights or tiers |
 
@@ -171,17 +180,25 @@ requirements.txt
 config/               everything you edit to change behaviour
   profile.yaml        the ICP definition (never changed by the tool)
   scoring.json        lead score weights, cut-off, size bands
+  datapoints/         each data point's waterfall: which layers run and when (one file each)
   prompts/            one AI prompt per data point + _shared.json
 docs/
   PIPELINE.md         how the pipeline works, with diagrams
   SIGNALS.md          how each data point is checked
   INTEGRATIONS.md     API, MCP server, Clay
+  TESTING.md          how to test and evaluate: levels, review, accuracy, regression
+  MANUAL_REVIEW.md    the MCP review so far: instructions, decisions per data point, how to resume
 examples/
   sample_leads.csv    14-company test list
 enrich/
   __main__.py         all commands (python -m enrich ...)
   core/               shared foundations
     settings.py       keys from .env, set once
+    paths.py          where data lives (DATA_DIR)
+    shared.py         one company cache for all lists: pages and AI answers
+    ratelimit.py      rate limits shared by every process (SEC, Internet Archive)
+    versions.py       version stamps for rules and prompts
+    usage.py          monthly AI cost and budget
     store.py          per-list storage: pages, results, AI answers, directory findings
     inputs.py         reads the CSV, cleans domains
     runlog.py         run log per list (runs.jsonl)
@@ -190,8 +207,13 @@ enrich/
     crawl.py          finds and downloads pages, job feeds; real-browser and public DNS fallbacks
     directories.py    free directories: YC, SEC EDGAR, IRS non-profit list
     history.py        old copies of company sites (Internet Archive)
+  engine/             the waterfall: layers in order, one set of merge rules
+    layers.py         the five layers: name, cost, which data points each can answer
+    merge.py          how answers from different layers are combined; the ICP verdict
+    resolve.py        one company through the layers: rules, directories, then AI and provider answers
   checks/             free checks
-    rules.py          pattern-matching rules for every data point; which AI prompts a company needs
+    rules.py          pattern-matching rules for every data point
+    datapoints.py     reads config/datapoints/: each data point's waterfall settings
     scoring.py        lead score from scoring.json
   ai/                 the AI step
     prompts.py        loads prompt files and builds AI messages (single and grouped)
@@ -204,10 +226,17 @@ enrich/
     common.py         shared helpers for both phases
     evaluate.py       accuracy against labels
     trace.py          one company through every step, one at a time
+    waterfall.py      each data point through every layer, and which layer decided
+    review.py         you mark each data point right or wrong; review.csv and labels.csv
+  providers/          paid data, the last layer
+    prospeo.py        Prospeo: company data, people search, email reveal, credit balance
+    apply.py          provider data into answers (medium strength: never makes a company NO alone)
+    run.py            the providers and people steps for a list; contacts file
   integrations/       using it from outside
     api.py            HTTP API (python -m enrich serve)
     service.py        runs the pipeline from code, for the API and MCP
-    mcp_server.py     MCP server (python -m enrich mcp)
+    mcp_server.py     MCP server (python -m enrich mcp); AI answered by the chat model
+    client_ai.py      open questions out to the chat model, its answers back in through the quality checks
     clay.py           pull from / push to Clay
 lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.jsonl, output/  (not in git)
 ```
@@ -228,6 +257,7 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.json
 | Real-browser fallback (your Google Chrome) for JavaScript-only sites and short bot checks | Done; Khan Academy went from 209 to 8,682 characters of text. Hard Cloudflare blocks still fail |
 | Reasoning column ending with the profile's "Funding stage: <value> (<basis>)" line | Done (built by code, no AI cost) |
 | `evaluate` (accuracy against labels) and `runs` (run log with AI cost) | Done; the 10-company test scores 9 of 9 decided, 0 good companies wrongly NO |
+| Built to scale on one machine (see [PIPELINE.md, Architecture](docs/PIPELINE.md#architecture)): one company cache for all lists, rate limits shared across processes, version stamps, API jobs that survive restarts, monthly AI budget, configurable data folder | Done; tested with two lists sharing pages and answers, two processes sharing a limit, and a server restarted twice mid-list |
 | Final list with ICP YES / NO / PENDING, lead score, tier and segment | Done |
 | Free directories: YC (by domain), SEC EDGAR (public, Form D funding, Delaware, address), IRS non-profit list, with match-strength rules | Done; on the test list it caught HubSpot as public and confirmed Puzzle's Delaware status and funding |
 | 62 AI prompt files with a web search step | Written |

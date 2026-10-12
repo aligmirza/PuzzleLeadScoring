@@ -924,6 +924,259 @@
         }
       }
     },
+    "/v1/lists/{name}/providers": {
+      "post": {
+        "tags": [
+          "Providers"
+        ],
+        "summary": "Providers",
+        "description": "Prospeo company data, the last layer of the waterfall, for companies whose data points the earlier layers left\nopen. Refused above max_credits.",
+        "operationId": "providers_v1_lists__name__providers_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvidersIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/people": {
+      "post": {
+        "tags": [
+          "Providers"
+        ],
+        "summary": "People",
+        "description": "Decision-makers at the list's ICP companies from Prospeo (founders, C-suite, finance lead), with emails if asked.\nRefused above max_credits.",
+        "operationId": "people_v1_lists__name__people_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeopleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lists/{name}/contacts": {
+      "get": {
+        "tags": [
+          "Providers"
+        ],
+        "summary": "Contacts",
+        "description": "Contacts found for the list: one row per person, with the company's ICP, score and tier.",
+        "operationId": "contacts_v1_lists__name__contacts_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "type": "string",
+              "default": "json",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/lists/{name}/evaluate": {
       "post": {
         "tags": [
@@ -1132,6 +1385,86 @@
               "type": "string",
               "default": "",
               "title": "Place"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usage": {
+      "get": {
+        "tags": [
+          "Quality"
+        ],
+        "summary": "Usage",
+        "description": "Companies checked and AI cost per list for a month (default this month), and the monthly budget left.",
+        "operationId": "usage_v1_usage_get",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
             }
           },
           {
@@ -1740,6 +2073,73 @@
         ],
         "title": "ListIn"
       },
+      "PeopleIn": {
+        "properties": {
+          "emails": {
+            "type": "boolean",
+            "title": "Emails",
+            "description": "Also reveal verified emails (1 credit each)",
+            "default": false
+          },
+          "per_company": {
+            "type": "integer",
+            "title": "Per Company",
+            "description": "Contacts kept per company: founder/CEO first, then the finance lead",
+            "default": 3
+          },
+          "strong_only": {
+            "type": "boolean",
+            "title": "Strong Only",
+            "description": "Only Strong fit companies",
+            "default": false
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 0
+          },
+          "max_credits": {
+            "type": "number",
+            "title": "Max Credits",
+            "description": "Refuse if this could use more Prospeo credits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_credits"
+        ],
+        "title": "PeopleIn"
+      },
+      "ProvidersIn": {
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "icp",
+              "signals"
+            ],
+            "title": "Phase",
+            "description": "icp: open must-haves and exclusions; signals: open fit and buying signals",
+            "default": "icp"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "description": "Only the first N companies (0 = all that need it)",
+            "default": 0
+          },
+          "max_credits": {
+            "type": "number",
+            "title": "Max Credits",
+            "description": "Refuse if this could use more Prospeo credits (1 per matched company)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_credits"
+        ],
+        "title": "ProvidersIn"
+      },
       "PullIn": {
         "properties": {
           "table_id": {
@@ -1916,6 +2316,10 @@
     {
       "name": "Reference",
       "description": "Free directory lookups and the list of data points."
+    },
+    {
+      "name": "Providers",
+      "description": "Paid data (Prospeo): company data for open data points, and decision-makers. Always capped by max_credits."
     },
     {
       "name": "Clay",

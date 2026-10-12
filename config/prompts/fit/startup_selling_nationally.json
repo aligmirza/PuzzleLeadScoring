@@ -21,20 +21,23 @@
     "max_chars_per_page": 4000
   },
   "prompt": {
-    "task": "Decide whether the company operates as a startup rather than a small business: it sells a scalable software or technology product to customers beyond its own metro area, where revenue grows independently of headcount.",
+    "task": "Decide whether the company operates as a startup rather than a small local business: it sells a software or technology product, or provably sells its services beyond its own metro area.",
     "definition": "This is the single most important discriminator on the profile. It cannot be true together with 'Local professional services firm'.",
     "yes_when": [
-      "A software or tech product sold to customers anywhere (self-serve sign up, national or global customers)"
+      "The text clearly states a software or tech product (an app, platform, API, SaaS or software tool the company sells). Software counts as selling nationally: no proof of where its customers are is needed",
+      "A services firm whose text states customers beyond its own city or region (named clients elsewhere, 'nationwide', 'clients across the US')"
     ],
     "no_when": [
-      "The company sells its own billed labour into one metro area: agency, consultancy, contractor, clinic, single-location operation"
+      "The company sells its own billed labour into one metro area: agency, consultancy, contractor, clinic, single-location operation, and no software product is stated"
     ],
     "unknown_when": [
-      "Not enough text to tell what or where it sells"
+      "Not enough text to tell whether it sells a software product",
+      "A services firm with no stated customers or service area"
     ],
     "watch_out_for": [
       "Don't judge by how polished the site is",
-      "A service business with national clients and no scalable product is NOT this signal"
+      "The software must be stated in the text, not guessed from design or wording like 'AI-powered'",
+      "A services firm needs stated proof of customers beyond its own city; national reach is never assumed for services"
     ],
     "where_to_look": [
       "Homepage",

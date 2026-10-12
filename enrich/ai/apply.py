@@ -14,12 +14,31 @@ Confidence rules (from config/prompts/_shared.json):
 import re
 
 from . import prompts as P
-from ..checks.rules import CHECK, SIGNALS, UNKNOWN, decide
+from ..checks.rules import CHECK, SIGNALS, UNKNOWN
+from ..engine.merge import redecide
 
 
 NOT_MENTIONED = re.compile(r"\b(?:does|do|did) not (?:mention|indicate|state|show|say|provide|confirm)|\bno (?:mention|evidence|indication|information)\b"
                            r"|\bnot (?:mentioned|stated|indicated)\b|\bthere is no\b", re.I)
 
+
+RE_E1_PROOF = re.compile(r"\bseries\s+[c-z]\b|\bIPO\b|initial public offering|publicly traded|\b(?:NYSE|NASDAQ|Nasdaq)\b|"
+                         r"stock exchange|\bticker\b|went public", re.I)
+
+
+def late_stage_proof(quote: str, company: str = "") -> bool:
+    """Series C or later needs a quote that shows it. A tender offer or secondary sale is not a funding round."""
+    from ..checks.rules import _late_stage_amount
+    if re.search(r"tender offer|secondary (?:sale|transaction)", quote, re.I) and not RE_E1_PROOF.search(quote):
+        return False
+    return bool(RE_E1_PROOF.search(quote) or _late_stage_amount(quote, company or "we"))
+
+
+RE_HEADCOUNT = re.compile(r"\b\d[\d,]*\+?\s*(?:employees|people|team members|staff|person team|-person)|"
+                          r"\b(?:team|company) of\s+\d|\bheadcount\b", re.I)
+TOOL_SIGNALS = {"M3", "F2", "F4", "F9", "F19", "F20", "F21"}
+RE_CUSTOMER_LIST = re.compile(r"\b(?:including|customers?|clients?|trusted by|used by|loved by|companies like|teams (?:at|like)|"
+                              r"such as|tool of choice for|powering)\b", re.I)
 
 # "Recent" signals: the answer is decided by the date in the AI's own quote, not by the AI's date arithmetic
 # (in testing it found "closed a $45M Series B on 4/17/2026" and still answered "not in the last 6 months").
@@ -88,6 +107,11 @@ def _apply_field(result: dict, pid: str, data: dict) -> None:
     if pid == "fields/vertical" and data.get("value"):
         result["vertical"] = data["value"]
     elif pid == "fields/segment_headcount" and data.get("value"):
+        quote = data.get("evidence_quote") or ""
+        roles = (result.get("crawl") or {}).get("jobs_count") or 0
+        headcount = data.get("headcount_estimate") or 0
+        if not RE_HEADCOUNT.search(quote) or (roles and headcount and headcount < roles):
+            return  # "31 open roles" is not a headcount, and 15 people can't be hiring 31
         result["segment_ai"] = {"value": data["value"], "headcount": data.get("headcount_estimate"),
                                 "evidence": data.get("evidence_quote", "")}
     elif pid == "fields/legal_entity_type" and data.get("value") not in (None, "Unknown"):
@@ -124,6 +148,24 @@ def _apply_recent_stage(result: dict) -> None:
                                        "note": "a recent round is Series C or later", "method": "ai"}
 
 
+def _confirm_stage(result: dict, data: dict, step: int) -> None:
+    """F1 was Yes from a directory (YC, Form D: venture-backed, stage not shown). A confirmed round with a quote becomes
+    its proof; a confirmed Series C or later turns it to No (outside pre-seed to Series B), which needs high + domain."""
+    stage, quote = (data.get("value") or "").strip(), (data.get("evidence_quote") or "").strip()
+    entity = data.get("entity_match", "domain") if step == 2 else "domain"
+    if data.get("basis") != "confirmed" or not quote:
+        return
+    url = data.get("source", "") if str(data.get("source", "")).startswith("http") else ""
+    where = "web search" if step == 2 else "company website"
+    if stage in ("Pre-Seed", "Seed", "Series A", "Series B") and entity in ("domain", "name_and_location"):
+        result["signals"]["F1"] = {**result["signals"]["F1"], "evidence": quote[:300], "url": url or result["signals"]["F1"].get("url", ""),
+                                   "method": "ai", "note": f"{stage} (confirmed), AI, {where} ({data.get('confidence')} confidence); "
+                                                           f"also {result['signals']['F1'].get('evidence', '')[:80]}"}
+    elif stage == "Series C or later" and data.get("confidence") == "high" and entity == "domain":
+        result["signals"]["F1"] = {**result["signals"]["F1"], "value": "no", "evidence": quote[:300], "url": url,
+                                   "method": "ai", "note": f"confirmed Series C or later, AI, {where}"}
+
+
 def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict:
     """answers = Store.get_ai(domain, phase). Changes and returns result."""
     if "signals" not in result:
@@ -145,11 +187,19 @@ def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict
         current = result["signals"][sid]
         if pid == "fit/venture_backed_stage" and data.get("value") not in (None, "Unknown") and data.get("confidence") != "low":
             result["funding_stage"] = f"{data['value']} ({data.get('basis', 'estimated')})"
+            if current["value"] == "yes" and current.get("method") == "directory":
+                _confirm_stage(result, data, step)
+                current = result["signals"][sid]
         if current["value"] not in (CHECK, UNKNOWN):
             continue  # code or a directory already found proof; AI doesn't overrule it
 
         if pid == "fit/venture_backed_stage":
             ans = data.get("venture_backed", "unknown")
+            stage = (data.get("value") or "").strip()
+            if stage in ("Series C or later", "Bootstrapped"):
+                ans = "no"  # funded, but not at pre-seed to Series B (or not venture-backed at all)
+            elif ans == "yes" and stage not in ("Pre-Seed", "Seed", "Series A", "Series B"):
+                ans = "unknown"
         else:
             ans = data.get("answer", "unknown")
         recent_note = ""
@@ -173,6 +223,11 @@ def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict
             conf_ok = False  # "it doesn't mention X" is absence of evidence, not a confirmed No
         if ans in ("yes", "no") and not (data.get("evidence_quote") or "").strip():
             conf_ok = False  # a confirmed answer needs an exact quote as proof
+        company = result.get("company") or result.get("domain", "").split(".")[0]
+        if sid == "E1" and ans == "yes" and not late_stage_proof(data.get("evidence_quote") or "", company):
+            conf_ok = False  # the quote must show the round letter, an IPO / listing, or a $100M+ round / $1B+ valuation
+        if sid in TOOL_SIGNALS and ans == "yes" and RE_CUSTOMER_LIST.search(data.get("evidence_quote") or ""):
+            conf_ok = False  # "40,000 companies (including OpenAI, Coinbase, and Ramp)" names a customer, not their card provider
         if pid == "fit/venture_backed_stage" and data.get("basis") == "estimated":
             conf_ok = False  # an estimated stage is reported in "Funding stage" but earns no points
         if ans in ("yes", "no") and conf_ok and entity_ok:
@@ -184,16 +239,18 @@ def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict
             if step == 2:
                 note += f" and entity match '{entity}'"
             note += f", not enough to count: {data.get('reason', '')}"
-        result["signals"][sid] = {"value": value, "evidence": (data.get("evidence_quote") or current["evidence"])[:300],
+        quote = data.get("evidence_quote") or current["evidence"]
+        if sid == "E1" and len(quote) > 300:
+            m = RE_E1_PROOF.search(quote)  # keep the words that prove it, not just the start of a long quote
+            if m:
+                quote = "..." + quote[max(0, m.start() - 180): m.end() + 100] + "..."
+        result["signals"][sid] = {"value": value, "evidence": quote[:300],
                                   "url": url, "note": note[:300], "method": "ai"}
         if value == "yes":
             for tool in data.get("tools_used", []) or []:
                 result["partners"] = sorted(set(result.get("partners", [])) | {tool})
 
     _apply_recent_stage(result)
-    if phase == "icp":
-        d = decide(result["signals"], result.get("crawl", {}).get("status"))
-        result.update(gate=d["gate"], icp_verdict=d["verdict"], exclusion_reason=d["exclusion_reason"],
-                      icp_checks=[SIGNALS[s][1] for s in d["checks"]], must_haves_confirmed=len(d["confirmed"]))
+    redecide(result, phase)
     result.setdefault("ai", {})["answered"] = applied
     return result
