@@ -33,7 +33,7 @@ from ..engine.layers import DIRECTORY_COVERS, PROVIDER_COVERS  # noqa: E402  (th
 PROVIDER_ON = {"F13", "F14"}
 # answered by the rules and the DNS check only: they read every page's text and code, the job posts and DNS records
 # for the tool's name, so an AI reading the same text adds cost, not proof
-RULES_ONLY = {"F19", "F20"}
+RULES_ONLY = {"F19", "F20", "F21"}
 # data points whose page answer needs the team page
 _NEEDS_TEAM_PAGE = {"F13", "F14"}
 

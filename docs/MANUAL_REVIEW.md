@@ -4,7 +4,7 @@ A data point by data point review of the waterfall, run through MCP (Claude Code
 **argon-ai.com** from `examples/Lead-Scoring-(Template)-Default-view-export-1791793022697.csv`.
 Each data point was run alone, its full waterfall shown, and approved, corrected or changed before moving on.
 
-**Status (2026-10-12): M1 to F20 reviewed, F21 waiting for a decision. Next session starts at F21, then B1 to B14 and W1 to W12.**
+**Status (2026-10-12): M1 to F20 reviewed; F21 set to rules, DNS and Wappalyzer only and waiting for your review. Next: review F21, then B1 to B14 and W1 to W12.**
 
 | | |
 |---|---|
@@ -18,7 +18,7 @@ Each data point was run alone, its full waterfall shown, and approved, corrected
 
 In Claude Code (with the puzzle-lead-scoring MCP server connected), say:
 
-> Resume the manual review in dp_test_lead_scoring: run F21 for argon-ai.com with confirm_next, show me the whole waterfall and wait for my review.
+> Resume the manual review in dp_test_lead_scoring: show me F21 for argon-ai.com and wait for my review.
 
 The tools: `dp_test_run` (one data point; `confirm_next=true` only after you say yes), `dp_test_answer` (Claude answers
 an AI step, test list only), `dp_test_record` (approve, reject, correct, partially_correct, investigate, retry, stop),
@@ -77,11 +77,10 @@ an AI step, test list only), `dp_test_record` (approve, reject, correct, partial
 | F18 | Unknown | Approved | Gap: blogs loaded by JavaScript aren't read. |
 | F19 | Unknown | Approved | Rules, DNS and Wappalyzer only (no AI). |
 | F20 | Unknown | Approved | Rules, DNS and Wappalyzer only (no AI). Wappalyzer page-structure rules added and false matches fixed. |
-| F21 | Unknown after steps 1 and 2 | **Waiting** | Decide: rules, DNS and Wappalyzer only like F19 and F20 (recommended), or run the AI steps. |
+| F21 | Unknown (no Carta or Pulley in text, code, fingerprints or DNS) | **Waiting for review** | Rules, DNS and Wappalyzer only (no AI), like F19 and F20. |
 
 ## Open decisions and offers (not built yet)
 
-- **F21:** rules only, or AI steps (above).
 - **YC safeguards (F11):** require a second agreeing fact for a strong YC match; count AI web answers about YC only
   when the listing's website is the company's domain; note near-name YC companies as "not a match".
 - **F12 / B3:** add the job-board link as the source.
@@ -89,7 +88,7 @@ an AI step, test list only), `dp_test_record` (approve, reject, correct, partial
 - **F17, F19-style cost savers:** web search only on a clue for rarely public data points.
 - **F18 and others:** re-fetch nearly empty blog pages with the real browser.
 - **E5:** treat "Inc." as a clue, decide by the IRS register / SEC Form D.
-- **Other tool data points (F2, F4, F9, F21):** rules only, like F19 and F20, if wanted.
+- **Other tool data points (F2, F4, F9):** rules only, like F19 and F20, if wanted.
 - **Prospeo company lookup** is untested live (only the people search is).
 - **Prospeo funding totals are unreliable** (counted Argon AI's $5.5M seed three times as $16.5M): drop or mark the column.
 

@@ -10,11 +10,11 @@
       "on": true
     },
     "ai_pages": {
-      "run": "if_open",
+      "run": "off",
       "prompt": "fit/cap_table_carta_or_pulley"
     },
     "ai_web": {
-      "run": "if_open",
+      "run": "off",
       "when_site_unreached": false
     },
     "provider": {

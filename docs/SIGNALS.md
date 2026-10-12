@@ -681,7 +681,7 @@ verification records, SPF senders, email provider).
 | F18 | Early adopter | Rules | - | if open | if open | n/a | Product Hunt launch or engineering blog. Gap: blogs loaded by JavaScript aren't read yet. |
 | F19 | Banks with Mercury or Brex | Rules + Wappalyzer | DNS | off | off | off | Rules (names in text and code), DNS and Wappalyzer only: an AI reading the same text adds cost, not proof. |
 | F20 | Uses Ramp or Brex cards | Rules + Wappalyzer | DNS | off | off | off | Rules, DNS and Wappalyzer only (as F19). |
-| F21 | Cap table in Carta or Pulley | Rules + Wappalyzer | DNS | if open | if open | off | Rules, DNS and Wappalyzer (a Carta fingerprint exists); AI steps still on, pending review. |
+| F21 | Cap table in Carta or Pulley | Rules + Wappalyzer | DNS | off | off | off | Rules, DNS and Wappalyzer only (as F19; a Carta fingerprint exists). |
 | B1 | Raised money in the last 6 months | Rules | SEC Form D | if open | if open | off | Not reviewed in the MCP test yet. |
 | B2 | New investor or accelerator | Rules | YC | if open | if open | n/a | Not reviewed in the MCP test yet. |
 | B3 | Hiring for several roles | Rules | - | if open | if open | off | Not reviewed in the MCP test yet. |
