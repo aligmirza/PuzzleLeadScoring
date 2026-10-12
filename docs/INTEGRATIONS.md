@@ -239,7 +239,24 @@ If you also did option A, `claude mcp list` notes the server is defined in two p
 `mcpServers` (command = the full path to `.venv/bin/python`, args `["-m", "enrich", "mcp"]`, env `PYTHONPATH` = the
 project folder), then quit (Cmd+Q) and reopen Claude Desktop.
 
-**Through MCP the model you're chatting with is the only AI** (Claude in Claude Code or Claude Desktop), at no API cost. The tool never calls OpenAI or any other AI API on this path:
+**Which AI answers, by list size:**
+
+| List | Steps 1-2 and 5 | Steps 3-4 (AI) |
+|---|---|---|
+| One company or a list up to about 100 | `check_company` / `enrich_list` (+ `use_prospeo`) | **Claude in the chat** (`open_questions`, `submit_answers`): $0 API. In Claude Code, `/enrich-chat <csv>` runs it all, one `company-answerer` subagent per company, 5 at a time |
+| Bigger lists (over about 100, up to thousands) | `enrich_list` (+ `use_prospeo`) | **OpenAI** via `list_ai`: estimate first, then only with your approved cap. Claude can't answer tens of thousands of questions in a chat |
+
+**Up to about 100 companies in Claude Code:** type `/enrich-chat path/to/list.csv my_list`. It runs the free steps,
+answers every company's open questions with the `company-answerer` subagent (`.claude/agents/`: its own fresh
+context per company, so the main chat stays short; 5 in parallel), asks you before any Prospeo credit, and shows the
+results. About 1,000-1,500 answers for 100 companies; expect roughly an hour and a good share of your Claude plan's
+usage.
+
+Bigger lists, bulk workflow: `enrich_list` (free, background) → `list_status` until done → `list_ai(list, "icp")` shows the
+estimate → approve a cap → `list_ai(list, "icp", max_cost_usd=<cap>)` → when done, the same for `"signals"` →
+`list_results` / `push_list_to_clay`.
+
+**In the chat path the model you're chatting with is the only AI** (Claude in Claude Code or Claude Desktop), at no API cost. The tool never calls OpenAI there; `list_ai` is the only way OpenAI is used through MCP:
 
 1. `check_company` (or `enrich_list`) runs the free layers: website rules and directories.
 2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ICP summary, ground rules, confidence scale), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
@@ -256,6 +273,7 @@ Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring
 | `open_questions` | The questions still open for a company, for the model to answer (phase 1, then phase 2) |
 | `submit_answers` | Saves the model's answers through the quality checks; returns what counted and the new verdict and score. `cannot_answer` items stay open (no other AI is used) |
 | `questions_overview` | For a whole list: open questions per company |
+| `list_ai` | **Big lists only.** The AI steps for a whole list with the OpenAI engine, in the background. Called without a cap it only returns the cost estimate; it runs only with `max_cost_usd` set to a cap you approved, and never above it or the monthly budget |
 | `enrich_list` | Start a CSV file as a list in the background (free waterfall steps); `use_prospeo=true` adds step 5 for each company where the finance check is still open (1 credit each at most) |
 | `list_status` | Progress and counts of a list |
 | `list_results` | Rows of a finished list (ICP = YES by default) |

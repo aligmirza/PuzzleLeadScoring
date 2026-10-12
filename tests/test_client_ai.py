@@ -93,10 +93,25 @@ class OpenAIFallback(unittest.TestCase):
         self.assertEqual(out["not_answered"]["questions"][0]["id"], self.q["id"])
         self.assertNotIn(self.q["id"], self.store.get_ai(DOMAIN, "icp"))
 
+    def test_openai_only_through_list_ai_with_an_approved_cap(self):
+        from enrich.integrations import mcp_server, service
+        est = {"list": "big", "phase": "icp", "companies": 900, "chosen_mode": "accurate",
+               "accurate": {"data_points": 4000, "worst_case_usd": 12.5}, "cheap": {"data_points": 4000, "worst_case_usd": 6.1}}
+        with mock.patch.object(service, "estimate_ai", return_value=est), \
+                mock.patch.object(service, "start_ai", side_effect=AssertionError("ran without a cap")):
+            out = mcp_server.list_ai("big")
+        self.assertTrue(out["estimate_only"])
+        self.assertIn("$12.50", out["next"])
+        with mock.patch.object(service, "start_ai", side_effect=service.CostLimit("above the limit")):
+            self.assertEqual(mcp_server.list_ai("big", max_cost_usd=5)["refused"], "above the limit")
+        with mock.patch.object(service, "start_ai", return_value={"state": "running"}) as s:
+            mcp_server.list_ai("big", max_cost_usd=15)
+        self.assertEqual(s.call_args.args[2]["max_cost_usd"], 15)
+
     def test_mcp_has_no_openai_route(self):
         import inspect
         from enrich.integrations import mcp_server
-        self.assertFalse(hasattr(client_ai, "openai_fallback"))
+        self.assertFalse(hasattr(client_ai, "openai_fallback"))  # the chat path never falls back to OpenAI
         tools = {t.name: t for t in asyncio.run(mcp_server.mcp.list_tools())}
         self.assertNotIn("allow_openai_fallback", tools["submit_answers"].input_schema["properties"])
         for name in ("check_company", "enrich_list", "pull_clay_table"):  # free layers only: use_ai is never true

@@ -33,8 +33,10 @@ an AI step, test list only), `dp_test_record` (approve, reject, correct, partial
    location. Low = implied, name-only, outdated or conflicting (never counts).
 3. **Waterfall rule for all:** if steps 1 and 2 (rules, directories) find nothing, run step 3 (AI on our pages), then
    step 4 (AI web search) if still open, unless the data point's file switches a step off with a reason.
-4. **Through MCP, only the attached Claude model answers AI questions**, with the prompts in `config/prompts`.
-   OpenAI is never called on the MCP path.
+4. **Through MCP, Claude answers AI questions for single companies and lists up to about 100** (in Claude Code:
+   `/enrich-chat`, one `company-answerer` subagent per company), with the prompts in `config/prompts`; OpenAI is
+   never called on that chat path. **Bigger lists use OpenAI** through the `list_ai` tool only: cost estimate
+   first, then only with a cap the user approved.
 5. **Prospeo only for the finance-person check (F13, F14), at most 1 credit per company** (one team search; the company
    details that come with it go to the contacts CSV only). Ask before using it anywhere else.
 6. **Size first:** work out the segment before the finance checks, and skip data points that can't score for that

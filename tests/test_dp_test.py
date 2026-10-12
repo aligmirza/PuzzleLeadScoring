@@ -286,7 +286,7 @@ class ExistingTools(unittest.TestCase):
         names = [t.name for t in asyncio.run(mcp_server.mcp.list_tools())]
         self.assertEqual(sorted(names), sorted([
             "check_company", "enrich_list", "list_status", "list_results", "explain_company", "clay_tables",
-            "pull_clay_table", "push_list_to_clay", "open_questions", "submit_answers", "questions_overview",
+            "pull_clay_table", "push_list_to_clay", "open_questions", "submit_answers", "questions_overview", "list_ai",
             "dp_test_setup", "dp_test_run", "dp_test_answer", "dp_test_record", "dp_test_summary"]))
 
     def test_production_waterfall_still_imports_and_runs_offline(self):

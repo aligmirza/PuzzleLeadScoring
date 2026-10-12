@@ -632,9 +632,10 @@ decided in the MCP review of each data point.
 - Confidence: **high** = the source clearly states it, about this company (domain match), under ~2 years old;
   **medium** = clearly stated but matched by name and location; **low** = implied, name-only, old or conflicting
   (never counts).
-- **Through MCP (Claude Code, Claude Desktop) the attached Claude model answers steps 3 and 4 with the same prompts
-  (`config/prompts`); the tool never calls OpenAI on that path.** A question Claude can't answer the way it asks stays
-  open. In the terminal, API and Clay, OpenAI answers them.
+- **Through MCP (Claude Code, Claude Desktop), for single companies and lists up to about 100, the attached Claude model answers
+  steps 3 and 4 with the same prompts (`config/prompts`); the tool never calls OpenAI on that path.** A question Claude
+  can't answer the way it asks stays open. **Big lists use OpenAI** (MCP `list_ai` with an approved cost cap, or the
+  terminal, API and Clay).
 - Prospeo (step 5) is used only for the finance-person check (F13, F14): one search per company, at most 1 credit,
   cached 90 days. The company details that come with it go to the contacts file (`<list>_contacts.csv`), not into
   other answers.

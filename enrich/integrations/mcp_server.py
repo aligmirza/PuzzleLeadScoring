@@ -25,7 +25,11 @@ mcp = MCPServer(
         "A question you can't answer the way it asks (e.g. no web search tool) is sent back as cannot_answer and stays open. "
         "Each data point follows its own waterfall (config/datapoints): free steps in check_company / enrich_list, then "
         "your answers (pages, then web), then step 5, Prospeo, only for the finance-person check: when submit_answers "
-        "says it's next, ask the user (1 credit per company) and only then call check_company with use_prospeo=true. Workflow for a company: check_company(domain) runs the free layers "
+        "says it's next, ask the user (1 credit per company) and only then call check_company with use_prospeo=true. "
+        "Lists up to about 100 companies: answer in the chat, one company at a time per helper (in Claude Code, the "
+        "company-answerer subagent, about 5 in parallel; the /enrich-chat command runs the whole flow). BIGGER LISTS: "
+        "don't answer in the chat; offer list_ai, which runs the AI steps with the OpenAI engine: show its estimate "
+        "first and run only with a cost cap the user approved. That is the only way OpenAI is used through MCP. Workflow for a company: check_company(domain) runs the free layers "
         "(website rules and directories); then open_questions(domain) lists what is still open, with the page text and "
         "instructions; answer each one yourself (read the page text, or search the web for answer_from = web if you can), "
         "quoting your proof exactly; then submit_answers. Answers pass the same quality checks as any AI answer, and the "
@@ -142,6 +146,27 @@ def submit_answers(domain: str, answers: list[dict], list_name: str = service.SI
     A question you can't answer the way it asks (e.g. web, and you have no web search tool): send
     {"id", "answer_from", "cannot_answer": "<why>"}; it stays open. No other AI (no OpenAI) is ever used through MCP."""
     return client_ai.submit_answers(domain, answers, list_name, phase)
+
+
+@mcp.tool()
+def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "") -> dict:
+    """BIG LISTS ONLY (more than about 100 companies): the AI steps (pages, then web) for a whole list with the OpenAI
+    engine, in the background, with the same prompts and checks. Up to about 100 companies answer the questions
+    yourself instead (open_questions, one company per helper). max_cost_usd=0 (default) only returns the cost estimate: show it to the user. Run it only after
+    the user approves a cap: call again with max_cost_usd = that cap. Nothing is sent above the cap or the monthly
+    AI budget. phase: icp first; after it finishes (list_status), run phase signals. mode: accurate (default) or cheap."""
+    if max_cost_usd <= 0:
+        est = service.estimate_ai(list_name, phase, mode or None)
+        chosen = est[est["chosen_mode"]]
+        return {"estimate_only": True, **est,
+                "next": (f"OpenAI would answer {chosen['data_points']} questions for {est['companies']} companies, "
+                         f"worst case ${chosen['worst_case_usd']:.2f} ({est['chosen_mode']} mode; cheap mode "
+                         f"${est['cheap']['worst_case_usd']:.2f}). Ask the user to approve a cap, then call list_ai again "
+                         f"with max_cost_usd set to it.") if chosen["data_points"] else "No open AI questions in this phase."}
+    try:
+        return service.start_ai(list_name, phase, {"max_cost_usd": max_cost_usd, "mode": mode or None})
+    except service.CostLimit as e:
+        return {"started": False, "refused": str(e)}
 
 
 @mcp.tool()
