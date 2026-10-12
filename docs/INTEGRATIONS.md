@@ -235,6 +235,17 @@ If you also did option A, `claude mcp list` notes the server is defined in two p
 **Check it works:** ask Claude Code *"Use puzzle-lead-scoring to check linear.app"*. To remove it:
 `claude mcp remove puzzle-lead-scoring -s local`.
 
+**Claude Code skills and helpers** (in `.claude/`, loaded automatically when you open the project):
+
+| Name | Use it for |
+|---|---|
+| `check-company` (skill) | One company through the full waterfall, Claude answering, Prospeo only after your yes |
+| `/enrich-chat <csv> [list]` (command) + `company-answerer` (subagent) | Lists up to about 100 companies, answered in chat, 5 companies at a time |
+| `bulk-enrich` (skill) | Bigger lists: free steps, `list_ai` with an approved cost cap, costs, Clay push |
+| `icp-answering` (skill) | The answering rules: stated proof only, confidence scale, same-name traps, cannot_answer |
+| `review-datapoints` (skill) | The manual data point review (resume, one data point at a time, record decisions) |
+| `datapoint-dev` (skill) | Changing a data point in the code with config, defaults, tests and docs kept in sync |
+
 **Claude Desktop:** add the same command to `~/Library/Application Support/Claude/claude_desktop_config.json` under
 `mcpServers` (command = the full path to `.venv/bin/python`, args `["-m", "enrich", "mcp"]`, env `PYTHONPATH` = the
 project folder), then quit (Cmd+Q) and reopen Claude Desktop.
