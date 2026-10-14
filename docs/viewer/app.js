@@ -27,7 +27,7 @@ function isUrl(s) { return /^https?:\/\//i.test(s); }
 function siteUrl(v) {
   v = String(v || '').trim();
   if (isUrl(v)) return v;
-  return /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v) ? 'https://' + v : null;
+  return /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?$/i.test(v) ? 'https://' + v : null;
 }
 function siteLink(text, cls) {
   const href = siteUrl(text);
@@ -35,6 +35,25 @@ function siteLink(text, cls) {
   const a = el('a', { class: 'sitelink ' + (cls || ''), href, target: '_blank', rel: 'noopener noreferrer', textContent: text, title: 'Open ' + href + ' in a new tab' });
   a.onclick = (e) => e.stopPropagation();  // opening the site must not also open the details panel
   return a;
+}
+const SITE_COLUMN = /domain|website|url|link|site/i;  // only these columns may hold bare domains like "acme.com"
+// text -> nodes: every http(s) address becomes a link; bare domains too, when bareOk (a column about sites)
+function linkify(text, bareOk) {
+  text = String(text ?? '');
+  const tokens = text.split(/\s*[;,\n]\s*/).map(t => t.trim()).filter(Boolean);
+  if (tokens.length && tokens.every(t => (bareOk || isUrl(t)) && siteUrl(t))) {
+    const out = [];
+    tokens.forEach((t, i) => { if (i) out.push(', '); out.push(siteLink(t)); });
+    return out;
+  }
+  const out = []; let last = 0;
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"]+/g)) {
+    const url = m[0].replace(/[.,;:!?)\]]+$/, '');  // punctuation after a link is not part of it
+    out.push(text.slice(last, m.index), siteLink(url));
+    last = m.index + url.length;
+  }
+  out.push(text.slice(last));
+  return out.filter(x => x !== '');
 }
 function parseCol(c) {
   const m = c.match(/^(Must-have|Exclusion|Fit|Buying signal|Weak fit): (.*)$/);
@@ -375,7 +394,7 @@ function render() {
     pin.onclick = () => selectCell(ri, -1); CELLS.set(ri + '|-1', pin); tr.append(pin);
     VIEW_COLS.forEach((c, ci) => {
       const cell = r.cells[c], td = el('td', { class: 'cell', title: cell.value });
-      const p = pillFor(c, cell); if (p) td.append(p); else if (c === 'Domain' || c === 'Website') td.append(siteLink(cell.value)); else td.textContent = cell.value;
+      const p = pillFor(c, cell); if (p) td.append(p); else td.append(...linkify(cell.value, SITE_COLUMN.test(c)));
       td.onclick = () => selectCell(ri, ci); CELLS.set(ri + '|' + ci, td); tr.append(td);
     });
     return tr;
@@ -414,6 +433,7 @@ function move(dr, dc) {
   const ri = Math.min(VIEW_ROWS.length - 1, Math.max(0, p.ri + dr)), ci = Math.min(VIEW_COLS.length - 1, Math.max(-1, p.ci + dc));
   selectCell(ri, ci);
 }
+function valNode(text, bareOk, cls) { return el('div', { class: cls || 'val' }, ...linkify(text, bareOk)); }
 function section(label, node) { return el('div', { class: 'sec' }, el('div', { class: 'lbl', textContent: label }), node); }
 function drawPanel() {
   const p = selPos(); if (!SEL || !p || p.ri < 0) return;
@@ -425,8 +445,8 @@ function drawPanel() {
   if (cell.details) {
     const d = cell.details, k = d.Response.toLowerCase();
     parts.push(['Answer', section('Answer', el('span', { class: 'pill bigans ' + (k === 'yes' ? 'yes' : k === 'no' ? 'no' : 'unknown'), textContent: d.Response })), d.Response]);
-    if (d.Reasoning) parts.push(['Reasoning', section('Reasoning', el('div', { class: 'val', textContent: d.Reasoning })), d.Reasoning]);
-    if (d.Proof) parts.push(['Proof', section('Proof', el('div', { class: 'quote', textContent: d.Proof })), d.Proof]);
+    if (d.Reasoning) parts.push(['Reasoning', section('Reasoning', valNode(d.Reasoning)), d.Reasoning]);
+    if (d.Proof) parts.push(['Proof', section('Proof', valNode(d.Proof, '', 'quote')), d.Proof]);
     if (d.Source) {
       const w = el('div', {});
       if (isUrl(d.Source)) { w.append(el('a', { class: 'linkbtn', href: d.Source, target: '_blank', rel: 'noopener noreferrer', textContent: 'Open source ↗' }), el('span', { class: 'url', textContent: d.Source })); }
@@ -438,9 +458,9 @@ function drawPanel() {
     meta.append(el('span', { class: 'pill unknown', textContent: 'Decided by: ' + d.Method }), el('span', { class: 'pill unknown', textContent: d.Phase === 'icp' ? 'ICP phase' : 'Signals phase' }));
     parts.push(['Details', section('Details', meta), d.Confidence + ' ' + d.Method + ' ' + d.Phase]);
   } else {
-    parts.push(['Value', section(col === 'Company Name' ? 'Company' : col, el('div', { class: 'val', textContent: cell.value || '—' })), cell.value]);
+    parts.push(['Value', section(col === 'Company Name' ? 'Company' : col, valNode(cell.value || '—', SITE_COLUMN.test(col))), cell.value]);
     const extra = col === 'Company Name' ? ['ICP', 'ICP status', 'Why', 'Lead score', 'Lead tier'] : (CONTEXT[col] || []);
-    for (const c of extra) { const v = row.cells[c]?.value; if (v) parts.push([c, section(c, el('div', { class: 'val', textContent: v })), v]); }
+    for (const c of extra) { const v = row.cells[c]?.value; if (v) parts.push([c, section(c, valNode(v)), v]); }
   }
   const body = $('pbody'); body.replaceChildren();
   for (const [label, node, text] of parts) { if (f && !(label + ' ' + text).toLowerCase().includes(f)) continue; body.append(node); }
