@@ -23,6 +23,19 @@ function el(tag, props = {}, ...kids) {
 }
 function btn(text, cls, fn) { return el('button', { class: cls, textContent: text, onclick: fn }); }
 function isUrl(s) { return /^https?:\/\//i.test(s); }
+// a plain domain or http(s) URL becomes a link that opens in a new tab; anything else is not linked
+function siteUrl(v) {
+  v = String(v || '').trim();
+  if (isUrl(v)) return v;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v) ? 'https://' + v : null;
+}
+function siteLink(text, cls) {
+  const href = siteUrl(text);
+  if (!href) return el('span', { class: cls || '', textContent: text });
+  const a = el('a', { class: 'sitelink ' + (cls || ''), href, target: '_blank', rel: 'noopener noreferrer', textContent: text, title: 'Open ' + href + ' in a new tab' });
+  a.onclick = (e) => e.stopPropagation();  // opening the site must not also open the details panel
+  return a;
+}
 function parseCol(c) {
   const m = c.match(/^(Must-have|Exclusion|Fit|Buying signal|Weak fit): (.*)$/);
   return m ? { group: m[1], name: m[2] } : { group: '', name: c };
@@ -358,11 +371,11 @@ function render() {
   CELLS = new Map();
   const tbody = VIEW_ROWS.map((r, ri) => {
     const tr = el('tr', {}, el('td', { class: 'n', textContent: String(ri + 1) }));
-    const pin = el('td', { class: 'pin cell' }, el('span', { class: 'nm', textContent: r.cells['Company Name']?.value || r.domain }), el('span', { class: 'dm', textContent: r.domain }));
+    const pin = el('td', { class: 'pin cell' }, el('span', { class: 'nm', textContent: r.cells['Company Name']?.value || r.domain }), siteLink(r.domain, 'dm'));
     pin.onclick = () => selectCell(ri, -1); CELLS.set(ri + '|-1', pin); tr.append(pin);
     VIEW_COLS.forEach((c, ci) => {
       const cell = r.cells[c], td = el('td', { class: 'cell', title: cell.value });
-      const p = pillFor(c, cell); if (p) td.append(p); else td.textContent = cell.value;
+      const p = pillFor(c, cell); if (p) td.append(p); else if (c === 'Domain' || c === 'Website') td.append(siteLink(cell.value)); else td.textContent = cell.value;
       td.onclick = () => selectCell(ri, ci); CELLS.set(ri + '|' + ci, td); tr.append(td);
     });
     return tr;

@@ -140,3 +140,8 @@ td.sel { outline: 2px solid var(--accent); outline-offset: -2px; background: var
 #loginform input { font-weight: 400; font-size: 15px; padding: 9px 12px; }
 #loginform .tbtn { justify-content: center; padding: 10px; font-weight: 600; }
 #loginerr { color: var(--red); min-height: 18px; font-size: 13px; }
+
+/* clickable domains */
+a.sitelink { color: var(--accent); text-decoration: none; }
+a.sitelink:hover { text-decoration: underline; }
+td.pin a.dm { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
