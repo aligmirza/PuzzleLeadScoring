@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lead list viewer</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <div class="bar" id="top">
+    <span class="brand">Lead list viewer</span>
+    <select id="list" aria-label="List"></select>
+    <div class="stats" id="stats"></div>
+    <span class="grow"></span>
+    <span class="count">Read-only</span>
+  </div>
+  <div class="bar" id="tools">
+    <div class="seg" id="quick" role="group" aria-label="ICP quick filter"></div>
+    <button class="tbtn" id="fbtn">&#9662; Filter <span class="badge" id="fcount" hidden></span></button>
+    <button class="tbtn" id="sbtn">&#8645; Sort <span class="badge" id="scount" hidden></span></button>
+    <button class="tbtn" id="cbtn">&#9638; Columns <span class="count" id="ccount"></span></button>
+    <input id="q" type="search" placeholder="Search rows…" aria-label="Search rows">
+    <span class="grow"></span>
+    <span class="count" id="count"></span>
+    <button class="tbtn primary" id="ebtn">&#8681; Export</button>
+    <div class="pop" id="fpop"></div>
+    <div class="pop" id="spop"></div>
+    <div class="pop" id="cpop"></div>
+    <div class="pop" id="epop"></div>
+  </div>
+  <div id="main">
+    <div id="gridwrap"><div class="empty">Loading…</div></div>
+    <aside id="panel">
+      <div id="phead">
+        <div id="ptitle"></div>
+        <button class="iconbtn" id="pprev" title="Previous row (↑)">↑</button>
+        <button class="iconbtn" id="pnext" title="Next row (↓)">↓</button>
+        <button class="iconbtn" id="close" title="Close (Esc)">×</button>
+      </div>
+      <input id="psearch" type="search" placeholder="Search in details" aria-label="Search in details">
+      <div id="pbody"></div>
+      <div id="pfoot"></div>
+    </aside>
+  </div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

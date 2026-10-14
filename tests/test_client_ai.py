@@ -99,14 +99,20 @@ class OpenAIFallback(unittest.TestCase):
                "accurate": {"data_points": 4000, "worst_case_usd": 12.5}, "cheap": {"data_points": 4000, "worst_case_usd": 6.1}}
         with mock.patch.object(service, "estimate_ai", return_value=est), \
                 mock.patch.object(service, "start_ai", side_effect=AssertionError("ran without a cap")):
-            out = mcp_server.list_ai("big")
+            out = asyncio.run(mcp_server.list_ai("big"))
         self.assertTrue(out["estimate_only"])
         self.assertIn("$12.50", out["next"])
         with mock.patch.object(service, "start_ai", side_effect=service.CostLimit("above the limit")):
-            self.assertEqual(mcp_server.list_ai("big", max_cost_usd=5)["refused"], "above the limit")
+            self.assertEqual(asyncio.run(mcp_server.list_ai("big", max_cost_usd=5))["refused"], "above the limit")
         with mock.patch.object(service, "start_ai", return_value={"state": "running"}) as s:
-            mcp_server.list_ai("big", max_cost_usd=15)
+            asyncio.run(mcp_server.list_ai("big", max_cost_usd=15))
         self.assertEqual(s.call_args.args[2]["max_cost_usd"], 15)
+
+    def test_list_ai_runs_inside_an_event_loop(self):
+        # start_ai starts a background job, which needs a running loop: a plain def tool crashed with no message
+        import inspect
+        from enrich.integrations import mcp_server
+        self.assertTrue(inspect.iscoroutinefunction(mcp_server.list_ai))
 
     def test_mcp_has_no_openai_route(self):
         import inspect

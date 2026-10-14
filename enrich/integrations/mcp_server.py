@@ -195,7 +195,7 @@ def submit_answers(domain: str, answers: list[dict], list_name: str = service.SI
 
 
 @tool()
-def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "") -> dict:
+async def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "") -> dict:
     """BIG LISTS ONLY (more than about 100 companies): the AI steps (pages, then web) for a whole list with the OpenAI
     engine, in the background, with the same prompts and checks. Up to about 100 companies answer the questions
     yourself instead (open_questions, one company per helper). max_cost_usd=0 (default) only returns the cost estimate: show it to the user. Run it only after
