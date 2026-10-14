@@ -261,6 +261,9 @@ In Claude Desktop, after `enrich_list` on a CSV (for example `examples/mcp_test.
 5. "Show dp_test progress" (`dp_test_summary`): tested, reviewed, approved, rejected, corrected, investigating,
    retries, current and remaining of the 57.
 
+Test mode asks every question, also those a normal run would hold back (a data point waiting for its parent, or
+skipped because the tier can't change); the result says what a normal run would do.
+
 Reviews: `lists/dp_test/output/dp_test_log.csv`. Session: `lists/dp_test/output/dp_test_session.json`.
 Automated tests for this mode (offline): `.venv/bin/python -m unittest discover -s tests -v`.
 
@@ -298,6 +301,14 @@ Run after changing a rule, a prompt, `scoring.json` or `profile.yaml`:
 3. `python -m enrich evaluate accuracy_test --labels lists/accuracy_test/output/labels.csv`: your review still agrees
 4. `python -m enrich trace linear.app --no-pause`: still NO, with the Series C proof
 5. For a prompt change: answers made with the old prompt are re-asked automatically (version stamps); run `python ai_check.py accuracy_test --phase icp` and evaluate again
+
+### Speed: `bench`
+
+`python -m enrich bench leads.csv --label before` runs the free steps (download, job boards, code scan, directories,
+rules; no AI, no Prospeo) on a fresh copy of the list, the same way MCP and the API do, and saves the wall time,
+seconds per stage per company (median and slowest) and every answer. After a change, run it again with another label
+and `python -m enrich bench --compare before after`: the speed-up, and every answer that differs. Live sites can
+change between runs, so check any difference before calling it a regression.
 
 ### Comparing two runs
 

@@ -24,16 +24,20 @@
     "definition": "This lowers the score but never disqualifies. Skip this if the company is a local professional services firm, which is already scored by its own signal.",
     "yes_when": [
       "A 'locations' or 'areas we serve' page listing nearby towns",
-      "Text says they serve one city and its surroundings"
+      "Text says they serve one city and its surroundings, and no software product is stated"
     ],
     "no_when": [
-      "Customers are national or global"
+      "The text clearly states a software or tech product the company sells: software counts as selling nationally (the same rule as 'Startup selling nationally')",
+      "A services firm whose text states customers beyond its own city or region"
     ],
     "unknown_when": [
-      "Not enough information about where customers are"
+      "A services firm with no stated customers or service area",
+      "Not enough text to tell whether it sells a software product"
     ],
     "watch_out_for": [
-      "Several office locations for a national company is not local"
+      "Several office locations for a national company is not local",
+      "The software must be stated in the text, not guessed from design or wording like 'AI-powered'",
+      "A services firm is never assumed national: it needs stated customers beyond its own city"
     ],
     "where_to_look": [
       "Locations page",

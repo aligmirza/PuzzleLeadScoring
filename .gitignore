@@ -5,6 +5,7 @@ __pycache__/
 
 # Lead lists, scraped pages and results (can hold company data; regenerate with the scripts)
 lists/
+learning/
 data/
 out/
 *.sqlite

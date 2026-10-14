@@ -28,6 +28,7 @@ from rich.table import Table
 from . import apply as ai_apply
 from . import prompts as P
 from ..pipeline.common import ai_prompts, console, rel
+from ..core import learning
 from ..core.inputs import load_leads
 from ..checks.rules import SIGNALS, VALUE_NAMES
 from ..checks import datapoints
@@ -80,6 +81,34 @@ def chunks(items: list[str], size: int, by_model: bool = True) -> list[list[str]
 
 
 # ---------------------------------------------------------------------------
+class CallGate:
+    """How many OpenAI calls run at once. Starts at `start`; one more after every 20 calls in a row without a rate limit,
+    up to `most`; halves when OpenAI says slow down (429), never below 2. Faster when the account allows, never
+    hammering it when it doesn't. Cost is unchanged: the same calls, only how many at once."""
+
+    def __init__(self, start: int, most: int):
+        self.limit, self.most, self.busy, self.streak = max(1, min(start, most)), max(1, most), 0, 0
+        self.cond = asyncio.Condition()
+
+    async def __aenter__(self):
+        async with self.cond:
+            await self.cond.wait_for(lambda: self.busy < self.limit)
+            self.busy += 1
+
+    async def __aexit__(self, typ, exc, tb):
+        async with self.cond:
+            self.busy -= 1
+            if typ is None:
+                self.streak += 1
+                if self.streak >= 20 and self.limit < self.most:
+                    self.limit, self.streak = self.limit + 1, 0
+            self.cond.notify_all()
+
+    async def slow_down(self):
+        async with self.cond:
+            self.limit, self.streak = max(2, self.limit // 2), 0
+
+
 class Runner:
     def __init__(self, store: Store, phase: str, web: bool, redo: bool, concurrency: int, search_signals: bool = True,
                  mode: dict | None = None):
@@ -92,11 +121,11 @@ class Runner:
         if not key:
             sys.exit(f"Set your OpenAI key first, in the terminal you run this from:\n  export {pv['api_key_env']}=sk-...\n"
                      f"It is read from the environment only and never saved to files or git.")
-        self.client = openai.AsyncOpenAI(api_key=key, max_retries=4)
+        self.client = openai.AsyncOpenAI(api_key=key, max_retries=2)  # rate limits are handled by the gate below
         self.pv, self.store, self.phase, self.web, self.redo = pv, store, phase, web, redo
         self.search_signals = search_signals
         self.mode = mode or P.mode()
-        self.sem = asyncio.Semaphore(concurrency)
+        self.gate = CallGate(min(8, concurrency), concurrency)
         self.c = Counter()
         self.cost = 0.0
         self.feed: deque = deque(maxlen=10)
@@ -117,15 +146,25 @@ class Runner:
         if tools:
             kwargs["tools"] = tools
         fmt = {"format": {"type": "json_schema", "name": "answer", "schema": to_strict(schema), "strict": True}}
-        async with self.sem:
+        for attempt in range(4):
             try:
-                resp = await self.client.responses.create(text=fmt, **kwargs)
-            except self.openai.BadRequestError:
-                if not tools:
+                async with self.gate:
+                    try:
+                        resp = await self.client.responses.create(text=fmt, **kwargs)
+                    except self.openai.BadRequestError:
+                        if not tools:
+                            raise
+                        # some models can't combine web search with strict JSON: ask for the JSON in plain text instead
+                        plain = {"type": "input_text", "text": "Reply with only the JSON object, no other text."}
+                        if plain not in kwargs["input"][0]["content"]:
+                            kwargs["input"][0]["content"].append(plain)
+                        resp = await self.client.responses.create(**kwargs)
+                break
+            except self.openai.RateLimitError:
+                if attempt == 3:
                     raise
-                # some models can't combine web search with strict JSON: ask for the JSON in plain text instead
-                kwargs["input"][0]["content"].append({"type": "input_text", "text": "Reply with only the JSON object, no other text."})
-                resp = await self.client.responses.create(**kwargs)
+                await self.gate.slow_down()  # fewer calls at once, then try this one again
+                await asyncio.sleep(2 ** attempt * 2)
         u = resp.usage
         usage = {"model": model, "input": u.input_tokens if u else 0, "output": u.output_tokens if u else 0,
                  "cached": getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0 if u else 0,
@@ -151,50 +190,76 @@ class Runner:
             return
         if self.redo:  # ask again from scratch: an old web search answer must not outlive a new step 1 answer
             self.store.delete_ai(domain, self.phase)
-        done = {} if self.redo else self.store.get_ai(domain, self.phase)
-        facts = known_facts(result)
-        todo = [pid for pid in ai_prompts(result) if wanted(pid, self.search_signals)
-                and (pid in done or datapoints.still_open(datapoints.sid_for_prompt(pid), result))]  # not settled since
-        self.c["skipped"] += len(ai_prompts(result)) - len(todo)
-        step1: dict[str, dict | None] = {pid: (done.get(pid, {}).get(1) or {}).get("answer") for pid in todo}
+        asked: set[str] = set()
+        before = {p: set(s) for p, s in self.store.get_ai(domain, self.phase).items()}
         try:
-            # step 1: our saved data, for data points that aren't web-first and haven't been answered yet
-            site_ok = (result.get("crawl") or {}).get("status") == "live"
-            ask = [pid for pid in todo if site_ok and datapoints.ask_pages(pid, result) and pid not in done]
-            for chunk in chunks(ask, self.mode["site_group"]):
-                step1.update(await self.step1(domain, result, facts, chunk))
-            # step 2: web search where step 1 found nothing (or the data point is web-first)
-            web = []
-            still_open = self._open_after_pages(domain, result)
-            for pid in todo:
-                if 2 in done.get(pid, {}) or not (self.web and not self.web_disabled_reason):
-                    continue
-                if site_ok and pid in done and 1 not in done[pid] and datapoints.ask_pages(pid, result):
-                    continue
-                if datapoints.web_after(pid, step1.get(pid), still_open.get(pid, True), site_ok):
-                    web.append(pid)
-            for chunk in chunks(web, self.mode["web_group"], by_model=False):
-                await self.step2(domain, result, facts, chunk, step1)
+            # conditional runs (config/datapoints run_if): parents are asked first, in waves; a child whose parent
+            # ended on a value it doesn't run on is never asked
+            while True:
+                done = self.store.get_ai(domain, self.phase)
+                now = self._so_far(domain, result)
+                ready = [p for p in dict.fromkeys(p for p, _ in datapoints.runnable(datapoints.waiting(now, done), now))
+                         if p not in asked and wanted(p, self.search_signals)]
+                if not ready:
+                    break
+                asked |= set(ready)
+                await self._wave(domain, now, ready, done)
         except self.openai.AuthenticationError:
             sys.exit("OpenAI rejected the API key. Check OPENAI_API_KEY.")
         except self.openai.BadRequestError as e:
             if "web_search" in str(e) or "tool" in str(e).lower():
                 self.web_disabled_reason = f"web search not available for {self.pv['web']}: {str(e)[:160]}"
             self.c["errors"] += 1
+            learning.error("openai request", e, domain=domain)
         except (self.openai.APIError, ValueError) as e:
             self.c["errors"] += 1
             self.feed.appendleft((domain, f"error: {type(e).__name__}", "", str(e)[:40], ""))
+            learning.error("openai answer", e, domain=domain)
+        self.c["skipped"] += len([p for p in ai_prompts(result) if p not in asked])
         # apply everything answered so far and save
-        updated = ai_apply.apply(result, self.store.get_ai(domain, self.phase), self.phase)
+        updated = self._so_far(domain, result)
         self.store.save_result(domain, updated, self.phase)
+        after = self.store.get_ai(domain, self.phase)
+        new = [(p, s) for p, steps in after.items() for s in steps if s not in before.get(p, set())]
+        learning.outcomes(updated, new, after, "openai", self.store.root.name, domain)
         self.c["companies"] += 1
         if self.phase == "icp":
             self.c[f"verdict_{updated.get('icp_verdict')}"] += 1
 
+    def _so_far(self, domain: str, result: dict) -> dict:
+        """The result with every answer bought so far, and the data points that no longer apply closed."""
+        from ..engine.resolve import close_skipped
+        now = ai_apply.apply(copy.deepcopy(result), self.store.get_ai(domain, self.phase), self.phase)
+        close_skipped(self.store, domain, self.phase, now)
+        return now
+
+    async def _wave(self, domain: str, result: dict, todo: list[str], done: dict) -> None:
+        """Steps 1 (pages) and 2 (web) for the questions that may run now."""
+        facts = known_facts(result)
+        step1: dict[str, dict | None] = {pid: (done.get(pid, {}).get(1) or {}).get("answer") for pid in todo}
+        # step 1: our saved data, for data points that aren't web-first and haven't been answered yet
+        site_ok = (result.get("crawl") or {}).get("status") == "live"
+        ask = [pid for pid in todo if site_ok and datapoints.ask_pages(pid, result) and pid not in done]
+        for chunk in chunks(ask, self.mode["site_group"]):
+            step1.update(await self.step1(domain, result, facts, chunk))
+        # step 2: web search where step 1 found nothing (or the data point is web-first)
+        web = []
+        still_open = self._open_after_pages(domain, result)
+        for pid in todo:
+            if 2 in done.get(pid, {}) or not (self.web and not self.web_disabled_reason):
+                continue
+            if site_ok and pid in done and 1 not in done[pid] and datapoints.ask_pages(pid, result):
+                continue
+            sid = datapoints.sid_for_prompt(pid)
+            clue = bool(sid) and result["signals"].get(sid, {}).get("value") == "check"
+            if datapoints.web_after(pid, step1.get(pid), still_open.get(pid, True), site_ok, clue):
+                web.append(pid)
+        for chunk in chunks(web, self.mode["web_group"], by_model=False):
+            await self.step2(domain, result, facts, chunk, step1)
+
     def _open_after_pages(self, domain: str, result: dict) -> dict[str, bool]:
         """For each question: is its data point still open after the page answers (also when one was rejected)?"""
-        import copy
-        applied = ai_apply.apply(copy.deepcopy(result), self.store.get_ai(domain, self.phase), self.phase)
+        applied = self._so_far(domain, result)
         out = {}
         for pid in ai_prompts(result):
             out[pid] = datapoints.still_open(datapoints.sid_for_prompt(pid), applied)
@@ -215,7 +280,8 @@ class Runner:
     async def step2(self, domain: str, result: dict, facts: dict, pids: list[str], step1: dict) -> None:
         """Step 2, web search: one data point per call (accurate mode) or several sharing the searches (cheap mode)."""
         if len(pids) == 1:
-            m = P.build_search(pids[0], result["company"], domain, facts, result.get("legal_name"), step1.get(pids[0]))
+            m = P.build_search(pids[0], result["company"], domain, facts, result.get("legal_name"), step1.get(pids[0]),
+                               founders=(result.get("facts") or {}).get("founders"))
             data, usage, sources = await self.call(m["model"], m["system"], [m["instruction"]], m["schema"], tools=m["tools"])
             self._save(domain, pids, 2, {"data_point_1": data}, usage, sources)
             return
@@ -371,7 +437,7 @@ def worst_case(est: dict) -> float:
 
 
 async def run_async(store: Store, domains: list[str], phase: str, web: bool = True, search_signals: bool = True,
-                    mode_name: str | None = None, concurrency: int = 8) -> dict:
+                    mode_name: str | None = None, concurrency: int = 24) -> dict:
     """The AI step without the terminal (for the API): answers, applies and saves. Returns usage and cost."""
     try:
         runner = Runner(store, phase, web, False, concurrency, search_signals and web, P.mode(mode_name))
@@ -389,7 +455,7 @@ async def run_async(store: Store, domains: list[str], phase: str, web: bool = Tr
             "cost_usd": round(runner.cost, 4), "seconds": round(time.time() - start), "mode": runner.mode["name"]}
 
 
-def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool = False, concurrency: int = 8,
+def run(folder: Path, phase: str, limit: int = 0, web: bool = True, redo: bool = False, concurrency: int = 24,
         assume_yes: bool = False, search_signals: bool = True, mode_name: str | None = None, all_layers: bool = False) -> None:
     if all_layers:
         _all_layers(folder, phase, limit, web, concurrency, assume_yes, search_signals, mode_name)

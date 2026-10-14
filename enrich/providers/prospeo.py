@@ -23,7 +23,6 @@ from ..core.paths import CACHE
 BASE = "https://api.prospeo.io"
 CACHE_DB = CACHE / "providers.sqlite"
 PER_SECOND = 2
-SENIORITIES = ["Founder/Owner", "C-Suite", "Vice President", "Head", "Director"]
 
 
 class ProspeoError(RuntimeError):

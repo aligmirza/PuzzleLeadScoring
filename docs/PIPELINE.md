@@ -59,6 +59,29 @@ flowchart TD
 
 Each phase works on about 50 companies at the same time. Every row of your list ends up in the final file, in its original order.
 
+**How one company flows** (free work first; phase 2 only for companies that can still be ICP YES, and it stops as
+soon as no answer can change the tier):
+
+```mermaid
+flowchart TD
+    A["Company row<br/>domain, name, employees"] --> B["Download site (free)<br/>pages, job boards, code scan,<br/>Wappalyzer, JavaScript pages in a browser"]
+    B --> C["Size first<br/>list → Prospeo → YC → AI → SMB"]
+    C --> D["Phase 1, one after another<br/>M1 → M2 → M3 → M4 → E1–E6<br/>a proven No stops the rest"]
+    D --> E{"ICP verdict"}
+    E -- "NO (proof)" --> X["Stop: the rest of phase 1 is Not applicable,<br/>no phase 2, no Prospeo"]
+    E -- "YES / PENDING" --> F["Phase 2: fit, buying, weak<br/>F1–F21, B1–B14, W1–W12<br/>most valuable questions first;<br/>children wait for their parents"]
+    F --> G{"Can the tier still change?"}
+    G -- "no" --> H["Stop early: skip the rest"]
+    G -- "yes" --> F
+    F --> I["Step 5: Prospeo finance check<br/>F13, F14 · 1 credit, only on your OK"]
+    I --> J["Score + tier<br/>Strong fit at 12"]
+    H --> J
+    J --> K["Results CSV · contacts CSV · Clay"]
+
+    classDef no fill:#f8e1dc,stroke:#b93a27,color:#18202e
+    class X no
+```
+
 ---
 
 **The waterfall, per data point.** Every data point is answered by the cheapest layer that can, and a layer only runs when the ones before it left the answer open:
@@ -67,9 +90,9 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 |---|---|---|---|
 | 1 | Rules on the scraped pages | free | proof from the company's own site |
 | 2 | Free directories (YC, SEC, IRS, Internet Archive) | free | strong when tied to the domain or legal name |
-| 3 | AI reading our saved pages | about $0.0003 a question | needs an exact quote |
-| 4 | AI web search | about $0.011 a search | needs a quote and a domain match to exclude |
-| 5 | Provider: Prospeo company data | 1 credit per matched company, covers several data points | medium: confirms fit signals and US location; a public company, non-profit or foreign HQ only becomes Needs check |
+| 3 | AI reading our saved pages (Claude through MCP, or OpenAI) | $0 through MCP; about $0.0008 a question with OpenAI | needs an exact quote |
+| 4 | AI web search (job sites and LinkedIn posts included) | $0 through MCP; about $0.011 a search with OpenAI | needs a quote and a domain match to exclude |
+| 5 | Provider: Prospeo, only the finance-person check (F13, F14) | 1 credit per company at most, only when you agree | team or finance-department search; the contacts go to `<list>_contacts.csv` |
 
 **Each data point has its own waterfall file** in `config/datapoints/<group>/<name>.json`. Change a file to change how that data point is answered; the run still schedules everything together (pages downloaded once per company, free layers for all data points at once, AI questions in parallel, one provider call per company covering all its data points, and each data point stops at the first layer that confirms it).
 
@@ -77,14 +100,34 @@ Each phase works on about 50 companies at the same time. Every row of your list 
 |---|---|
 | `rules.on`, `directories.on` | `true` / `false` |
 | `ai_pages.run` | `if_open` (still empty or Needs check), `if_clue` (only when a rule found a clue), `always`, `off`; optional `requires_page` (e.g. `team`) |
-| `ai_web.run` | `after_pages` (when the page answer found nothing), `if_open` (whenever still open, also when the page answer was rejected), `first` (web only), `off`; `when_site_unreached` (`true`: also for sites that couldn't be read) |
+| `ai_web.run` | `after_pages` (when the page answer found nothing), `if_open` (whenever still open, also when the page answer was rejected), `if_clue` (only when the rules or the page answer saw a hint), `first` (web only), `off`; `when_site_unreached` (`true`: also for sites that couldn't be read) |
 | `provider.run` | `if_open` / `off` |
+| `run_if` | Conditional run between data points, e.g. `{"F1": ["yes"]}`: the paid steps run only when each parent's answer is one of the listed values; the data point waits while a parent still has a question, and is **Not applicable** when a parent ends on another value. Free proof already found is kept. The whole map: [SIGNALS.md, Waterfall per data point](SIGNALS.md#waterfall-per-data-point) |
 
 `python -m enrich datapoints` lists all 57; `python -m enrich datapoints --show M3` shows one. The waterfall and review views show each data point's settings and the file to edit. **The default for every data point with an AI question:** if the rules and directories leave it open, AI reads our pages (`ai_pages.run: if_open`); if it is still open after that, AI searches the web (`ai_web.run: if_open`). Sites that couldn't be read get no web search unless `when_site_unreached` is `true`. Change one file to make a data point differ.
 
-Prospeo covers: based in the US, fintech tools (from its technology data: Stripe, Gusto, Rippling, Deel, Mercury, Brex, Ramp, Carta, Pulley), open roles, public / non-profit, outside the US, funding stage and date, QuickBooks and NetSuite, headcount (company size) and industry. Then, for companies that pass, `people` finds decision-makers (founder or CEO first, then the finance lead), which also answers "Has a finance lead" and "No finance person visible". `python -m enrich waterfall acme.com` shows all five layers for each data point. Provider credits per month are capped by `PROVIDER_MONTHLY_CREDITS`, and responses are cached for 90 days (Prospeo doesn't charge again for those either).
+**Opposites** (`OPPOSITES` in `enrich/checks/datapoints.py`): when one data point is proven Yes, its opposite is No for free (F5 → W1, W3, F7; M4 → W5; F3 → W4; F13 → W10; M3 → W12; E6 → W9), and the opposite waits while the other still has a question.
+
+Prospeo is switched on only for F13 and F14 today. It could cover: based in the US, fintech tools (from its technology data: Stripe, Gusto, Rippling, Deel, Mercury, Brex, Ramp, Carta, Pulley), open roles, public / non-profit, outside the US, funding stage and date, QuickBooks and NetSuite, headcount (company size) and industry. Then, for companies that pass, `people` finds decision-makers (founder or CEO first, then the finance lead), which also answers "Has a finance lead" and "No finance person visible". `python -m enrich waterfall acme.com` shows all five layers for each data point. Provider credits per month are capped by `PROVIDER_MONTHLY_CREDITS`, and responses are cached for 90 days (Prospeo doesn't charge again for those either).
 
 **To see every step for one company:** `python -m enrich trace acme.com` runs the whole flow for that company and stops after each step, showing what it received, found (with proof) and decided. `--ai` adds the AI steps (it shows the cost and asks first). The trace is saved as a Markdown report.
+
+**What runs at the same time** (measured with `python -m enrich bench` on the 100-company lead list, free steps:
+255 s before these changes, 93 s after, every answer the same or better):
+
+| Level | At the same time |
+|---|---|
+| Companies | 50 at a time (`--workers`); through MCP `check_companies` up to 25, `enrich_list` 20 |
+| Phases | Each company goes on to phase 2 as soon as its own phase 1 passes (free steps), instead of waiting for the whole list |
+| Inside one company | Pages in parallel; the job boards and the payment-code scan side by side; the directories (YC, IRS, SEC, DNS, Wayback) all at once |
+| Heavy CPU work | Wappalyzer's 7,600 fingerprints run in separate processes, so they never stall the downloads; the payment-code and job-board patterns only run on text that can match |
+| Rules and directory lookups | A pool of 64 threads (the default had 14) |
+| Chrome (JavaScript pages, bot checks) | **At most 3 pages at a time**, unchanged |
+| OpenAI (bulk) | Starts at 8 calls at once, one more after every 20 without a rate limit (up to `--concurrency`, 24), halves on a rate limit. Phase 1 and phase 2 AI stay separate: each phase's cost is estimated and capped before anything is sent |
+| Rate limits kept | SEC 8 per second and the Internet Archive 2 per second, shared by every thread |
+
+Before these changes the CPU work ran on the event loop and blocked it for half of a run, so 31 of 100 companies hit
+the 90-second download limit and came back "site not reached"; now all of them are read.
 
 ## 2. What starts what
 
@@ -113,6 +156,11 @@ Prospeo covers: based in the US, fintech tools (from its technology data: Stripe
 | You answer **y** to the clean-up question | Raw pages of companies that aren't ICP are deleted |
 | You answer anything else, or there's no terminal | Nothing is deleted |
 | You change a rule and run `rules leads` | Rules run again on saved pages, without downloading |
+| A data point's parent (`run_if`) still has a question | The data point waits; it is asked in the next round |
+| A parent ends on a value the child doesn't run on | The child is Not applicable: no AI, web search or Prospeo for it |
+| A must-have is proven No, or an exclusion Yes | Every phase 1 data point still open is Not applicable |
+| A data point is proven Yes | Its opposite is No for free |
+| No open question can move the lead tier | The rest of phase 2 is skipped (stop when decided) |
 
 ---
 
@@ -331,6 +379,8 @@ flowchart TD
     class O1,O4 pending
 ```
 
+Must-haves are asked one after another (M1, then M2, M3, M4), then the exclusions, so a proven No stops the paid questions after it; the data points left open then show **Not applicable**.
+
 "Unknown" never makes a company a NO; only proof does. A company still unconfirmed on some must-haves is a YES, as profile.yaml requires.
 
 ---
@@ -496,7 +546,7 @@ Passing in the facts code already proved stops the AI from contradicting them.
 
 **Code:** [enrich/checks/scoring.py](../enrich/checks/scoring.py). **Weights:** [config/scoring.json](../config/scoring.json), editable without touching code.
 
-Each signal answered Yes adds points by its weight in profile.yaml. Needs check and Unknown add nothing.
+Each signal answered Yes adds points by its weight in profile.yaml. Needs check, Unknown and Not applicable add nothing.
 
 | Weight | Points |
 | --- | --- |

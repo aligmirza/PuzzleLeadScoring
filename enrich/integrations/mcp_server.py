@@ -17,10 +17,18 @@ from . import client_ai, service  # noqa: E402
 from ..checks.rules import SIGNALS, VALUE_NAMES  # noqa: E402
 from ..core.store import Store  # noqa: E402
 
+from ..core import learning  # noqa: E402
+
 mcp = MCPServer(
     name="puzzle-lead-scoring",
     instructions=(
-        "Checks companies against Puzzle's ideal customer profile (ICP) and scores them. Through MCP YOU are the only "
+        "Checks companies against Puzzle's ideal customer profile (ICP) and scores them. Work as an experienced GTM "
+        "engineer who owns this lead scoring pipeline: run it, judge the evidence the way the prompts ask, and keep "
+        "improving it. After each company or list, say in a few lines what you noticed (data points that keep coming "
+        "back Unknown, suspicious matches, costs) and call improvement_report: tell the user what was applied "
+        "automatically, fix crashes in the code yourself (tests must pass, then tell the user), and show every other "
+        "proposal with its proof and apply it only after the user says yes. Never lower the proof standard to get more "
+        "answers. Through MCP YOU are the only "
         "AI: you answer every AI question with the project's prompts; the tool never calls OpenAI or any other AI API. "
         "A question you can't answer the way it asks (e.g. no web search tool) is sent back as cannot_answer and stays open. "
         "Each data point follows its own waterfall (config/datapoints): free steps in check_company / enrich_list, then "
@@ -47,7 +55,33 @@ mcp = MCPServer(
 )
 
 
-@mcp.tool()
+def tool():
+    """mcp.tool(), plus: a crash in any tool is recorded (enrich/core/learning.py), then raised as before."""
+    import functools
+    import inspect
+
+    def wrap(fn):
+        if inspect.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def run(*a, **k):
+                try:
+                    return await fn(*a, **k)
+                except Exception as e:
+                    learning.error(f"mcp {fn.__name__}", e, domain=k.get("domain", ""))
+                    raise
+        else:
+            @functools.wraps(fn)
+            def run(*a, **k):
+                try:
+                    return fn(*a, **k)
+                except Exception as e:
+                    learning.error(f"mcp {fn.__name__}", e, domain=k.get("domain", ""))
+                    raise
+        return mcp.tool()(run)
+    return wrap
+
+
+@tool()
 async def check_company(domain: str, company: str = "", employees: str = "", include_signals: bool = True,
                         use_prospeo: bool = False) -> dict:
     """Check one company against the ICP: the free waterfall steps (size, website rules and code checks, YC, SEC,
@@ -58,7 +92,17 @@ async def check_company(domain: str, company: str = "", employees: str = "", inc
                                    use_prospeo=use_prospeo)
 
 
-@mcp.tool()
+@tool()
+async def check_companies(domains: list[str], include_signals: bool = True, use_prospeo: bool = False) -> dict:
+    """Check several companies at once (up to 25): their free waterfall steps run at the same time, so 10 companies
+    take about as long as the slowest one, not ten times one. Example: domains=['linear.app', 'resend.com'].
+    Then answer each company's open questions (open_questions / submit_answers; in Claude Code one company-answerer
+    per company, 5 at a time). use_prospeo=true only after the user agreed (1 credit per company at most).
+    For more than 25 companies use enrich_list."""
+    return await service.check_many(domains, include_signals, use_prospeo)
+
+
+@tool()
 async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool = True, push_to_clay: bool = False,
                       use_prospeo: bool = False) -> dict:
     """Start enriching a CSV file of companies (needs a Domain or Website column) with the free waterfall steps.
@@ -73,13 +117,13 @@ async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool 
                               source="mcp", use_prospeo=use_prospeo)
 
 
-@mcp.tool()
+@tool()
 def list_status(list_name: str) -> dict:
     """Progress and summary of a list: state, current step, ICP YES / NO / PENDING counts, Strong fit count."""
     return service.list_status(list_name)
 
 
-@mcp.tool()
+@tool()
 def list_results(list_name: str, only_icp: bool = True, limit: int = 25) -> dict:
     """Rows of a finished list with ICP, lead score, tier and signals found. only_icp=True returns ICP = YES only."""
     keep = ("Domain", "Company Name", "Company", "ICP", "ICP status", "Why", "Lead score", "Lead tier", "Segment",
@@ -89,7 +133,7 @@ def list_results(list_name: str, only_icp: bool = True, limit: int = 25) -> dict
     return {"count": len(rows), "rows": [{k: v for k, v in r.items() if k in keep and v} for r in rows]}
 
 
-@mcp.tool()
+@tool()
 def explain_company(domain: str, list_name: str = service.SINGLE_LIST) -> dict:
     """Every answer for one company with its proof (quote and page link), for phase 1 and phase 2."""
     from ..pipeline.common import LISTS
@@ -110,13 +154,13 @@ def explain_company(domain: str, list_name: str = service.SINGLE_LIST) -> dict:
     return out
 
 
-@mcp.tool()
+@tool()
 def clay_tables() -> dict:
     """Tables in the signed-in Clay workspace (id, name, workbook)."""
     return {"tables": clay.list_tables()}
 
 
-@mcp.tool()
+@tool()
 async def pull_clay_table(table_id: str, list_name: str = "", limit: int = 0, include_signals: bool = True,
                           push_to_clay: bool = False) -> dict:
     """Read a Clay table (id like t_abc123) and enrich it as a new list in the background."""
@@ -124,21 +168,23 @@ async def pull_clay_table(table_id: str, list_name: str = "", limit: int = 0, in
                                    web=True, push_to_clay=push_to_clay)
 
 
-@mcp.tool()
+@tool()
 async def push_list_to_clay(list_name: str, webhook_url: str = "", only_icp: bool = False) -> dict:
     """Send a finished list's rows to a Clay table webhook (one row per request). Default webhook comes from settings."""
     return await service.push_list(list_name, webhook_url or None, only_icp)
 
 
-@mcp.tool()
-def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 12) -> dict:
+@tool()
+def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 12,
+                   all_questions: bool = False) -> dict:
     """The questions the free layers left open for a company, for YOU to answer (not OpenAI): the company's page text,
     each question's instructions and its answer fields, and whether to answer from the pages or the web.
-    phase: auto (default), icp or signals. Answer them, then call submit_answers."""
-    return client_ai.open_questions(domain, list_name, phase, limit)
+    phase: auto (default), icp or signals. Answer them, then call submit_answers. Most valuable questions come
+    first; phase 2 stops early once no answer can change the lead tier (all_questions=true asks the rest anyway)."""
+    return client_ai.open_questions(domain, list_name, phase, limit, all_questions)
 
 
-@mcp.tool()
+@tool()
 def submit_answers(domain: str, answers: list[dict], list_name: str = service.SINGLE_LIST, phase: str = "auto") -> dict:
     """Save your answers to open_questions. Each answer: {"id": <question id>, "answer_from": "pages" or "web", plus the
     answer fields (answer, confidence, evidence_quote, source, reason, and for web: entity_match)}. They pass the same
@@ -148,7 +194,7 @@ def submit_answers(domain: str, answers: list[dict], list_name: str = service.SI
     return client_ai.submit_answers(domain, answers, list_name, phase)
 
 
-@mcp.tool()
+@tool()
 def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "") -> dict:
     """BIG LISTS ONLY (more than about 100 companies): the AI steps (pages, then web) for a whole list with the OpenAI
     engine, in the background, with the same prompts and checks. Up to about 100 companies answer the questions
@@ -169,9 +215,10 @@ def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: s
         return {"started": False, "refused": str(e)}
 
 
-@mcp.tool()
+@tool()
 def questions_overview(list_name: str) -> dict:
-    """For a whole list: how many questions are still open per company (phase 1 and phase 2), to work through them."""
+    """For a whole list: open questions per company (phase 1 and phase 2) and work_order: the companies to answer,
+    best leads first (ICP YES, then by current score)."""
     return client_ai.overview(list_name)
 
 
@@ -179,14 +226,14 @@ def questions_overview(list_name: str) -> dict:
 from . import dp_test  # noqa: E402
 
 
-@mcp.tool()
+@tool()
 def dp_test_setup(source_list: str = "mcp_test", test_list: str = "dp_test", reset: bool = False) -> dict:
     """TEST MODE. Copy a finished list into an isolated test list (name must start with dp_test), without AI answers.
     The source list is opened read-only and never changed."""
     return dp_test.setup(source_list, test_list, reset)
 
 
-@mcp.tool()
+@tool()
 def dp_test_run(domain: str, data_point: str, test_list: str = "dp_test", confirm_next: bool = False) -> dict:
     """TEST MODE. Run ONE data point (ID like E1 or its name) for ONE company through its own waterfall and return
     every stage: executed / skipped / waiting, source, evidence, output, confidence, why the next stage was or wasn't
@@ -197,14 +244,14 @@ def dp_test_run(domain: str, data_point: str, test_list: str = "dp_test", confir
     return dp_test.run(domain, data_point, test_list, confirm_next)
 
 
-@mcp.tool()
+@tool()
 def dp_test_answer(domain: str, data_point: str, answer: dict, test_list: str = "dp_test") -> dict:
     """TEST MODE. Save YOUR answer for the stage dp_test_run says is next (answer_from 'pages' or 'web', plus the
     answer fields). Same quality checks as production; saved to the test list only, never the shared cache."""
     return dp_test.answer(domain, data_point, answer, test_list)
 
 
-@mcp.tool()
+@tool()
 def dp_test_record(action: str, expected_value: str = "", notes: str = "", reference: str = "", domain: str = "",
                    data_point: str = "", test_list: str = "dp_test") -> dict:
     """TEST MODE. The user's review of the data point under test; call it only with the action THE USER chose.
@@ -216,11 +263,36 @@ def dp_test_record(action: str, expected_value: str = "", notes: str = "", refer
     return dp_test.review(domain, data_point, action, expected_value, notes, reference, test_list)
 
 
-@mcp.tool()
+@tool()
 def dp_test_summary(test_list: str = "dp_test") -> dict:
     """TEST MODE. Progress across the 57 data points (tested, reviewed, approved, rejected, corrected, needing
     investigation, retries, current, remaining) and totals from the review log."""
     return dp_test.summary(test_list)
+
+
+@tool()
+def improvement_report(auto_apply: bool = True) -> dict:
+    """What the pipeline learned from its runs: crashes, answers the quality checks rejected, web searches that keep
+    finding nothing, questions the chat model couldn't answer, and the user's corrections, grouped into proposals with
+    proof. Safe changes are applied automatically (a phase 2 data point's web search switched to on-clue when it almost
+    never finds anything; tests run, reverted if they fail) and listed in applied_automatically: tell the user. Crash
+    fixes (safety auto, kind code_fix): fix them in the code, add a test, run all tests, then mark_improvement(done) and
+    tell the user. Everything with safety approve: show it with its proof and wait for the user's yes."""
+    return learning.report(auto_apply=auto_apply)
+
+
+@tool()
+def apply_improvement(proposal_id: str) -> dict:
+    """Apply a setting proposal from improvement_report after the user approved it: the data point's file is changed,
+    all tests run, and the change is reverted if they fail. Logged in docs/IMPROVEMENTS.md."""
+    return learning.apply(proposal_id)
+
+
+@tool()
+def mark_improvement(proposal_id: str, status: str, note: str = "") -> dict:
+    """Record what happened to a proposal: done (fixed by editing code, a prompt or a rule; say what changed),
+    rejected (the user said no; it only comes back if it keeps happening), applied or failed."""
+    return learning.mark(proposal_id, status, note)
 
 
 def main():

@@ -85,12 +85,14 @@
     "mode": "primary",
     "queries": [
       "\"{company}\" QuickBooks",
-      "{company} founder QuickBooks"
+      "{company} founder QuickBooks",
+      "site:linkedin.com/posts (\"{company}\" OR \"{founders}\") QuickBooks"
     ],
     "good_sources": [
       "X / Twitter",
       "LinkedIn posts",
-      "Reddit"
+      "Reddit",
+      "LinkedIn posts by the company or its founders (public, indexed ones)"
     ]
   },
   "examples": []

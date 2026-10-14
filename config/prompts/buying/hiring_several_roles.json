@@ -29,7 +29,8 @@
       "Roles not visible in the text"
     ],
     "watch_out_for": [
-      "Same role in several locations counts once"
+      "Same role in several locations counts once",
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'"
     ],
     "where_to_look": [
       "Careers page"
@@ -79,9 +80,11 @@
   "web_search": {
     "mode": "fallback",
     "queries": [
+      "\"{company}\" jobs site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
       "\"{company}\" jobs"
     ],
     "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
       "company job board",
       "LinkedIn jobs",
       "Wellfound"

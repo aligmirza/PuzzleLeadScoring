@@ -10,76 +10,67 @@ from pathlib import Path
 
 from rich.live import Live
 
-from .common import (ai_columns, ai_summary, console, files_and_disk, offer_cleanup, plain, prepare_list, rel,
+from .common import (each_row, in_thread, save_download, ai_columns, ai_summary, console, files_and_disk, offer_cleanup, plain, prepare_list, rel,
                      run_rules, signal_columns, signal_summary, write_outputs)
-from ..sources.crawl import ICP_KINDS, Crawler, slim_html
+from ..sources.crawl import ICP_KINDS, Crawler
 from . import final
 from ..core.dashboard import Dashboard
 from ..core.inputs import load_leads
 from ..checks.rules import SIGNALS
-from ..core import shared
+from ..core import shared, timing
 from ..core.store import Store
 
 OUTPUTS = {"csv": "icp_check.csv", "evidence": "icp_evidence.jsonl", "ai_queue": "icp_ai_queue.jsonl"}
 GROUPS = ("must", "exclusion")
 
 
-async def _crawl_and_check(rows, store: Store, dash: Dashboard, workers: int, max_requests: int, refresh: bool) -> list[dict]:
-    crawler = Crawler(max_requests=max_requests)
-    queue: asyncio.Queue = asyncio.Queue()
-    for row in rows:
-        queue.put_nowait(row)
-    results: list[dict] = []
+def handler(store: Store, dash: Dashboard, crawler: Crawler, refresh: bool):
+    """This phase for one company (download, rules, directories): `await handle(row)` returns its result."""
 
-    async def worker():
-        while True:
-            try:
-                row = queue.get_nowait()
-            except asyncio.QueueEmpty:
-                return
-            d = row["domain"]
-            record = None if refresh else store.get_site(d)
-            if record is None and not refresh:  # another list may have this company already
-                record = shared.adopt_site(store, d, ICP_KINDS)
-                if record:
-                    record["input"] = {"company": row["company"], "employees": row["employees"]}
-                    store.save_site(d, record)
-            cached = record is not None
-            if not cached:
-                try:
-                    record, pages, jobs = await asyncio.wait_for(crawler.crawl(d, ICP_KINDS), timeout=90)
-                except asyncio.TimeoutError:
-                    record, pages, jobs = {"domain": d, "status": "unreachable", "error": "took longer than 90s", "pages": {}}, {}, []
-                except Exception as e:  # noqa: BLE001  one bad site must not stop the run
-                    record, pages, jobs = {"domain": d, "status": "error", "error": f"crawler bug: {e!r}"[:200], "pages": {}}, {}, []
-                for kind, html in pages.items():
-                    store.save_page(d, kind, await asyncio.to_thread(slim_html, html))
-                if jobs:
-                    store.save_jobs(d, jobs)
+    async def handle(row):
+        d = row["domain"]
+        timing.start(d)
+        record = None if refresh else store.get_site(d)
+        if record is None and not refresh:  # another list may have this company already
+            record = shared.adopt_site(store, d, ICP_KINDS)
+            if record:
                 record["input"] = {"company": row["company"], "employees": row["employees"]}
                 store.save_site(d, record)
-                shared.publish_site(store, d, record)
-            dash.crawled(record, cached)
-            if cached and record.get("pages_deleted") and store.get_result(d, "icp"):
-                result = store.get_result(d, "icp")  # pages were cleaned up earlier; reuse the saved result
-                dash.ruled(result)
-                results.append(result)
-                continue
-            dash.c["bytes_saved"] += store.pages_size(d)
+        cached = record is not None
+        if not cached:
             try:
-                result = await asyncio.to_thread(run_rules, store, row, record, "icp")
-            except Exception as e:  # noqa: BLE001  keep the run going; report at the end
-                result = {"domain": d, "error": f"rules failed: {e!r}"}
-                dash.progress.update(dash.t_rules, advance=1)
-            else:
-                dash.ruled(result)
-            results.append(result)
+                with timing.stage("1 download"):
+                    record, pages, jobs = await asyncio.wait_for(crawler.crawl(d, ICP_KINDS), timeout=90)
+            except asyncio.TimeoutError:
+                record, pages, jobs = {"domain": d, "status": "unreachable", "error": "took longer than 90s", "pages": {}}, {}, []
+            except Exception as e:  # noqa: BLE001  one bad site must not stop the run
+                record, pages, jobs = {"domain": d, "status": "error", "error": f"crawler bug: {e!r}"[:200], "pages": {}}, {}, []
+            await save_download(store, d, pages, jobs)
+            record["input"] = {"company": row["company"], "employees": row["employees"]}
+            store.save_site(d, record)
+            shared.publish_site(store, d, record)
+        dash.crawled(record, cached)
+        if cached and record.get("pages_deleted") and store.get_result(d, "icp"):
+            result = store.get_result(d, "icp")  # pages were cleaned up earlier; reuse the saved result
+            dash.ruled(result)
+            return result
+        dash.c["bytes_saved"] += store.pages_size(d)
+        try:
+            with timing.stage("1 rules + directories (incl. waiting for a thread)"):
+                result = await in_thread(run_rules, store, row, record, "icp")
+        except Exception as e:  # noqa: BLE001  keep the run going; report at the end
+            result = {"domain": d, "error": f"rules failed: {e!r}"}
+            dash.progress.update(dash.t_rules, advance=1)
+        else:
+            dash.ruled(result)
+        return result
 
-    try:
-        await asyncio.gather(*(worker() for _ in range(workers)))
-    finally:
-        await crawler.close()
-    return results
+    return handle
+
+
+async def _crawl_and_check(rows, store: Store, dash: Dashboard, workers: int, max_requests: int, refresh: bool) -> list[dict]:
+    crawler = Crawler(max_requests=max_requests)
+    return await each_row(rows, workers, crawler, handler(store, dash, crawler, refresh))
 
 
 def csv_row(r: dict) -> dict:

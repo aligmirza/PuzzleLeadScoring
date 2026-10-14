@@ -16,6 +16,8 @@ description: Check one company (or a handful) against Puzzle's ICP with the full
    - ICP YES / NO / PENDING and the reason (`Why`), segment and its basis, lead score and tier.
    - A table of the signals found, each with its quote and link (from `explain_company(domain)`).
    - What stayed open (Unknown is not a negative).
+5. If something went wrong on the way (a crash, answers rejected, a data point that seems misread), run the
+   **improve-pipeline** skill.
 
 ## For speed and cost
 

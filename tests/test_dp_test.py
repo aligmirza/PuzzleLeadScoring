@@ -287,7 +287,8 @@ class ExistingTools(unittest.TestCase):
         self.assertEqual(sorted(names), sorted([
             "check_company", "enrich_list", "list_status", "list_results", "explain_company", "clay_tables",
             "pull_clay_table", "push_list_to_clay", "open_questions", "submit_answers", "questions_overview", "list_ai",
-            "dp_test_setup", "dp_test_run", "dp_test_answer", "dp_test_record", "dp_test_summary"]))
+            "dp_test_setup", "dp_test_run", "dp_test_answer", "dp_test_record", "dp_test_summary",
+            "improvement_report", "apply_improvement", "mark_improvement", "check_companies"]))
 
     def test_production_waterfall_still_imports_and_runs_offline(self):
         from enrich.integrations import client_ai, service

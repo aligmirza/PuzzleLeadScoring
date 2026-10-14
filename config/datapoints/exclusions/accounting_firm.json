@@ -2,6 +2,24 @@
   "id": "E3",
   "name": "Accounting or bookkeeping firm",
   "group": "exclusion",
+  "run_if": {
+    "M1": [
+      "yes",
+      "unknown"
+    ],
+    "M2": [
+      "yes",
+      "unknown"
+    ],
+    "M3": [
+      "yes",
+      "unknown"
+    ],
+    "M4": [
+      "yes",
+      "unknown"
+    ]
+  },
   "steps": {
     "rules": {
       "on": true

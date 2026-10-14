@@ -164,6 +164,23 @@ async def check(body: CheckIn):
         _fail(e)
 
 
+class BatchIn(BaseModel):
+    companies: list[CheckIn] = Field(description="Up to 25 companies, each like the body of POST /v1/check")
+    signals: bool = True
+    wait_seconds: float = Field(300, description="How long to wait before answering 'still running'")
+
+
+@app.post("/v1/check/batch", dependencies=AUTH, tags=["Companies"])
+async def check_batch(body: BatchIn):
+    """Up to 25 companies at once, answered while you wait: their free steps run at the same time. Same answers as
+    POST /v1/check for each (AI questions stay open; use a list with ai=true for those)."""
+    try:
+        return await service.check_many([c.model_dump(include={"domain", "company", "employees"}) for c in body.companies],
+                                        body.signals, False, body.wait_seconds)
+    except (ValueError, RuntimeError) as e:
+        _fail(e)
+
+
 # --- lists ---------------------------------------------------------------------
 @app.get("/v1/lists", dependencies=AUTH, tags=["Lists"])
 def all_lists():

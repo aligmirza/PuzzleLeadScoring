@@ -35,7 +35,8 @@
     ],
     "watch_out_for": [
       "'Sync with QuickBooks' on a product page describes their product",
-      "Note QuickBooks Enterprise separately; that is a different signal"
+      "Note QuickBooks Enterprise separately; that is a different signal",
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'"
     ],
     "where_to_look": [
       "Job posts (finance, ops, office manager)",
@@ -86,10 +87,12 @@
   "web_search": {
     "mode": "fallback",
     "queries": [
+      "\"{company}\" QuickBooks jobs site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
       "\"{company}\" QuickBooks job",
       "\"{company}\" bookkeeper QuickBooks"
     ],
     "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
       "job boards",
       "LinkedIn job posts"
     ]

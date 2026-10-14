@@ -3,7 +3,6 @@
 Each limit is a row in cache/ratelimits.sqlite holding the next free time slot; taking a slot is one short
 transaction, so separate processes and threads never exceed the limit together.
 """
-import asyncio
 import sqlite3
 import time
 
@@ -34,9 +33,3 @@ def wait(name: str, per_second: float) -> None:
     delay = _reserve(name, per_second)
     if delay > 0:
         time.sleep(delay)
-
-
-async def wait_async(name: str, per_second: float) -> None:
-    delay = await asyncio.to_thread(_reserve, name, per_second)
-    if delay > 0:
-        await asyncio.sleep(delay)

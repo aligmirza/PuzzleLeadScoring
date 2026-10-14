@@ -158,21 +158,32 @@ def build_group(prompt_ids: list[str], company: str, domain: str, known_facts: d
             "schema": {"type": "object", "properties": {f"data_point_{k}": m["schema"] for k, m in enumerate(msgs, start=1)}}}
 
 
+def _search_header(vars_: dict, known_facts: dict) -> list[str]:
+    """The start of every web search message: who the company is, today's date, what's already confirmed."""
+    parts = [f"Company: {vars_['company']}\nDomain: {vars_['domain']}\nLegal name (if known): {vars_['legal_name']}\n"
+             f"Today: {date.today().isoformat()}"]
+    if known_facts:
+        parts.append("Facts already confirmed (don't contradict them):\n" + "\n".join(f"- {k}: {v}" for k, v in known_facts.items()))
+    return parts
+
+
+def _search_rules(cfg: dict) -> list[str]:
+    """How to search, match the company and rate confidence (config/prompts/_shared.json web_search_step)."""
+    return ["How to search:\n" + "\n".join(f"- {r}" for r in cfg["instructions"]),
+            "Entity match:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["entity_match"].items()),
+            "Confidence:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["confidence"].items())]
+
+
 def build_search_group(prompt_ids: list[str], company: str, domain: str, known_facts: dict, legal_name: str | None,
                        step1: dict[str, dict | None]) -> dict:
     """Step 2 for several data points in one web search call: the searches are shared, each answer is separate."""
     shared = load()[0]
     cfg = shared["web_search_step"]
     vars_ = variables(company, domain, legal_name)
-    parts = [f"Company: {vars_['company']}\nDomain: {vars_['domain']}\nLegal name (if known): {vars_['legal_name']}\n"
-             f"Today: {date.today().isoformat()}"]
-    if known_facts:
-        parts.append("Facts already confirmed (don't contradict them):\n" + "\n".join(f"- {k}: {v}" for k, v in known_facts.items()))
+    parts = _search_header(vars_, known_facts)
     parts.append(GROUP_INTRO + " Plan searches that cover several data points at once (for example one search for "
                  "recent funding and investor news), then answer each data point from what you found.")
-    parts.append("How to search:\n" + "\n".join(f"- {r}" for r in cfg["instructions"]))
-    parts.append("Entity match:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["entity_match"].items()))
-    parts.append("Confidence:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["confidence"].items()))
+    parts += _search_rules(cfg)
     props = {}
     for k, pid in enumerate(prompt_ids, start=1):
         ws = load()[1][pid]["web_search"]
@@ -215,14 +226,22 @@ def needs_web(prompt_id: str, step1: dict | None) -> bool:
     return value in (None, "", "unknown", "Unknown") or step1.get("confidence") == "low"
 
 
-def variables(company: str, domain: str, legal_name: str | None = None, today: date | None = None) -> dict:
+def variables(company: str, domain: str, legal_name: str | None = None, today: date | None = None,
+              founders: list[str] | None = None) -> dict:
     today = today or date.today()
     return {"company": company or domain, "domain": domain, "legal_name": legal_name or company or domain,
-            "year": str(today.year), "last_year": str(today.year - 1)}
+            "year": str(today.year), "last_year": str(today.year - 1), "founders": (founders or [""])[0]}
 
 
 def queries(prompt_id: str, vars_: dict) -> list[str]:
-    return [q.format(**vars_) for q in load()[1][prompt_id]["web_search"].get("queries", [])]
+    """The prompt's suggested searches. {founders} is the first founder's name (from the Prospeo team list); when no
+    founder is known, ' OR "{founders}"' is dropped so the search uses the company name alone."""
+    out = []
+    for q in load()[1][prompt_id]["web_search"].get("queries", []):
+        if not vars_.get("founders"):
+            q = q.replace(' OR "{founders}"', "").replace('("{company}")', '"{company}"')
+        out.append(q.format(**{**vars_, "founders": vars_.get("founders", "")}))
+    return out
 
 
 def search_schema(prompt_id: str) -> dict:
@@ -236,17 +255,14 @@ def search_schema(prompt_id: str) -> dict:
 
 
 def build_search(prompt_id: str, company: str, domain: str, known_facts: dict, legal_name: str | None = None,
-                 step1: dict | None = None) -> dict:
+                 step1: dict | None = None, founders: list[str] | None = None) -> dict:
     """Everything needed for one step 2 call: Claude with the web search tool."""
     shared, prompts = load()
     ws, cfg = prompts[prompt_id]["web_search"], shared["web_search_step"]
     if ws["mode"] == "off":
         raise ValueError(f"{prompt_id} doesn't use web search: {ws.get('why', '')}")
-    vars_ = variables(company, domain, legal_name)
-    parts = [f"Company: {vars_['company']}\nDomain: {vars_['domain']}\nLegal name (if known): {vars_['legal_name']}\n"
-             f"Today: {date.today().isoformat()}"]
-    if known_facts:
-        parts.append("Facts already confirmed (don't contradict them):\n" + "\n".join(f"- {k}: {v}" for k, v in known_facts.items()))
+    vars_ = variables(company, domain, legal_name, founders=founders)
+    parts = _search_header(vars_, known_facts)
     if step1:
         parts.append(f"Step 1 (the company's own website) found: {json.dumps(step1)}\nSearch the web to fill the gap.")
     parts.append(instruction_text(prompt_id).rsplit("Return only JSON", 1)[0].rstrip())
@@ -254,9 +270,7 @@ def build_search(prompt_id: str, company: str, domain: str, known_facts: dict, l
     parts.append("Good sources for this data point:\n" + "\n".join(f"- {x}" for x in ws.get("good_sources", [])))
     if ws.get("note"):
         parts.append(ws["note"])
-    parts.append("How to search:\n" + "\n".join(f"- {r}" for r in cfg["instructions"]))
-    parts.append("Entity match:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["entity_match"].items()))
-    parts.append("Confidence:\n" + "\n".join(f"- {k}: {v}" for k, v in cfg["confidence"].items()))
+    parts += _search_rules(cfg)
     parts.append("Return only JSON matching this schema:\n" + json.dumps(search_schema(prompt_id)))
     return {
         "prompt_id": prompt_id,

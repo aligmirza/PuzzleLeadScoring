@@ -47,6 +47,12 @@ GATEWAYS: dict[str, list[tuple[str, str]]] = {
     "Gumroad": [("Gumroad overlay", r"gumroad\.com/js/gumroad|gumroad\.com/l/")],
 }
 _COMPILED = {g: [(how, re.compile(p, re.I)) for how, p in pats] for g, pats in GATEWAYS.items()}
+# words one of which every pattern of the gateway contains: text without any of them can't match, so its patterns are
+# skipped (most JavaScript bundles mention no gateway; scanning megabytes with 30 patterns blocked the downloads)
+MUST_CONTAIN = {"Stripe": ("stripe", "createpaymentmethod", "confirmcardpayment", "confirmpayment"), "Paddle": "paddle", "Chargebee": "chargebee", "Braintree": "braintree",
+                "PayPal": "paypal", "Square": "square", "Lemon Squeezy": "lemonsqueezy", "Recurly": "recurly",
+                "Adyen": "adyen", "Authorize.net": "authorize.net", "Checkout.com": "checkout.com",
+                "Razorpay": "razorpay", "Gumroad": "gumroad"}
 NOT_STRIPE_KEY = re.compile(r"clerk|posthog|publishable[-_]?key=[\"']pk_(?:live|test)_[^\"']*[\"'][^>]*clerk", re.I)
 
 # links that lead to the product app's sign-in / sign-up page
@@ -58,7 +64,11 @@ RE_SCRIPT_SRC = re.compile(r"<script[^>]+src=[\"']([^\"']+)[\"']", re.I)
 def detect(text: str, where: str) -> list[dict]:
     """Every gateway method found in this page or script. `where` is its URL."""
     out = []
+    low = (text or "").lower()
     for gateway, pats in _COMPILED.items():
+        words = MUST_CONTAIN[gateway]
+        if not any(w in low for w in ((words,) if isinstance(words, str) else words)):
+            continue
         for how, rx in pats:
             m = rx.search(text)
             if not m:

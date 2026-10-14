@@ -86,11 +86,13 @@
   "web_search": {
     "mode": "primary",
     "queries": [
-      "\"{company}\" \"joins board\" OR \"board of directors\" {year}"
+      "\"{company}\" \"joins board\" OR \"board of directors\" {year}",
+      "site:linkedin.com/posts (\"{company}\" OR \"{founders}\") \"board of directors\" OR \"joins our board\" OR \"investor update\""
     ],
     "good_sources": [
       "press releases",
-      "LinkedIn"
+      "LinkedIn",
+      "LinkedIn posts by the company or its founders (public, indexed ones)"
     ]
   },
   "examples": []

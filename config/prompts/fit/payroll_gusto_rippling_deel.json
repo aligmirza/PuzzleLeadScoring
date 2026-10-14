@@ -35,7 +35,8 @@
       "The tool is only an integration of their product"
     ],
     "watch_out_for": [
-      "'Sync employees from Gusto' describes their product"
+      "'Sync employees from Gusto' describes their product",
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'"
     ],
     "where_to_look": [
       "Careers and benefits text",
@@ -99,10 +100,12 @@
   "web_search": {
     "mode": "fallback",
     "queries": [
+      "\"{company}\" Gusto OR Rippling OR Deel jobs site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
       "\"{company}\" Gusto OR Rippling OR Deel",
       "site:{domain} benefits payroll"
     ],
     "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
       "job posts",
       "careers pages"
     ]

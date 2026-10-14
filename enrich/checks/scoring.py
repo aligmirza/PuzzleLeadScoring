@@ -55,3 +55,32 @@ def score(signals: dict, seg: str) -> dict:
     tier = "Strong fit" if total >= cfg["tiers"]["strong_fit_min_score"] else "Weak fit"
     breakdown = "; ".join(f"{name} {p:+d}" for name, p in parts)
     return {"score": total, "tier": tier, "breakdown": breakdown, "parts": parts}
+
+
+def tier_range(signals: dict, seg: str | None, open_sids: set | None = None) -> dict:
+    """Could the remaining open signals still change the lead tier? The lowest and highest score reachable if every
+    open fit or buying signal ended Yes (more points) or every open weak signal ended Yes (minus points). When both
+    ends give the same tier, no answer left can change it ("locked"). Unknown size: never locked (weights depend on it)."""
+    cfg = config()
+    pts = cfg["points"]
+    now = score(signals, seg or "SMB")
+    if not seg:
+        return {"locked": False, "score": now["score"], "tier": now["tier"], "why": "size not known yet"}
+    weights = {**cfg["fit_signals"], **cfg["buying_signals"]}
+    gain = loss = 0
+    for sid, v in signals.items():
+        # open = still has a question waiting (open_sids); Unknown after its whole waterfall is final (0 points)
+        if v.get("value") not in ("unknown", "check") or (open_sids is not None and sid not in open_sids):
+            continue
+        group, name = SIGNALS[sid]
+        if group == "weak":
+            loss += -cfg["weak_signal_points"]
+        elif name in weights:
+            w = weights[name]
+            gain += pts[w.get(seg, "none") if isinstance(w, dict) else w]
+    low, high = now["score"] - loss, now["score"] + gain
+    cut = cfg["tiers"]["strong_fit_min_score"]
+    locked = (low >= cut) == (high >= cut)
+    return {"locked": locked, "score": now["score"], "tier": now["tier"], "low": low, "high": high, "strong_at": cut,
+            "why": (f"score {now['score']}, the open signals can only reach {low} to {high} (Strong fit at {cut}): "
+                    f"the tier stays {now['tier']}") if locked else ""}

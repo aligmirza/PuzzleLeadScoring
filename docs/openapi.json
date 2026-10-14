@@ -97,6 +97,80 @@
         }
       }
     },
+    "/v1/check/batch": {
+      "post": {
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Check Batch",
+        "description": "Up to 25 companies at once, answered while you wait: their free steps run at the same time. Same answers as\nPOST /v1/check for each (AI questions stay open; use a list with ai=true for those).",
+        "operationId": "check_batch_v1_check_batch_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/lists": {
       "get": {
         "tags": [
@@ -1260,6 +1334,79 @@
         }
       }
     },
+    "/v1/lists/{name}/costs": {
+      "get": {
+        "tags": [
+          "Quality"
+        ],
+        "summary": "Costs",
+        "description": "The actual AI cost per company (phase 1, phase 2, answers, web searches, reused answers).",
+        "operationId": "costs_v1_lists__name__costs_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/lists/{name}/runs": {
       "get": {
         "tags": [
@@ -1797,6 +1944,34 @@
         },
         "type": "object",
         "title": "AiOptions"
+      },
+      "BatchIn": {
+        "properties": {
+          "companies": {
+            "items": {
+              "$ref": "#/components/schemas/CheckIn"
+            },
+            "type": "array",
+            "title": "Companies",
+            "description": "Up to 25 companies, each like the body of POST /v1/check"
+          },
+          "signals": {
+            "type": "boolean",
+            "title": "Signals",
+            "default": true
+          },
+          "wait_seconds": {
+            "type": "number",
+            "title": "Wait Seconds",
+            "description": "How long to wait before answering 'still running'",
+            "default": 300
+          }
+        },
+        "type": "object",
+        "required": [
+          "companies"
+        ],
+        "title": "BatchIn"
       },
       "Body_upload_list_v1_lists_upload_post": {
         "properties": {

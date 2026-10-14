@@ -17,9 +17,10 @@ flowchart LR
 |---|---|
 | **README.md** (this file) | Setup, commands, configuration, project files, status and roadmap |
 | [PIPELINE.md](docs/PIPELINE.md) | How the pipeline works, step by step with diagrams: downloading, rules, verdict, AI, scoring, outputs, storage |
-| [SIGNALS.md](docs/SIGNALS.md) | How each must-have, exclusion and signal is checked |
+| [SIGNALS.md](docs/SIGNALS.md) | How each must-have, exclusion and signal is checked; the waterfall of all 57 data points and how they depend on each other (conditional runs, opposites) |
 | [INTEGRATIONS.md](docs/INTEGRATIONS.md) | The API, the MCP server, and exchanging lists with Clay |
 | [TESTING.md](docs/TESTING.md) | How to test and evaluate everything: smoke test, AI run, trace, waterfall, manual review of every data point, accuracy, regression checklist |
+| [IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | What the pipeline changed about itself from what it learned while scoring leads (safe fixes automatic, the rest approved) |
 | [MANUAL_REVIEW.md](docs/MANUAL_REVIEW.md) | The data point by data point review through MCP: standing instructions, decisions per data point, open items, how to resume |
 
 ---
@@ -101,6 +102,9 @@ AI options:
 | Find decision-makers at ICP companies (founder/CEO, finance lead), with emails if wanted | `python -m enrich people leads --emails` (asks first; writes `leads_contacts.csv`) |
 | Follow one company through every step, one at a time (input, download, rules, directories, verdict, AI, signals, score) | `python -m enrich trace linear.app` (add `--ai` for the AI steps; asks before spending). Saved as a report in `lists/trace_linear_app/output/` |
 | Re-check saved pages after changing a rule (no downloading) | `python -m enrich rules leads` (add `--phase icp` or `--phase signals`) |
+| Re-read open jobs for a list downloaded before (13 job boards, careers pages; free) | `python -m enrich jobs leads` |
+| Time the free steps on a CSV, per stage, and compare two runs answer by answer (free) | `python -m enrich bench leads.csv --label before`, then `python -m enrich bench --compare before after` |
+| Re-open pages that only load with JavaScript (a "Loading blog..." page) in the real browser; free | `python -m enrich render leads` |
 | Continue a stopped run | Run the same command again; finished companies come from the cache |
 | Delete raw pages no longer needed (always asks first) | `python -m enrich clean leads` |
 | Measure accuracy against the right answers | `python -m enrich evaluate leads --labels labels.csv` (blank file: `python -m enrich evaluate --template labels.csv`) |
@@ -157,7 +161,7 @@ Other tools can use the pipeline too. Details and setup steps: [docs/INTEGRATION
 | File | What it holds | Change it when |
 |---|---|---|
 | [enrich/checks/rules.py](enrich/checks/rules.py) | The pattern-matching rules: what counts as proof for each data point | A rule finds wrong answers or misses clear ones |
-| [config/datapoints/](config/datapoints/) | Each data point's own waterfall (57 files): which layers run and when (rules, directories, AI on pages, AI web search, provider). See them all: `python -m enrich datapoints` | You want a data point answered differently, cheaper or more thoroughly |
+| [config/datapoints/](config/datapoints/) | Each data point's own waterfall (57 files): which layers run and when (rules, directories, AI on pages, AI web search, provider), and `run_if`: which data points it waits for. See them all: `python -m enrich datapoints` | You want a data point answered differently, cheaper or more thoroughly |
 | [config/prompts/](config/prompts/) | One JSON prompt file per data point (62), plus shared rules, the AI provider and model names in `_shared.json` | AI should judge a data point differently, or you want another model |
 | [config/scoring.json](config/scoring.json) | Points per signal (high 3, medium 2, low 1, weak fit -2), Strong fit cut-off (12), size bands | You want different weights or tiers |
 

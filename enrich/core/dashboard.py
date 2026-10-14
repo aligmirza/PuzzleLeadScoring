@@ -18,7 +18,7 @@ EXCLUSION_SHORT = {"E1": "Series C+", "E2": "No website", "E3": "Accounting firm
                    "E5": "Non-profit", "E6": "Holds stock"}
 MUST_SHORT = {"M1": "US", "M2": "Live", "M3": "Fintech", "M4": "Sales"}
 
-ICON = {"yes": "[green]✓[/]", "no": "[red]✗[/]", "unknown": "[dim]·[/]", "check": "[yellow]?[/]"}
+ICON = {"yes": "[green]✓[/]", "no": "[red]✗[/]", "unknown": "[dim]·[/]", "check": "[yellow]?[/]", "na": "[dim]–[/]"}
 VERDICT_STYLE = {"Yes": "green", "Yes (some must-haves unconfirmed)": "cyan", "Needs AI check": "yellow",
                  "No": "red", "Unknown: site not reached": "yellow"}
 

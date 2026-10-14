@@ -14,7 +14,7 @@
       "prompt": "buying/preparing_first_audit"
     },
     "ai_web": {
-      "run": "if_open",
+      "run": "if_clue",
       "when_site_unreached": false
     },
     "provider": {

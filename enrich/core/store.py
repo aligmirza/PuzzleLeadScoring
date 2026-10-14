@@ -19,7 +19,7 @@ class Store:
         self.root = root
         self.pages_dir = root / "raw"
         self.pages_dir.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(root / "cache.sqlite", check_same_thread=False)
+        self.db = sqlite3.connect(root / "cache.sqlite", check_same_thread=False, isolation_level=None)  # autocommit
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("CREATE TABLE IF NOT EXISTS sites (domain TEXT PRIMARY KEY, record TEXT, crawled_at REAL)")
         # one results table per phase: phase 1 (ICP check) and phase 2 (signals)

@@ -30,16 +30,18 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from ..ai import apply as ai_apply
 from ..ai import prompts as P
 from ..checks import datapoints
-from ..checks.rules import SIGNALS, VALUE_NAMES, signal_column
+from ..checks.rules import SIGNALS, VALUE_NAMES, phase_of, signal_column
 from ..core import versions
-from ..core.inputs import load_leads, normalize_domain
+from ..core.inputs import normalize_domain
 from ..core.paths import ROOT
 from ..core.store import Store
 from ..engine import layers as L
 from ..pipeline import waterfall
 from ..pipeline.common import LISTS, run_rules
+from .client_ai import _row, with_sources
 
 PREFIX = "dp_test"
 EST = {"rules": 0.0, "directories": 0.0, "ai_pages": 0.0008, "ai_web": 0.011, "provider": None}
@@ -66,16 +68,6 @@ def _sid(data_point: str) -> str:
         if low in (name.lower(), signal_column(sid).lower()):
             return sid
     raise ValueError(f"Unknown data point '{data_point}'. Use an ID (M1..M4, E1..E6, F1..F21, B1..B14, W1..W12) or its name.")
-
-
-def _row(folder: Path, domain: str, store: Store) -> dict:
-    if (folder / "input.csv").exists():
-        rows, _ = load_leads(folder / "input.csv")
-        hit = next((r for r in rows if r["domain"] == domain), None)
-        if hit:
-            return hit
-    given = (store.get_site(domain) or {}).get("input") or {}
-    return {"domain": domain, "company": given.get("company", ""), "employees": given.get("employees", ""), "input": {}}
 
 
 def _description(sid: str) -> str:
@@ -134,7 +126,8 @@ def _pending_for(store: Store, domain: str, phase: str, result: dict, pid: str |
     if not pid:
         return None
     from .client_ai import _pending
-    return next((kind for p, kind in _pending(store, domain, phase, result) if p == pid), None)
+    # test mode reviews every data point: asked even when a normal run would stop early (the tier can't change)
+    return next((kind for p, kind in _pending(store, domain, phase, result, all_questions=True) if p == pid), None)
 
 
 def _reason(layer: str, status: str, cfg: dict, pending: str | None, note: str) -> str:
@@ -175,6 +168,8 @@ def _reason(layer: str, status: str, cfg: dict, pending: str | None, note: str) 
         return (f"Not triggered: ai_web.run is '{run}'. "
                 + {"after_pages": "It only runs after a page answer that is empty or low confidence.",
                    "if_open": "It runs only if the data point is still open after the page answer.",
+                   "if_clue": "Rarely public: it runs only on a clue (the rules flagged it, or the page answer saw "
+                              "an unproven yes/no). A clean 'unknown' from the pages ends here.",
                    "off": "Web search is switched off for this data point" + _web_off_why(cfg) + "."}.get(run, ""))
     if layer == "provider":
         return "Not run: no Prospeo data bought for this company in the test list."
@@ -185,6 +180,16 @@ def _web_off_why(cfg: dict) -> str:
     pid = cfg["steps"]["ai_pages"].get("prompt")
     why = ((P.load()[1].get(pid) or {}).get("web_search") or {}).get("why", "") if pid else ""
     return f": {why.rstrip('.')}" if why else ""
+
+
+def _normal_run_note(store: Store, domain: str, phase: str, result: dict, pid: str | None, pending: str | None) -> str:
+    """What a normal (non-test) run would do with this question: the same, or skip it because the tier can't change."""
+    if not pid or not pending:
+        return ""
+    from .client_ai import tier_lock
+    lock = tier_lock(store, domain, phase, result)
+    return (f"A normal run would skip this question (stop when the result can't change): {lock['why']}. "
+            "It is asked here only because this is the manual review.") if lock else ""
 
 
 # setup ---------------------------------------------------------------------------------------------------------------
@@ -333,7 +338,7 @@ def _report(domain: str, data_point: str, test_list: str = PREFIX, include_page_
     d = normalize_domain(domain) or domain
     sid = _sid(data_point)
     group, name = SIGNALS[sid]
-    phase = "icp" if group in ("must", "exclusion") else "signals"
+    phase = phase_of(sid)
     store = Store(folder)
     record = store.get_site(d)
     if not record:
@@ -476,6 +481,7 @@ def _report(domain: str, data_point: str, test_list: str = PREFIX, include_page_
                           ("Still open after every layer allowed by its settings" if value in ("unknown", "check") else ""),
         },
         "next_step": next_step,
+        "normal_run": _normal_run_note(store, d, phase, result, pid, pending),
         "scope_note": "Rules re-ran for this phase in one pass (free, no network); only this data point is shown. "
                       "Nothing was written outside the test list.",
     }
@@ -491,7 +497,7 @@ def answer(domain: str, data_point: str, answer: dict, test_list: str = PREFIX) 
     cur = s.get("current") or {}
     if s["state"] != "awaiting_review" or (cur.get("domain"), cur.get("data_point_id")) != (d, sid):
         raise ValueError(f"{sid} for {d} is not the data point under test; run it with dp_test_run first.")
-    phase = "icp" if SIGNALS[sid][0] in ("must", "exclusion") else "signals"
+    phase = phase_of(sid)
     pid = datapoints.step(sid, "ai_pages").get("prompt")
     if not pid:
         raise ValueError(f"{sid} has no AI question; only rules and directories answer it.")
@@ -508,13 +514,12 @@ def answer(domain: str, data_point: str, answer: dict, test_list: str = PREFIX) 
         raise ValueError(f"The waterfall is waiting for the '{pending}' stage, not '{kind}'.")
     a.pop("id", None)
     step = 2 if kind == "web" else 1
-    if step == 2 and a.get("source") and not a.get("_sources_found"):
-        a["_sources_found"] = [{"url": a["source"], "title": ""}]
+    with_sources(a, step)
     store.save_ai(d, phase, pid, step, a, {**USAGE, "prompt_version": versions.prompt(pid)})  # test list only
     report = _report(d, sid, test_list, include_page_text=False)
     v = (store.get_result(d, phase) or {}).get("signals", {}).get(sid, {})
     report["answer_saved"] = {"stage": "AI reading our pages" if step == 1 else "AI web search",
-                              "counted": v.get("method") == "ai" and v.get("value") in ("yes", "no"),
+                              "counted": ai_apply.counted(v),
                               "quality_check_note": v.get("note", "")}
     report["progress"] = progress(folder)
     return report
@@ -573,6 +578,10 @@ def review(domain: str = "", data_point: str = "", action: str = "", expected_va
     if key == "investigate":
         out["investigation"] = _investigate(folder, d, sid, rep)
     row = _log(folder, rep, key, expected_value, notes, reference)
+    if key in ("reject", "correct", "partially_correct", "conflicting_evidence"):
+        from ..core import learning
+        learning.record("correction", sid=sid, domain=d, action=key, got=rep["final_result"]["value"],
+                        expected=expected_value, notes=notes, list=folder.name)
     s["reviews"][k] = {"action": key, "expected_value": expected_value, "notes": notes, "reference": reference,
                        "final_value": rep["final_result"]["value"], "at": row["Tested at"]}
     if key in FINAL:
@@ -597,7 +606,7 @@ def _clear_answers(folder: Path, domain: str, sid: str) -> None:
     pid = datapoints.step(sid, "ai_pages").get("prompt")
     if not pid:
         return
-    phase = "icp" if SIGNALS[sid][0] in ("must", "exclusion") else "signals"
+    phase = phase_of(sid)
     store = Store(folder)
     store.db.execute("DELETE FROM ai_answers WHERE domain = ? AND phase = ? AND prompt_id = ?", (domain, phase, pid))
     store.db.commit()

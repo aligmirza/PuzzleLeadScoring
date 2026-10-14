@@ -87,12 +87,14 @@
   "web_search": {
     "mode": "primary",
     "queries": [
-      "\"{company}\" launches pricing OR \"paid plans\" {year}"
+      "\"{company}\" launches pricing OR \"paid plans\" {year}",
+      "site:linkedin.com/posts (\"{company}\" OR \"{founders}\") launch OR pricing OR \"now available\""
     ],
     "good_sources": [
       "company blog or changelog",
       "Product Hunt",
-      "press"
+      "press",
+      "LinkedIn posts by the company or its founders (public, indexed ones)"
     ]
   },
   "examples": []

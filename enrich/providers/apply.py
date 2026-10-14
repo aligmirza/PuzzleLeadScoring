@@ -119,6 +119,9 @@ def apply(result: dict, providers: dict, phase: str) -> dict:
             _settle(s, "F14", YES, ev, finance[0].get("linkedin") or URL, "finance person found", m, "provider")
             _settle(s, "F13", NO, ev, finance[0].get("linkedin") or URL, "finance person found", m, "provider")
         team = people.get("team") or []
+        founders = [x.get("name") for x in team if re.search(r"founder|\bceo\b|chief executive", x.get("title") or "", re.I)]
+        if founders:
+            facts["founders"] = [n for n in founders if n][:3]
         if not finance and people.get("team_searched") and 2 <= len(team) < TEAM_PAGE:
             titles = "; ".join(f"{x.get('name')} ({x.get('title') or 'no title'})" for x in team[:12])
             ev = (f"No finance or accounting title among the {len(team)} people Prospeo lists at "

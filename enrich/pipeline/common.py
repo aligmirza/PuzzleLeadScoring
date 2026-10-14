@@ -1,6 +1,7 @@
 """Helpers shared by phase 1 (ICP check) and phase 2 (signals)."""
 import csv
 import json
+import os
 import re
 import shutil
 import sys
@@ -64,8 +65,10 @@ def plain(text: str) -> str:
 # rules -------------------------------------------------------------------
 def run_rules(store: Store, row: dict, record: dict, phase: str) -> dict:
     """The waterfall for one company with what's known and bought so far (engine/resolve.py); saved and returned."""
+    from ..core import timing
     from ..engine.resolve import resolve
-    return resolve(store, row, record, phase)
+    with timing.stage(f"{'1' if phase == 'icp' else '2'} rules + directories (working)"):
+        return resolve(store, row, record, phase)
 
 
 def directory_finder(store: Store, row: dict):
@@ -80,6 +83,14 @@ def directory_finder(store: Store, row: dict):
                 and found.get("version") == directories.VERSION
                 and (skip_sec or not found.get("skipped_sec"))
                 and all(asked.get(k) or not v for k, v in (history or {}).items())):
+            sec = found.get("SEC") or {}
+            if (sec.get("match") not in (None, "weak") and sec.get("latest_form_d") and "form_d_details" not in sec
+                    and os.environ.get("SEC_CONTACT_EMAIL", "").strip()):  # saved before the SEC email was set
+                try:
+                    sec["form_d_details"] = directories.form_d_details(sec["cik"], sec["latest_form_d"])
+                except Exception as e:  # noqa: BLE001
+                    found.setdefault("errors", {})["SEC Form D"] = repr(e)[:200]
+                store.save_directory(row["domain"], found)
             if "DNS" not in found:  # saved before the DNS check existed: add only that part
                 try:
                     found["DNS"] = directories.dns_lookup(row["domain"])
@@ -92,6 +103,54 @@ def directory_finder(store: Store, row: dict):
         store.save_directory(row["domain"], found)
         return found
     return find
+
+
+_RULES_POOL = None
+
+
+async def in_thread(fn, *args):
+    """Run blocking work (rules and directory lookups, mostly waiting on the network) on a pool sized for the workers;
+    the default pool has only cpu count + 4 threads, which held 50 parallel companies down to 14."""
+    import asyncio
+    import contextvars
+    from concurrent.futures import ThreadPoolExecutor
+    global _RULES_POOL
+    if _RULES_POOL is None:
+        _RULES_POOL = ThreadPoolExecutor(max_workers=64, thread_name_prefix="rules")
+    ctx = contextvars.copy_context()  # stage timings follow the work into the thread
+    return await asyncio.get_running_loop().run_in_executor(_RULES_POOL, ctx.run, fn, *args)
+
+
+async def each_row(rows: list[dict], workers: int, crawler, handle) -> list[dict]:
+    """Run `await handle(row)` for every row, `workers` at a time, and close the crawler at the end."""
+    import asyncio
+    queue: asyncio.Queue = asyncio.Queue()
+    for row in rows:
+        queue.put_nowait(row)
+    results: list[dict] = []
+
+    async def worker():
+        while True:
+            try:
+                row = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            results.append(await handle(row))
+
+    try:
+        await asyncio.gather(*(worker() for _ in range(workers)))
+    finally:
+        await crawler.close()
+    return results
+
+
+async def save_download(store: Store, d: str, pages: dict[str, str], jobs: list[dict] | None) -> None:
+    """Keep downloaded pages (slimmed) and open jobs."""
+    from ..sources.crawl import slim_html
+    for kind, html in pages.items():
+        store.save_page(d, kind, await in_thread(slim_html, html))
+    if jobs:
+        store.save_jobs(d, jobs)
 
 
 def ai_prompts(r: dict) -> list[str]:

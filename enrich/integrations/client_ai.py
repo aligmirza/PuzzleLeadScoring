@@ -10,11 +10,12 @@ recent signals. Cost: $0 in API.
 """
 from __future__ import annotations
 
+from ..ai import apply as ai_apply
 from ..ai import prompts as P
 from ..ai.runner import known_facts
 from ..checks import datapoints
 from ..checks.rules import SIGNALS, VALUE_NAMES
-from ..core import shared, versions
+from ..core import learning, shared, versions
 from ..core.inputs import load_leads, normalize_domain
 from ..core.store import Store
 from ..pipeline import final
@@ -50,6 +51,13 @@ def _row(folder, domain: str, store: Store | None = None) -> dict:
     return {"domain": domain, "company": given.get("company", ""), "employees": given.get("employees", ""), "input": {}}
 
 
+def with_sources(a: dict, step: int) -> dict:
+    """A web answer's link becomes its source list (what an OpenAI web search returns), so it's treated the same."""
+    if step == 2 and a.get("source") and not a.get("_sources_found"):
+        a["_sources_found"] = [{"url": a["source"], "title": ""}]
+    return a
+
+
 def _domains(folder, store: Store) -> list[tuple[str, str]]:
     if (folder / "input.csv").exists():
         rows, _ = load_leads(folder / "input.csv")
@@ -67,22 +75,49 @@ def _phase(store: Store, domain: str, phase: str) -> str:
     return "icp" if open_icp or not store.get_result(domain, "signals") else "signals"
 
 
-def _pending(store: Store, domain: str, phase: str, result: dict) -> list[tuple[str, str]]:
-    """(question, 'pages' or 'web') still to answer: a page answer first; the web where the page answer left it open."""
-    done = store.get_ai(domain, phase)
-    site_ok = (result.get("crawl") or {}).get("status") == "live"
-    out = []
-    for pid in ai_prompts(result):
-        steps = done.get(pid, {})
-        sid = datapoints.sid_for_prompt(pid)
-        still_open = datapoints.still_open(sid, result)
-        if not steps:
-            if sid and not still_open:
-                continue  # already settled after the questions were chosen (e.g. by provider data bought since)
-            out.append((pid, "pages" if site_ok and datapoints.ask_pages(pid, result) else "web"))
-        elif 2 not in steps and still_open and datapoints.web_after(pid, (steps.get(1) or {}).get("answer"), True, site_ok):
-            out.append((pid, "web"))
-    return [(p, k) for p, k in out if k == "pages" or datapoints.step(datapoints.sid_for_prompt(p) or "", "ai_web").get("run", "after_pages") != "off"]
+def tier_lock(store: Store, domain: str, phase: str, result: dict, waiting: list | None = None) -> dict | None:
+    """Phase 2 only: when no question still waiting can change the lead tier, the rest are skipped (stop when the
+    result can't change). Phase 1 is never skipped: the ICP verdict always matters."""
+    if phase != "signals" or not result or "signals" not in result:
+        return None
+    from ..checks.scoring import tier_range
+    if waiting is None:  # every question still wanted, also those waiting for a parent: they can still score
+        waiting = datapoints.waiting(result, store.get_ai(domain, phase))
+    open_sids = {datapoints.sid_for_prompt(p) for p, _ in waiting} - {None}
+    seg = (result.get("facts") or {}).get("segment") or (result.get("segment_ai") or {}).get("value")
+    rng = tier_range(result["signals"], seg, open_sids)
+    return rng if rng["locked"] else None
+
+
+def _pending(store: Store, domain: str, phase: str, result: dict, all_questions: bool = False) -> list[tuple[str, str]]:
+    """(question, 'pages' or 'web') to answer now: a page answer first; the web where the page answer left it open.
+    A data point whose parents (run_if) are still open waits for them. Phase 2 questions stop once no answer can change the lead tier (all_questions=True asks them anyway); the most
+    valuable data points come first, so the tier settles as early as possible."""
+
+    raw = datapoints.waiting(result, store.get_ai(domain, phase))
+    # conditional run: a data point waits for its parents (run_if); the test mode's all_questions asks them anyway
+    out = raw if all_questions else datapoints.runnable(raw, result)
+    out = sorted(out, key=lambda pk: -_worth(pk[0], result))
+    if not all_questions and out and tier_lock(store, domain, phase, result, raw):
+        return []
+    return out
+
+
+def _worth(pid: str, result: dict) -> int:
+    """Points this question's data point can move (fit/buying weight for the size, weak signals 2); fields 0."""
+    from ..checks.scoring import config
+    sid = datapoints.sid_for_prompt(pid)
+    if not sid:
+        return 0
+    cfg = config()
+    group, name = SIGNALS[sid]
+    if group == "weak":
+        return -cfg["weak_signal_points"]
+    w = {**cfg["fit_signals"], **cfg["buying_signals"]}.get(name)
+    if w is None:
+        return 4 if group in ("must", "exclusion") else 0  # phase 1 decides ICP: always first
+    seg = (result.get("facts") or {}).get("segment") or "MM"
+    return cfg["points"][w.get(seg, "none") if isinstance(w, dict) else w]
 
 
 def _fields(schema: dict) -> dict:
@@ -100,18 +135,21 @@ def prompt_for(pid: str, kind: str, company: str, domain: str, facts: dict, resu
     if kind == "pages":
         msg = P.build(pid, company, domain, facts, result.get("ai_context", {}))
     else:
-        msg = P.build_search(pid, company, domain, facts, result.get("legal_name"), page_answer)
+        msg = P.build_search(pid, company, domain, facts, result.get("legal_name"), page_answer,
+                             founders=(result.get("facts") or {}).get("founders"))
     return {**msg, "prompt_file": f"config/prompts/{pid}.json"}
 
 
-def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 12) -> dict:
+def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 12,
+                   all_questions: bool = False) -> dict:
     d = normalize_domain(domain) or domain
     folder, store = _folder_store(list_name)
     phase = _phase(store, d, phase)
     result = store.get_result(d, phase)
     if not result:
         raise ValueError(f"No {phase} result for {d} in '{list_name}'. Run check_company first.")
-    pending = _pending(store, d, phase, result)
+    pending = _pending(store, d, phase, result, all_questions)
+    lock = None if all_questions else tier_lock(store, d, phase, result)
     row = _row(folder, d, store)
     facts = known_facts(result)
     questions = []
@@ -134,7 +172,9 @@ def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str
                              if needs_pages else "",
         "questions": questions,
         "next": "Answer these, then call submit_answers(domain, answers=[{id, answer_from, ...answer_fields}], "
-                f"list_name='{folder.name}', phase='{phase}')." if questions else "Nothing left to answer in this phase.",
+                f"list_name='{folder.name}', phase='{phase}')." if questions else (
+                    f"Stopped early: {lock['why']}. Nothing left that can change the result (all_questions=true asks "
+                    f"the rest anyway)." if lock else "Nothing left to answer in this phase."),
     }
 
 
@@ -153,9 +193,10 @@ def submit_answers(domain: str, answers: list[dict], list_name: str = service.SI
         step = 2 if a.pop("answer_from", "pages") == "web" else 1
         if a.get("cannot_answer"):
             unsupported.append({"id": pid, "answer_from": "web" if step == 2 else "pages", "why": str(a["cannot_answer"])[:200]})
+            learning.record("cannot_answer", sid=datapoints.sid_for_prompt(pid), prompt=pid, why=str(a["cannot_answer"])[:200],
+                            list=folder.name, domain=d)
             continue
-        if step == 2 and a.get("source") and not a.get("_sources_found"):
-            a["_sources_found"] = [{"url": a["source"], "title": ""}]
+        with_sources(a, step)
         usage = {**USAGE, "prompt_version": versions.prompt(pid)}
         store.save_ai(d, phase, pid, step, a, usage)
         shared.put_ai(d, phase, pid, step, a, usage)
@@ -181,6 +222,8 @@ def _finish(folder, store: Store, d: str, phase: str, saved: list[tuple[str, int
         row_out = next((r for r in final.read_rows(folder) if r.get("_domain") == d), {})
     else:  # one-off checks have no list file: work out the row directly
         row_out = service.findings(store, d, row["company"], row["employees"])
+    if result:
+        learning.outcomes(result, saved, store.get_ai(d, phase), "mcp", folder.name, d)
     outcome = []
     for pid, step in saved:
         sid = datapoints.sid_for_prompt(pid)
@@ -188,7 +231,7 @@ def _finish(folder, store: Store, d: str, phase: str, saved: list[tuple[str, int
             outcome.append({"id": pid, "data_point": P.name(pid), "result": "saved"})
             continue
         v = result["signals"].get(sid, {})
-        counted = v.get("method") == "ai" and v.get("value") in ("yes", "no")
+        counted = ai_apply.counted(v)
         outcome.append({"id": pid, "data_point": SIGNALS[sid][1], "result": f"counted as {VALUE_NAMES[v['value']]}" if counted
                         else f"not counted ({(v.get('note') or 'already decided by an earlier layer')[:160]})"})
     left = _pending(store, d, phase, result) if result else []
@@ -198,6 +241,9 @@ def _finish(folder, store: Store, d: str, phase: str, saved: list[tuple[str, int
     nxt = (f"{len(left)} questions still open: call open_questions again." if left else
            "Phase 1 done. If ICP is YES and signals aren't checked yet, call check_company again with include_signals, "
            "then open_questions(phase='signals')." if phase == "icp" else "All questions answered.")
+    lock = tier_lock(store, d, phase, result) if result else None
+    if lock:
+        nxt = f"Stopped early: {lock['why']}. No answer left can change the result."
     if step5:
         nxt += (f" Step 5 is next: the Prospeo finance-person check ({', '.join(step5)}), 1 credit. Ask the user; only "
                 f"if they agree, call check_company('{d}', use_prospeo=true).")
@@ -207,18 +253,28 @@ def _finish(folder, store: Store, d: str, phase: str, saved: list[tuple[str, int
 
 
 def overview(list_name: str) -> dict:
-    """Per company: open questions in each phase, so the attached model can work through a whole list."""
+    """Per company: open questions in each phase, best leads first (ICP YES, then by current score), so the attached
+    model answers the most valuable companies first and a usage limit only delays the weakest."""
+    from ..checks.scoring import score
     folder, store = _folder_store(list_name)
     out = []
+    rank = {"Yes": 0, "Yes (some must-haves unconfirmed)": 1, "Needs AI check": 2}
     for domain, company in dict.fromkeys(_domains(folder, store)):
         icp = store.get_result(domain, "icp")
         if not icp:
             continue
-        item = {"domain": domain, "company": company, "icp_verdict": icp.get("icp_verdict")}
+        sig = store.get_result(domain, "signals")
+        seg = ((sig or icp).get("facts") or {}).get("segment")
+        now = score(sig["signals"], seg or "SMB") if sig else {"score": 0, "tier": ""}
+        item = {"domain": domain, "company": company, "icp_verdict": icp.get("icp_verdict"),
+                "score_now": now["score"], "tier_now": now["tier"]}
         for ph in ("icp", "signals"):
             res = store.get_result(domain, ph)
             item[f"open_{ph}"] = len(_pending(store, domain, ph, res)) if res and (
                 ph == "icp" or icp.get("icp_verdict") not in ("No", "Unknown: site not reached")) else 0
         out.append(item)
-    return {"list": folder.name, "companies": out,
-            "total_open": sum(c["open_icp"] + c["open_signals"] for c in out)}
+    out.sort(key=lambda c: (rank.get(c["icp_verdict"], 3), -c["score_now"]))
+    todo = [c for c in out if c["open_icp"] + c["open_signals"]]
+    return {"list": folder.name, "companies": out, "work_order": [c["domain"] for c in todo],
+            "total_open": sum(c["open_icp"] + c["open_signals"] for c in out),
+            "note": "work_order: answer these companies in this order (best leads first)."}

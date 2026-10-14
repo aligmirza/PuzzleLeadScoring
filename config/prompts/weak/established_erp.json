@@ -31,7 +31,9 @@
     "unknown_when": [
       "Only the ERP or only the team is known"
     ],
-    "watch_out_for": [],
+    "watch_out_for": [
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'"
+    ],
     "where_to_look": [
       "Job descriptions",
       "Team page"
@@ -81,9 +83,11 @@
   "web_search": {
     "mode": "fallback",
     "queries": [
+      "\"{company}\" NetSuite OR \"QuickBooks Enterprise\" jobs site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
       "\"{company}\" NetSuite OR \"QuickBooks Enterprise\""
     ],
     "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
       "job posts",
       "vendor case studies"
     ]

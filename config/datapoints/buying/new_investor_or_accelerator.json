@@ -2,6 +2,12 @@
   "id": "B2",
   "name": "New investor or accelerator",
   "group": "buying",
+  "run_if": {
+    "F1": [
+      "yes",
+      "unknown"
+    ]
+  },
   "steps": {
     "rules": {
       "on": true

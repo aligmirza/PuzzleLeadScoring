@@ -46,6 +46,18 @@ def _credits_this_month() -> float:
     return sum(r.get("provider_credits", 0) for r in report()["lists"])
 
 
+def _refuse(credits: float, max_credits: float | None, hint: str) -> dict | None:
+    """The answer when a run could use more credits than the caller's limit or the monthly cap; None when it fits."""
+    if max_credits is not None and credits > max_credits:
+        return {"companies": 0, "credits": 0, "refused": f"Could use up to {credits:g} credits, above max_credits "
+                                                           f"{max_credits:g}. Nothing was sent. {hint}"}
+    over = _cap_check(credits)
+    if over:
+        console.print(f"[red]{over}[/]")
+        return {"companies": 0, "credits": 0, "refused": over}
+    return None
+
+
 def _cap_check(credits: float) -> str | None:
     try:
         cap = float(os.environ.get("PROVIDER_MONTHLY_CREDITS", "").strip() or "nan")
@@ -130,13 +142,9 @@ def company_step(folder: Path, phase: str, limit: int = 0, assume_yes: bool = Fa
         console.print("No company needs provider data: the earlier layers answered what Prospeo covers.")
         return {"companies": 0, "credits": 0}
     covered = ", ".join(SIGNALS[s][1] for s in COVERS[phase])
-    if max_credits is not None and len(domains) > max_credits:
-        return {"companies": 0, "credits": 0, "refused": f"Could use up to {len(domains)} credits, above max_credits {max_credits:g}. "
-                                                           f"Nothing was sent. Use a limit or raise max_credits."}
-    over = _cap_check(len(domains))
-    if over:
-        console.print(f"[red]{over}[/]")
-        return {"companies": 0, "credits": 0, "refused": over}
+    refused = _refuse(len(domains), max_credits, "Use a limit or raise max_credits.")
+    if refused:
+        return refused
     if not _confirm(f"[bold]Prospeo[/] for {len(domains)} companies still open on: {covered}.\n"
                     f"  At most {len(domains)} credits, 1 per company: one team search gives the company record and its "
                     f"people (no match and repeats within 90 days are free). {_balance()}.", assume_yes):
@@ -289,13 +297,9 @@ def people_step(folder: Path, emails: bool = False, per_company: int = 3, strong
         write_contacts(folder, store)
         return {"companies": 0, "credits": 0}
     most = len(domains) + (len(domains) * per_company if emails else 0)
-    if max_credits is not None and most > max_credits:
-        return {"companies": 0, "credits": 0, "refused": f"Could use up to {most} credits, above max_credits {max_credits:g}. "
-                                                           f"Nothing was sent. Use a limit, fewer contacts, or raise max_credits."}
-    over = _cap_check(most)
-    if over:
-        console.print(f"[red]{over}[/]")
-        return {"companies": 0, "credits": 0, "refused": over}
+    refused = _refuse(most, max_credits, "Use a limit, fewer contacts, or raise max_credits.")
+    if refused:
+        return refused
     if not _confirm(f"[bold]Prospeo people[/] for {len(domains)} ICP companies{' (Strong fit only)' if strong_only else ''}: "
                     f"founders, C-suite, finance and other leads, top {per_company} kept per company.\n"
                     f"  About {len(domains)} credits for the searches"

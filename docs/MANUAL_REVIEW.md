@@ -4,7 +4,7 @@ A data point by data point review of the waterfall, run through MCP (Claude Code
 **argon-ai.com** from `examples/Lead-Scoring-(Template)-Default-view-export-1791793022697.csv`.
 Each data point was run alone, its full waterfall shown, and approved, corrected or changed before moving on.
 
-**Status (2026-10-12): M1 to F20 reviewed; F21 set to rules, DNS and Wappalyzer only and waiting for your review. Next: review F21, then B1 to B14 and W1 to W12.**
+**Status (2026-10-14): complete. All 57 data points reviewed on argon-ai.com: 56 approved, 1 partially correct (E2), 29 retries after fixes.**
 
 | | |
 |---|---|
@@ -81,19 +81,74 @@ an AI step, test list only), `dp_test_record` (approve, reject, correct, partial
 | F20 | Unknown | Approved | Rules, DNS and Wappalyzer only (no AI). Wappalyzer page-structure rules added and false matches fixed. |
 | F21 | Unknown (no Carta or Pulley in text, code, fingerprints or DNS) | **Waiting for review** | Rules, DNS and Wappalyzer only (no AI), like F19 and F20. |
 
+## Decisions from the B group (2026-10-14)
+
+| ID | Result for Argon AI | Review | What was decided or changed |
+|---|---|---|---|
+| F21 | Unknown | Approved | Rules, DNS and Wappalyzer only (no AI). |
+| B1 | No, medium (latest round: $5.5M seed, 2025-07-02) | Approved | — |
+| B2 | No, medium (investors from July 2025, YC W24) | Approved | Offer: one shared funding search for B1 and B2. |
+| B3 | Yes (3 open roles, Ashby) | Approved | Job-board link still missing as source (same as F12). |
+| B4 | No, high (3 open roles listed, none in finance) | Waiting | Job sites added to step 4 for all job-based data points (Built In, ZipRecruiter, LinkedIn Jobs, YC, Wellfound via search). A web search confirmed the same 3 roles and no finance role. LinkedIn automation tools (logged-in bots) were rejected: against LinkedIn's terms. |
+
+| B5 | No, high (no ops or chief-of-staff role among 3 listed) | Approved | — |
+| B6 | No (SEC Form D: Delaware corporation since 2023, previous name Incyte Bio, Inc.) | Approved | Step 2 now reads Form D year of incorporation, entity type and previous names (SEC contact email set). |
+| B7 | No (SEC Form D: incorporated 2023) | Approved | Decided free by step 2. |
+| B8 | Unknown | Approved | — |
+| B9 | Unknown | Approved | — |
+| B10 | Yes (1 day to the Oct 15 C-Corp deadline) | Approved | Details added to SIGNALS.md. |
+| B11 | Unknown | Approved | — |
+| B12 | No, medium (blog: latest launch 2025-10-07) | Approved | JavaScript pages rendered in the real browser (`render`): the blog is now read. |
+| B13 | Unknown | Approved | LinkedIn-post searches (company or founder) added for B2, B9, B11, B12, B13. |
+| B14 | Unknown | Approved | SOC 2 / Trust Center correctly not counted as a financial audit. |
+| W1 | No (stated software product) | Approved | W1 prompt gets the F5 rule; W1 = No for free when F5 is Yes (opposites). |
+| W2 | No (software, not billed labour) | Approved | — |
+| W3 | No (online software; an office address is not a venue) | Approved | — |
+| W4 | No ("Argon AI, Inc.", YC-backed) | Approved | Test mode now asks questions a normal run skips (tier locked) and says so. |
+| W5 | No ("7-figure ARR", 3 open jobs) | Approved | Prospeo's old "waitlist" description ignored: current pages win. |
+| W6 | No ("All payments shall be in US dollars", terms) | Approved | — |
+| W7 | No ("Argon builds AI software") | Approved | A different "Argon AI" making chips was ignored. |
+| W8 | No, medium (subscription billing in the terms; template-like) | Approved | Long pages now keep decisive sentences past the cut-off (`excerpt`). |
+| W9 | No (no store platform in the code; software) | Approved | — |
+| W10 | Unknown | Approved | No from F13 (no finance team) for free: opposites, built 2026-10-14. |
+| W11 | Unknown | Approved | Web search only on a clue for F17, B8, B9, B11, B13, B14, W11. |
+| W12 | No ("All payment data is stored by Stripe"; Rippling in DNS) | Approved | Opposite of M3. |
+
+## Conditional runs (2026-10-14)
+
+- Must-haves run one after another (M1 → M2 → M3 → M4 → exclusions); a proven No stops the rest, and ICP NO makes
+  every open phase 1 data point Not applicable.
+- F12 runs only when F1 is Yes.
+- Skipped data points show **Not applicable** with the reason; free proof already found is kept.
+- Also built: B1, B2, B13 after F1; B12 after F8; B11 after F4 (skipped when the parent is proven No).
+- Opposites built: W1, W3, F7 from F5; W5 from M4; W4 from F3; W10 from F13; W12 from M3; W9 from E6.
+- Left out on purpose: B3 → B4/B5, F5 → W2/W7, F11 → B2 (they would skip or close data points that can still be Yes).
+
 ## Open decisions and offers (not built yet)
+
+- ~~Opposites~~ **built 2026-10-14** (see Conditional runs; W2 and W7 left out).
+- **W9:** No store platform in the code → W9 No at step 1.
+- **B4/B5:** job board read and no finance / ops title → No at step 1.
+- **B12:** skip "launched pricing" when the company publishes no pricing.
+- **B1/B2:** one shared funding search.
 
 - **YC safeguards (F11):** require a second agreeing fact for a strong YC match; count AI web answers about YC only
   when the listing's website is the company's domain; note near-name YC companies as "not a match".
-- **F12 / B3:** add the job-board link as the source.
+- ~~Job boards (A, B)~~ **built 2026-10-14:** 13 boards + careers-page roles; 4 → 13 test companies with jobs
+  (glavel.com and repool.com now show finance hires for B4). Not built: JazzHR, Jobvite, Stardex.
+- **B4:** rules-only No when the job board was read and no title is a finance role.
 - **F16:** a free rule when all job posts say "In person" / on-site.
 - **F17, F19-style cost savers:** web search only on a clue for rarely public data points.
-- **F18 and others:** re-fetch nearly empty blog pages with the real browser.
+- ~~F18 and others: re-fetch nearly empty pages with the real browser~~ **built 2026-10-14** (`render`).
 - **E5:** treat "Inc." as a clue, decide by the IRS register / SEC Form D.
 - **Other tool data points (F2, F4, F9):** rules only, like F19 and F20, if wanted.
 - **Prospeo company lookup** is untested live (only the people search is).
 - **Prospeo funding totals are unreliable** (counted Argon AI's $5.5M seed three times as $16.5M): drop or mark the column.
 
 ## Still to review
+
+Nothing: the review is complete. Next: the open offers above, then a second company to confirm the fixes.
+
+## Before the review was completed
 
 F21, then buying signals B1 to B14 and weak signals W1 to W12: 27 of 57 data points left, F21 included.

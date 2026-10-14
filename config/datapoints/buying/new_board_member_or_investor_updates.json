@@ -2,6 +2,12 @@
   "id": "B13",
   "name": "New board member or investor updates",
   "group": "buying",
+  "run_if": {
+    "F1": [
+      "yes",
+      "unknown"
+    ]
+  },
   "steps": {
     "rules": {
       "on": true
@@ -14,7 +20,7 @@
       "prompt": "buying/new_board_member_or_investor_updates"
     },
     "ai_web": {
-      "run": "if_open",
+      "run": "if_clue",
       "when_site_unreached": false
     },
     "provider": {

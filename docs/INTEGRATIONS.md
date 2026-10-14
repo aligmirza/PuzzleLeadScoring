@@ -97,6 +97,7 @@ The full description of every call (fields, types, examples) is in [docs/openapi
 |---|---|---|
 | | `GET /health` | Is the API up (no key needed) |
 | Companies | `POST /v1/check` | One company, answered while you wait: ICP, reason, score, tier, reasoning, every data point. Cached. Body: `{"domain": "acme.com", "company": "Acme", "employees": "12"}`; options `signals`, `ai`, `ai_options`, `refresh`, `wait_seconds` |
+| | `POST /v1/check/batch` | Up to 25 companies at once, answered while you wait; their free steps run at the same time. Body: `{"companies": [{"domain": "acme.com"}, {"domain": "beta.io"}]}`; options `signals`, `wait_seconds` (default 300) |
 | Lists | `GET /v1/lists` | Every list with state and counts |
 | | `POST /v1/lists` | Start a whole list in the background. Body: `{"name": "q4", "rows": [{"Domain": "..."}], "ai": false, "callback_url": "https://..."}`; your other columns are kept |
 | | `POST /v1/lists/upload` | The same with a CSV file (form fields `name`, `ai`, `mode`, `max_cost_usd`, `callback_url`) |
@@ -245,6 +246,7 @@ If you also did option A, `claude mcp list` notes the server is defined in two p
 | `icp-answering` (skill) | The answering rules: stated proof only, confidence scale, same-name traps, cannot_answer |
 | `review-datapoints` (skill) | The manual data point review (resume, one data point at a time, record decisions) |
 | `datapoint-dev` (skill) | Changing a data point in the code with config, defaults, tests and docs kept in sync |
+| `improve-pipeline` (skill) | After a run: what the pipeline learned, safe fixes applied, the rest proposed with proof for your OK |
 
 **Claude Desktop:** add the same command to `~/Library/Application Support/Claude/claude_desktop_config.json` under
 `mcpServers` (command = the full path to `.venv/bin/python`, args `["-m", "enrich", "mcp"]`, env `PYTHONPATH` = the
@@ -271,7 +273,10 @@ estimate → approve a cap → `list_ai(list, "icp", max_cost_usd=<cap>)` → wh
 
 1. `check_company` (or `enrich_list`) runs the free layers: website rules and directories.
 2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ICP summary, ground rules, confidence scale), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
-3. The model answers, quoting its proof, and calls `submit_answers`.
+3. The model answers, quoting its proof, and calls `submit_answers`. Questions come in rounds: a data point that
+   depends on another (`run_if`, or an opposite) appears only after that one is answered, and is dropped as Not
+   applicable when the answer rules it out. Keep calling `open_questions` until nothing is left; phase 2 also stops
+   early once no answer can change the lead tier.
 4. The answers pass the same quality checks as any AI answer (exact quote, confidence, domain match for web answers, dated events for recent signals). The result says which counted, the new verdict and score, and what's next.
 5. Step 5, Prospeo, runs only for the finance-person check (F13, F14) and only when you agree: when the finance check is still open after the model's answers, `submit_answers` says so, and the model asks you before calling `check_company(..., use_prospeo=true)` (1 credit at most per company).
 6. A question the model can't answer the way it asks (usually a web search in a client without a web tool) is sent back as `cannot_answer` and **stays open**; nothing is sent to another AI.
@@ -280,6 +285,7 @@ Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring
 
 | Tool | What it does |
 |---|---|
+| `check_companies` | Several companies at once (up to 25): their free steps run at the same time, so ten take about as long as the slowest one. Then answer each one's questions as usual |
 | `check_company` | One company through the free waterfall steps (size, rules and code checks, YC, SEC, IRS, DNS): ICP, score, tier, signals. `use_prospeo=true` (after your yes) adds step 5, the Prospeo finance check, at most 1 credit |
 | `open_questions` | The questions still open for a company, for the model to answer (phase 1, then phase 2) |
 | `submit_answers` | Saves the model's answers through the quality checks; returns what counted and the new verdict and score. `cannot_answer` items stay open (no other AI is used) |
@@ -292,6 +298,32 @@ Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring
 | `clay_tables` | Tables in your Clay workspace |
 | `pull_clay_table` | Read a Clay table and run it as a list |
 | `push_list_to_clay` | Send a finished list to a Clay webhook |
+| `improvement_report` | What the pipeline learned from its runs, as proposals with proof; safe setting changes are applied automatically (tests run, reverted if they fail) |
+| `apply_improvement` | Apply a setting proposal after your yes (tests run, reverted if they fail) |
+| `mark_improvement` | Record a proposal's outcome: done (fixed by hand), rejected, applied or failed |
+
+### The GTM engineer and the learning loop
+
+Through MCP, Claude works as an **experienced GTM engineer who owns this pipeline**, and the shared prompt
+(`config/prompts/_shared.json`) gives OpenAI and Claude the same role when answering: someone who knows how B2B
+company data goes wrong (shared names, an acquirer's news, stale funding articles, job sites mixing up employers,
+customer logos taken for tools). The proof rules don't change: only stated proof counts, Unknown is never a No.
+
+Every run feeds a learning log (`learning/events.jsonl`, not in git): each AI answer and what became of it (counted,
+rejected and why, unknown), crashes and where they happened, questions the chat model couldn't answer, and your
+corrections in test mode. `improvement_report` turns it into proposals:
+
+| Pattern | Proposal | Who decides |
+|---|---|---|
+| A crash | Fix the code, add a test, run all tests | **Automatic** (Claude fixes it in Claude Code, tests must pass), you're told after |
+| A phase 2 data point's web search found nothing in 90%+ of 8+ answers | Search only on a clue (`ai_web.run: if_clue`) | **Automatic** (applied, tests run, reverted if they fail), you're told after |
+| Answers rejected the same way 3+ times (no quote, wrong company, too old, …) | A line in that data point's prompt, or a looser check if the answers were right | **You** |
+| Questions the chat model couldn't answer, 3+ times | A free rule or directory for it, or `list_ai` | **You** |
+| Your corrections in test mode | Find and change the rule, prompt or setting behind the wrong answer | **You** |
+
+Must-haves and exclusions are never changed automatically. A rejected proposal only comes back if it keeps happening.
+Every decision is logged in [IMPROVEMENTS.md](IMPROVEMENTS.md). `LEARNING_AUTO_APPLY=0` in `.env` makes everything
+wait for you. `/enrich-chat`, `check-company` and `bulk-enrich` end with the `improve-pipeline` skill.
 
 For **Claude Desktop**: Settings > Developer > Edit Config opens `~/Library/Application Support/Claude/claude_desktop_config.json`. Add this inside it (keep what's already there), with your own project path, then quit Claude Desktop fully (Cmd+Q) and open it again. Use full paths: Claude Desktop doesn't start in the project folder, which is why `PYTHONPATH` points to it. Keys, lists and settings are found from the project folder automatically.
 

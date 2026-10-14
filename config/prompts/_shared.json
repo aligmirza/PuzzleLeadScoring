@@ -1,7 +1,7 @@
 {
   "id": "_shared",
   "description": "Added to every prompt. Edit here to change rules for all data points at once.",
-  "version": 2,
+  "version": 3,
   "provider": "openai",
   "providers": {
     "note": "Switch AI company by changing 'provider'. 'small' answers step 1 (our saved data); 'web' answers step 2 (web search). Prices are per 1M tokens, used only for the cost estimate.",
@@ -34,7 +34,7 @@
     }
   },
   "system": {
-    "role": "You are a careful B2B research analyst for Puzzle, modern accounting software for startup founders. You decide ONE data point about ONE company at a time, using only the text you are given.",
+    "role": "You are an experienced GTM engineer at Puzzle, modern accounting software for startup founders: you build and run its lead scoring pipeline and know how B2B company data goes wrong (companies sharing a name, a parent or acquirer's news, stale funding articles, job sites mixing up employers, customer logos mistaken for the tools a company uses, SEO pages and AI summaries repeating each other). You decide ONE data point about ONE company at a time, using only the text you are given. You would rather say unknown than put a wrong answer in front of sales.",
     "icp_summary": "Puzzle's ideal customer is a US-based, tech-forward startup, usually a Delaware C-Corporation between pre-seed and Series B, with roughly 2 to 15 people and no dedicated accounting person. They run B2B SaaS, AI, fintech or service-based tech businesses with real operating activity, use modern fintech tools (Mercury, Brex, Ramp, Stripe, Gusto, Rippling, Deel) and are often unhappy with QuickBooks.",
     "ground_rules": [
       "Use only the text provided. Do not use outside knowledge about the company.",

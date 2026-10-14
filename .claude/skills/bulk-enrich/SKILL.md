@@ -21,6 +21,8 @@ thousands of questions in a chat, so the AI steps run on the OpenAI engine, only
    `enrich_list(..., use_prospeo=true)` on the same CSV and list name (pages and answers are cached).
 6. **Results:** `list_results(list_name)` (ICP YES by default), `questions_overview(list_name)` for what's open.
    `push_list_to_clay(list_name)` only if the user asks.
+7. **Learn from the run:** the **improve-pipeline** skill (`improvement_report`): report what was fixed automatically,
+   fix crashes, and show the other proposals for the user's OK.
 
 ## Costs and checks (terminal, from the project folder)
 

@@ -21,6 +21,7 @@ from ..ai import prompts as prompt_files
 from ..sources import wappalyzer
 
 YES, NO, UNKNOWN, CHECK = "yes", "no", "unknown", "check"
+NA = "na"  # skipped by a conditional run (config/datapoints run_if): no step ran
 
 SIGNALS = {
     # must-haves
@@ -87,8 +88,13 @@ SIGNALS = {
     "W12": ("weak", "No fintech tools, spreadsheets and a traditional bank"),
 }
 
+def phase_of(sid: str) -> str:
+    """Which phase checks a data point: must-haves and exclusions decide ICP (phase 1), the rest score (phase 2)."""
+    return "icp" if SIGNALS[sid][0] in ("must", "exclusion") else "signals"
+
+
 GROUP_NAMES = {"must": "Must-have", "exclusion": "Exclusion", "fit": "Fit", "buying": "Buying signal", "weak": "Weak fit"}
-VALUE_NAMES = {"yes": "Yes", "no": "No", "check": "Needs check", "unknown": "Unknown"}
+VALUE_NAMES = {"yes": "Yes", "no": "No", "check": "Needs check", "unknown": "Unknown", "na": "Not applicable"}
 CELL_NAMES = {**VALUE_NAMES, "unknown": ""}  # CSV cells: left empty until something is confirmed
 GATE_NAMES = {"pass": "Pass", "pass (some unknown)": "Pass (some checks unknown)", "failed must-have": "Failed a must-have",
               "excluded": "Excluded", "not reached (retry)": "Site not reached (retry)"}
@@ -537,8 +543,8 @@ class Extractor:
         for d in self.ld:
             addr = d.get("address")
             if isinstance(addr, dict):
-                c = str(addr.get("addressCountry", "")).strip()
-                c = c.get("name", "") if isinstance(addr.get("addressCountry"), dict) else c
+                ac = addr.get("addressCountry", "")  # text ("US") or an object ({"name": "United States"})
+                c = str(ac.get("name", "") if isinstance(ac, dict) else ac).strip()
                 if c.upper() in ("US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA"):
                     us.append((f"structured data address country: {c}", ""))
                 elif c:
@@ -847,6 +853,8 @@ class Extractor:
             self.s["W10"] = sig(CHECK, erp, note="ERP found in job posts; confirm a full in-house finance team")
 
     def job_board_url(self) -> str:
+        if self.record.get("jobs_url"):
+            return self.record["jobs_url"]
         ats, slug = self.record.get("ats"), self.record.get("ats_slug")
         return JOB_BOARDS.get(ats, "").format(slug=slug) if ats and slug else ""
 
@@ -866,8 +874,8 @@ class Extractor:
         if count is not None:
             titles = ", ".join(j["title"] for j in self.jobs[:6])
             val = YES if count >= 3 else NO
-            self.s["F12"] = sig(val, f"{count} open roles on {ats}: {titles}")
-            self.s["B3"] = sig(val, f"{count} open roles on {ats}")
+            self.s["F12"] = sig(val, f"{count} open roles on {ats}: {titles}", self.job_board_url())
+            self.s["B3"] = sig(val, f"{count} open roles on {ats}", self.job_board_url())
         elif ats:
             self.s["F12"] = sig(CHECK, f"job board on {ats}, but its jobs feed couldn't be read")
         elif self.page("careers"):
@@ -877,7 +885,7 @@ class Extractor:
         fin_any = [j for j in self.jobs if RE_FIN_ROLE.search(j["title"])]
         if fin or fin_any:
             j = (fin or fin_any)[0]
-            self.s["B4"] = sig(YES, f"open role: {j['title']}")
+            self.s["B4"] = sig(YES, f"open role: {j['title']}", j.get("url") or self.job_board_url())
         ops = [j for j in self.jobs if RE_OPS_ROLE.search(j["title"])]
         if ops:
             self.s["B5"] = sig(YES, f"open role: {ops[0]['title']}")
@@ -1146,7 +1154,7 @@ class Extractor:
             deadline = date(today.year, month, day)
             days = (deadline - today).days
             if 0 <= days <= 45 and corp and self.s.get("M1", {}).get("value") == YES:
-                self.s["B10"] = sig(YES, f"{days} days to the {deadline:%b %d} C-Corp filing deadline",
+                self.s["B10"] = sig(YES, f"{days} day{'' if days == 1 else 's'} to the {deadline:%b %d} C-Corp filing deadline",
                                     note=f"calendar based, for a confirmed C-Corp ({self.facts.get('entity_type')})")
 
     # result ----------------------------------------------------------
@@ -1310,7 +1318,7 @@ class Extractor:
             if key == "home_meta" and home:
                 ctx[key] = f"title: {home.title}\ndescription: {home.desc}\nfooter: {home.footer[:800]}"
             elif key in self.pages:
-                ctx[key] = self.pages[key].text[: 6000 if key == "home" else limit]
+                ctx[key] = excerpt(self.pages[key].text, 6000 if key == "home" else limit)
         if "tool_mentions" in extras and self.facts.get("tools"):
             ctx["tool_mentions"] = "\n".join(f"{n}: {t['evidence']}" for n, t in self.facts["tools"].items())
         if self.jobs and ("job_titles" in extras or "job_snippets" in extras):
@@ -1372,6 +1380,32 @@ def _late_stage_amount(sentence: str, company: str = "") -> str | None:
         if not is_valuation and usd >= LATE_STAGE_ROUND_USD and RE_BIG_RAISE.search(sentence):
             return f"raised ${m.group(1)} {m.group(2)} in one round"
     return None
+
+
+# sentences that often decide a data point, kept from the rest of a long page (terms, privacy, about...)
+RE_DECISIVE = re.compile(
+    r"\b(?:US dollars|U\.S\. dollars|USD|EUR|GBP|currenc\w*|invoice\w*|net ?\d{2}|subscription\w*|billed|billing|charged|"
+    r"payment\w*|refund\w*|governing law|laws of the state|Delaware|incorporated|LLC|Inc\.|Corp\w*|subsidiar\w*|affiliate\w*|"
+    r"headquarter\w*|offices?|employees|customers|clients|revenue|ARR|raised|funding|Series [A-E]|seed|investors?|backed|"
+    r"remote|hybrid|in[- ]person|warehouse|shipping|inventory|fulfil\w*|manufactur\w*|hardware|accounting|bookkeep\w*|"
+    r"QuickBooks|Xero|NetSuite|Stripe|Gusto|Rippling|Deel|Brex|Ramp|Mercury|Carta|audit|non-?profit|501\(c\))\b", re.I)
+
+
+def excerpt(text: str, limit: int, head_share: float = 0.6) -> str:
+    """A long page for the AI: its opening, plus the later sentences that carry decisive facts (currency, billing,
+    legal entity, offices, funding, tools...), within the same size limit. Short pages are kept whole.
+    "All payments shall be in US dollars" deep in the terms is no longer cut off."""
+    if len(text) <= limit:
+        return text
+    head = int(limit * head_share)
+    keep, size = [], head
+    for sent in re.split(r"(?<=[.!?])\s+", text[head:]):
+        if size >= limit:
+            break
+        if len(sent) < 400 and RE_DECISIVE.search(sent):
+            keep.append(sent.strip())
+            size += len(sent) + 1
+    return text[:head] + (" [...] " + " ".join(keep) if keep else "")[: max(0, limit - head)]
 
 
 def unscored(seg: str) -> list[str]:

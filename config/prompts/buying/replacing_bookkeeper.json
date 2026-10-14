@@ -34,7 +34,8 @@
       "Just an open finance role with no sign of replacing anyone"
     ],
     "watch_out_for": [
-      "A new first finance hire is a different signal"
+      "A new first finance hire is a different signal",
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'"
     ],
     "where_to_look": [
       "Job descriptions",
@@ -85,11 +86,15 @@
   "web_search": {
     "mode": "fallback",
     "queries": [
-      "\"{company}\" bookkeeper OR \"fractional CFO\""
+      "\"{company}\" bookkeeper OR accountant jobs site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
+      "\"{company}\" bookkeeper OR \"fractional CFO\"",
+      "site:linkedin.com/posts (\"{company}\" OR \"{founders}\") bookkeeper OR \"fractional CFO\" OR accounting"
     ],
     "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
       "job posts",
-      "public posts by founders"
+      "public posts by founders",
+      "LinkedIn posts by the company or its founders (public, indexed ones)"
     ]
   },
   "examples": []

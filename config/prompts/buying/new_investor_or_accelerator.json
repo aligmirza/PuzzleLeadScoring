@@ -84,11 +84,13 @@
   "web_search": {
     "mode": "primary",
     "queries": [
-      "\"{company}\" new investor OR \"joins\" accelerator {year}"
+      "\"{company}\" new investor OR \"joins\" accelerator {year}",
+      "site:linkedin.com/posts (\"{company}\" OR \"{founders}\") investor OR \"welcome\" OR \"backed by\""
     ],
     "good_sources": [
       "press",
-      "investor and accelerator portfolio pages"
+      "investor and accelerator portfolio pages",
+      "LinkedIn posts by the company or its founders (public, indexed ones)"
     ]
   },
   "examples": []

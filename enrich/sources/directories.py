@@ -22,6 +22,7 @@ database, so re-running the rules never looks them up again.
 """
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import io
 import json
@@ -31,13 +32,14 @@ import sqlite3
 import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote
 
 import httpx
 
-from ..core import ratelimit
+from ..core import ratelimit, timing
 from ..core.inputs import normalize_domain
 from ..checks.rules import CHECK, NO, US_STATES, YES, sig
 
@@ -64,6 +66,7 @@ NAME_SUFFIXES = {"inc", "incorporated", "corp", "corporation", "co", "llc", "lc"
 ORDER = ["YC", "SEC", "IRS", "DNS"]
 
 _lock = threading.Lock()
+_POOL = ThreadPoolExecutor(max_workers=48, thread_name_prefix="directory")  # lookups of many companies at once
 _yc: dict | None = None
 _db_lock = threading.Lock()
 
@@ -298,7 +301,7 @@ def form_d_details(cik: str, accession: str) -> dict:
         db = _sec_cache()
         row = db.execute("SELECT data FROM calls WHERE url = ?", (url,)).fetchone()
         db.close()
-    if row:
+    if row and "previous_names" in json.loads(row[0]):  # older readings lack the fields added since: read again
         return json.loads(row[0])
     ratelimit.wait("sec", SEC_PER_SECOND)
     with _http() as c:
@@ -316,6 +319,9 @@ def form_d_details(cik: str, accession: str) -> dict:
         "date_of_first_sale": first(".//offeringData/typeOfFiling/dateOfFirstSale/value"),
         "total_amount_sold": first(".//offeringData/offeringSalesAmounts/totalAmountSold"),
         "total_offering_amount": first(".//offeringData/offeringSalesAmounts/totalOfferingAmount"),
+        "entity_type": first(".//primaryIssuer/entityType"),
+        "jurisdiction": first(".//primaryIssuer/jurisdictionOfInc"),
+        "previous_names": [n.text.strip() for n in root.iter("previousName") if n.text and n.text.strip().lower() != "none"],
         "url": url,
     }
     with _db_lock:
@@ -335,20 +341,24 @@ def lookup(domain: str, company: str, legal_name: str | None, us_clues: list[str
     places = " ".join(us_clues).lower()
     states = {code for code, full in US_STATES.items() if re.search(rf"\b{code}\b|\b{full}\b", " ".join(us_clues))}
     found: dict = {"checked": date.today().isoformat(), "version": VERSION, "legal_name": legal_name, "errors": {}}
-    for label, fn in (("YC", lambda: yc_lookup(domain, [company, legal_name or ""])),
-                      ("IRS", lambda: irs_lookup(names, states)),
-                      ("SEC", lambda: None if skip_sec else sec_lookup(domain, names, places)),
-                      ("DNS", lambda: dns_lookup(domain))):
+    jobs = {"YC": lambda: yc_lookup(domain, [company, legal_name or ""]),
+            "IRS": lambda: irs_lookup(names, states),
+            "SEC": lambda: None if skip_sec else sec_lookup(domain, names, places),
+            "DNS": lambda: dns_lookup(domain)}
+    if history and (history.get("legal") or history.get("pricing")):
+        from .history import old_site
+        jobs["Wayback"] = lambda: old_site(domain, bool(history.get("legal")), bool(history.get("pricing")))
+
+    def timed(label, fn):
+        with timing.stage(f"directory {label}"):
+            return fn()
+    # all at the same time (each one's rate limit is shared by every thread, so SEC and the Archive stay within theirs)
+    futures = {label: _POOL.submit(contextvars.copy_context().run, timed, label, fn) for label, fn in jobs.items()}
+    for label, f in futures.items():
         try:
-            found[label] = fn()
+            found[label] = f.result()
         except Exception as e:  # noqa: BLE001  a directory being down must never stop the run
             found["errors"][label] = repr(e)[:200]
-    if history and (history.get("legal") or history.get("pricing")):
-        try:
-            from .history import old_site
-            found["Wayback"] = old_site(domain, bool(history.get("legal")), bool(history.get("pricing")))
-        except Exception as e:  # noqa: BLE001
-            found["errors"]["Wayback"] = repr(e)[:200]
     found["history_asked"] = history or {}
     found["complete"] = not found["errors"]
     return found
@@ -469,6 +479,22 @@ def apply(x) -> None:
                 if funded and s.get("M2", {}).get("value") == YES:
                     _settle(s, "B7", YES, f"SEC Form D: incorporated in {year}, already raising, live product", details["url"],
                             "year of incorporation on Form D", m)
+            elif year and year.isdigit() and int(year) <= date.today().year - 2:  # surely more than 12 months ago
+                _settle(s, "B7", NO, f"SEC Form D: incorporated in {year}", details["url"], "year of incorporation on Form D", m)
+            # B6: the Form D's previous names. An LLC name before today's corporation = a conversion; a corporation
+            # for 2+ years whose previous names are all corporations (or none) = no recent LLC conversion
+            prev = details.get("previous_names") or []
+            corp_now = re.search(r"corporation", details.get("entity_type") or "", re.I) or re.search(
+                r"\b(inc|corp|corporation|incorporated)\b", (sec.get("name") or "").lower())
+            llc_before = [n for n in prev if re.search(r"\bL\.?L\.?C\b", n, re.I)]
+            filed = (sec.get("form_d") or [""])[0]
+            if corp_now and llc_before and filed and _days_ago(filed) <= 548:
+                _settle(s, "B6", YES, f"SEC Form D ({filed}): previous name {llc_before[0]}, now {sec.get('name')}",
+                        details["url"], "LLC to corporation", m)
+            elif corp_now and not llc_before and year and year.isdigit() and int(year) <= date.today().year - 2:
+                was = f"; previous name {prev[0]} was also a corporation" if prev else ""
+                _settle(s, "B6", NO, f"SEC Form D: a {details.get('jurisdiction') or ''} corporation since {year}{was}".replace("a  ", "a "),
+                        details["url"], "no LLC in its incorporation history", m)
         inc = sec.get("state_of_incorporation")
         corp = re.search(r"\b(inc|incorporated|corp|corporation)\b\.?$", (sec.get("name") or "").lower())
         if inc == "DE" and corp:

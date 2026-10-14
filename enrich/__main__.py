@@ -146,6 +146,88 @@ def cmd_rules(args):
         phase2_signals.rerun_rules(folder)
 
 
+def cmd_bench(args):
+    from .pipeline import bench
+    if args.compare:
+        bench.compare(*args.compare)
+    else:
+        if not args.csv or not args.label:
+            raise SystemExit("Give a CSV and --label (or --compare A B).")
+        bench.run(Path(args.csv), args.label, args.workers, args.limit)
+
+
+def cmd_jobs(args):
+    """Read open jobs again for a list already downloaded: the company's job board (13 boards) or its careers page,
+    from the saved pages. Free (only the boards' public feeds are fetched); then the rules re-run."""
+    import asyncio
+    from .sources.crawl import Crawler
+    folder = list_dir(args.list)
+    store = Store(folder)
+
+    async def run():
+        c = Crawler()
+        before = after = 0
+        try:
+            for d in store.all_domains():
+                rec = store.get_site(d) or {}
+                if rec.get("status") != "live":
+                    continue
+                before += bool(rec.get("jobs_count"))
+                pages = {k: store.load_page(d, k) or "" for k in rec.get("pages", {})}
+                for k in ("ats", "ats_slug", "jobs_count", "jobs_url", "board_unreadable"):
+                    rec.pop(k, None)
+                jobs = await c.find_jobs(rec.get("final_url") or f"https://{d}/", pages, rec)
+                store.save_jobs(d, jobs)
+                store.save_site(d, rec)
+                after += bool(jobs)
+        finally:
+            await c.close()
+        return before, after
+    before, after = asyncio.run(run())
+    console.print(f"Companies with open jobs read: {before} before, {after} now. Re-running the rules...")
+    phase1_icp.rerun_rules(folder)
+    phase2_signals.rerun_rules(folder)
+
+
+def cmd_render(args):
+    """Pages saved before that only show their content after JavaScript runs (a "Loading blog..." placeholder, or
+    almost no text) are opened again in the real browser and saved rendered. Free; then the rules re-run."""
+    import asyncio
+    from .sources.crawl import Crawler, slim_html, text_chars, unrendered
+    folder = list_dir(args.list)
+    store = Store(folder)
+    only = normalize_domain(args.domain) if args.domain else None
+
+    async def run():
+        c = Crawler()
+        done = []
+        try:
+            for d in store.all_domains():
+                rec = store.get_site(d) or {}
+                if rec.get("status") != "live" or (only and d != only):
+                    continue
+                for kind, url in rec.get("pages", {}).items():
+                    old = store.load_page(d, kind) or ""
+                    if not unrendered(old):
+                        continue
+                    f, err = await c.browser.fetch(url)
+                    if f and f.status < 400 and text_chars(f.text) > text_chars(old) + 150:
+                        store.save_page(d, kind, slim_html(f.text))
+                        rec.setdefault("rendered_pages", []).append(kind)
+                        store.save_site(d, rec)
+                        done.append((d, kind, text_chars(old), text_chars(f.text)))
+        finally:
+            await c.close()
+        return done
+    done = asyncio.run(run())
+    for d, kind, a, b in done:
+        console.print(f"  {d} {kind}: {a} -> {b} characters of text")
+    console.print(f"Rendered {len(done)} pages in the real browser. Re-running the rules...")
+    if done:
+        phase1_icp.rerun_rules(folder)
+        phase2_signals.rerun_rules(folder)
+
+
 def cmd_directories(args):
     from .sources import directories
     if args.refresh:
@@ -559,7 +641,8 @@ def main(argv: list[str] | None = None):
                    help="phase 2: skip the signals only web search can answer (recent funding, new investors, "
                         "QuickBooks complaints...), the most expensive part")
     p.add_argument("--redo", action="store_true", help="ask again even where an answer is saved")
-    p.add_argument("--concurrency", type=int, default=8, help="AI calls at the same time")
+    p.add_argument("--concurrency", type=int, default=24,
+                   help="most AI calls at the same time (starts at 8, grows while OpenAI allows, halves on a rate limit)")
     p.add_argument("--yes", action="store_true", help="don't ask before spending")
     p.set_defaults(fn=cmd_ai)
 
@@ -605,6 +688,23 @@ def main(argv: list[str] | None = None):
     p.add_argument("--phase", choices=["icp", "signals", "both"], default="both")
     p.add_argument("--no-directories", action="store_true", help="skip the free directories (YC, SEC, IRS)")
     p.set_defaults(fn=cmd_rules)
+
+    p = sub.add_parser("render", help="open pages that need JavaScript (e.g. a 'Loading blog...' page) in the real browser; free")
+    p.add_argument("list", help="list name (or its CSV file)")
+    p.add_argument("--domain", help="only this company")
+    p.set_defaults(fn=cmd_render)
+
+    p = sub.add_parser("bench", help="time the free steps on a CSV (fresh list bench_<label>), or compare two runs; free")
+    p.add_argument("csv", nargs="?")
+    p.add_argument("--label", help="name of this run, e.g. before / after")
+    p.add_argument("--workers", type=int, default=50)
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--compare", nargs=2, metavar=("A", "B"), help="compare two saved runs")
+    p.set_defaults(fn=cmd_bench)
+
+    p = sub.add_parser("jobs", help="read open jobs again (13 job boards or the careers page) for a downloaded list; free")
+    p.add_argument("list", help="list name (or its CSV file)")
+    p.set_defaults(fn=cmd_jobs)
 
     p = sub.add_parser("evaluate", help="compare results with the right answers (accuracy, and every disagreement)")
     p.add_argument("list", nargs="?", help="list name")

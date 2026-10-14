@@ -22,7 +22,7 @@ from rich.table import Table
 
 from ..ai import prompts as P
 from ..checks import datapoints
-from ..checks.rules import SIGNALS, UNKNOWN, VALUE_NAMES, extract, signal_column
+from ..checks.rules import SIGNALS, UNKNOWN, VALUE_NAMES, extract, phase_of, signal_column
 from ..core.store import Store
 from ..providers import apply as provider_apply
 from ..providers import prospeo
@@ -139,8 +139,7 @@ def context(store: Store, domain: str, company: str = "") -> dict:
 
 def data_point(ctx: dict, sid: str) -> dict | None:
     """One data point through the five layers: what each found, which decided, and the final answer."""
-    g = SIGNALS[sid][0]
-    ph = "icp" if g in ("must", "exclusion") else "signals"
+    ph = phase_of(sid)
     result = ctx["store"].get_result(ctx["domain"], ph)
     if not result or sid not in result["signals"]:
         return None
@@ -152,7 +151,7 @@ def data_point(ctx: dict, sid: str) -> dict | None:
     method, note = final_v.get("method", "code"), final_v.get("note", "")
     decided = None
     if final_v["value"] not in (UNKNOWN, "check") and (final_v["value"] != UNKNOWN or method != "code"):
-        decided = {"code": 0, "directory": 1, "provider": 4}.get(method, 3 if "web search" in note else 2)
+        decided = {"code": 0, "derived": 0, "directory": 1, "provider": 4}.get(method, 3 if "web search" in note else 2)
     layer_vals = [code, with_dirs if (with_dirs or {}).get("method") == "directory" else None,
                   (answers.get(1) or {}).get("answer"), (answers.get(2) or {}).get("answer"),
                   _provider_view(sid, ctx["bought"], ph) if sid in PROVIDER_SIDS else None]

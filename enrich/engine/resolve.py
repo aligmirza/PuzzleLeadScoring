@@ -56,5 +56,33 @@ def resolve(store, row: dict, record: dict, phase: str) -> dict:
     if bought:  # layer 5: provider data already bought
         from ..providers import apply as provider_apply
         result = provider_apply.apply(result, bought, phase)
+    close_skipped(store, row["domain"], phase, result)
     store.save_result(row["domain"], result, phase)
     return result
+
+
+from ..checks.datapoints import OPPOSITES  # noqa: E402  (defined with the conditional runs)
+
+
+def close_skipped(store, domain: str, phase: str, result: dict) -> None:
+    """Settle opposites for free, then the conditional runs (config/datapoints run_if): data points whose parent's
+    final answer rules them out are Not applicable. A parent with a question still waiting counts as open."""
+    if "signals" not in result:
+        return
+    derive(result)
+    from ..checks import datapoints
+    from .merge import gates, redecide
+    waiting = {datapoints.sid_for_prompt(p) for p, _ in datapoints.waiting(result, store.get_ai(domain, phase))} - {None}
+    gates(result, waiting)
+    redecide(result, phase)
+
+
+def derive(result: dict) -> None:
+    """Settle a data point from its opposite's proven Yes (no AI call). Only fills what is still open."""
+    s = result.get("signals") or {}
+    for sid, other in OPPOSITES.items():
+        o = s.get(other) or {}
+        if o.get("value") == "yes" and s.get(sid, {}).get("value") in ("unknown", "check"):
+            from ..checks.rules import NO, SIGNALS, sig
+            s[sid] = sig(NO, f"{SIGNALS[other][1]} is Yes: {o.get('evidence', '')}"[:300], o.get("url", ""),
+                         f"the opposite of {other}, which is proven", method="derived")

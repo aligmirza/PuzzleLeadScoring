@@ -14,7 +14,7 @@
       "prompt": "weak/accountant_controls_tools"
     },
     "ai_web": {
-      "run": "if_open",
+      "run": "if_clue",
       "when_site_unreached": false
     },
     "provider": {

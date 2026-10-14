@@ -32,7 +32,8 @@
       "No open roles visible"
     ],
     "watch_out_for": [
-      "An accountant role at an accounting firm doesn't apply (that's an exclusion)"
+      "An accountant role at an accounting firm doesn't apply (that's an exclusion)",
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'"
     ],
     "where_to_look": [
       "Job titles and descriptions"
@@ -82,9 +83,11 @@
   "web_search": {
     "mode": "fallback",
     "queries": [
+      "\"{company}\" controller OR \"head of finance\" OR \"finance manager\" OR CFO jobs site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
       "\"{company}\" hiring controller OR \"head of finance\" OR \"finance manager\""
     ],
     "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
       "job boards",
       "LinkedIn jobs"
     ]

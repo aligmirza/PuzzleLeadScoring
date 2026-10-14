@@ -275,5 +275,171 @@ class GrowthNumbers(unittest.TestCase):
         self.assertEqual(self._f15("The platform passed $10M ARR in 2025.")["value"], "check")
 
 
+class StopWhenDecided(unittest.TestCase):
+    def _signals(self, yes=(), open_=(), weak_open=()):
+        from enrich.checks.rules import SIGNALS
+        s = {sid: {"value": "no", "evidence": "", "url": "", "note": "", "method": "code"} for sid in SIGNALS}
+        for sid in yes:
+            s[sid]["value"] = "yes"
+        for sid in (*open_, *weak_open):
+            s[sid]["value"] = "unknown"
+        return s
+
+    def test_locked_when_no_open_signal_can_cross_the_line(self):
+        from enrich.checks.scoring import tier_range
+        strong = self._signals(yes=("F1", "F2", "F3", "F4", "F5"), open_=("F11",))  # 15 points, F11 open (+2)
+        r = tier_range(strong, "MM")
+        self.assertTrue(r["locked"])
+        self.assertEqual(r["tier"], "Strong fit")
+        self.assertIn("the tier stays Strong fit", r["why"])
+
+    def test_not_locked_when_answers_could_change_the_tier(self):
+        from enrich.checks.scoring import tier_range
+        close = self._signals(yes=("F1", "F2", "F3"), open_=("F5", "F6"))  # 9 + up to 6
+        self.assertFalse(tier_range(close, "MM")["locked"])
+        weak_risk = self._signals(yes=("F1", "F2", "F3", "F4"), weak_open=("W1",))  # 12, a weak signal could drop it
+        self.assertFalse(tier_range(weak_risk, "MM")["locked"])
+
+    def test_unknown_after_its_waterfall_is_final(self):
+        from enrich.checks.scoring import tier_range
+        s = self._signals(yes=("F1", "F2", "F3", "F4"), weak_open=("W1", "W2"))  # 12 points; W1, W2 still Unknown
+        self.assertFalse(tier_range(s, "MM")["locked"])               # if they could still be asked: open
+        self.assertTrue(tier_range(s, "MM", open_sids=set())["locked"])  # nothing left to ask about them: final
+
+    def test_unknown_size_never_locks(self):
+        from enrich.checks.scoring import tier_range
+        self.assertFalse(tier_range(self._signals(yes=("F1", "F2", "F3", "F4", "F5")), None)["locked"])
+
+    def test_locked_company_gets_no_phase2_questions_but_can_ask_all(self):
+        from enrich.integrations import client_ai
+        result = {"signals": self._signals(yes=("F1", "F2", "F3", "F4", "F5"), open_=("F11",)),
+                  "facts": {"segment": "MM"}, "crawl": {"status": "live"}, "ai": {"prompts": ["fit/yc_or_accelerator"]}}
+        store = mock.MagicMock()
+        store.get_ai.return_value = {}
+        self.assertEqual(client_ai._pending(store, "x.com", "signals", result), [])
+        self.assertEqual(len(client_ai._pending(store, "x.com", "signals", result, all_questions=True)), 1)
+        self.assertNotEqual(client_ai._pending(store, "x.com", "icp", {**result}), [])  # phase 1 never stops early
+
+    def test_most_valuable_questions_first(self):
+        from enrich.integrations import client_ai
+        result = {"facts": {"segment": "MM"}}
+        worth = {pid: client_ai._worth(pid, result) for pid in
+                 ("fit/venture_backed_stage", "fit/yc_or_accelerator", "fit/banks_mercury_or_brex", "fields/vertical")}
+        self.assertEqual(sorted(worth, key=lambda p: -worth[p])[:1], ["fit/venture_backed_stage"])  # high (3) first
+        self.assertEqual(worth["fields/vertical"], 0)
+
+    def test_helper_runs_on_haiku(self):
+        from pathlib import Path
+        self.assertIn("model: haiku", (Path(__file__).parent.parent / ".claude/agents/company-answerer.md").read_text())
+
+
+class FormDHistory(unittest.TestCase):
+    def _signals(self, details, name="Argon AI, Inc.", form_d=("2024-06-13",)):
+        from enrich.checks.rules import extract
+        sec = {"cik": "2026471", "name": name, "match": "strong", "basis": "legal name", "tickers": [], "exchanges": [],
+               "state_of_incorporation": "DE", "form_d": list(form_d), "former_names": [], "business_city": "BROOKLYN",
+               "business_state": "NY", "form_d_details": {"url": "https://www.sec.gov/x.xml", **details}}
+        found = {"version": 0, "legal_name": None, "errors": {}, "complete": True, "SEC": sec}
+        home = ("<html><body><h1>X</h1><p>X is a B2B SaaS platform. Plans from $49 per month.</p>"
+                "<footer>Argon AI, Inc. 1 Main St, Brooklyn, NY 11211</footer></body></html>")
+        record = {"domain": "x.com", "status": "live", "final_url": "https://x.com/", "headers": {},
+                  "pages": {"home": "https://x.com/", "about": "https://x.com/about", "pricing": "https://x.com/pricing"}}
+        pages = {"home": home, "about": "<p>About</p>", "pricing": "<p>Starter $49 per month.</p>"}
+        with mock.patch("enrich.sources.directories.ENABLED", True):
+            return extract("x.com", "Argon AI", "10", record, pages, [], "signals", lambda *a, **k: found)["signals"]
+
+    def test_argon_like_filing_settles_b6_and_b7_no(self):
+        s = self._signals({"year_of_incorporation": "2023", "entity_type": "Corporation", "jurisdiction": "DELAWARE",
+                           "previous_names": ["Incyte Bio, Inc."]})
+        self.assertEqual(s["B7"]["value"], "no")
+        self.assertIn("incorporated in 2023", s["B7"]["evidence"])
+        self.assertEqual(s["B6"]["value"], "no")
+        self.assertIn("previous name Incyte Bio, Inc. was also a corporation", s["B6"]["evidence"])
+
+    def test_llc_previous_name_is_a_conversion(self):
+        from datetime import date, timedelta
+        recent = (date.today() - timedelta(days=60)).isoformat()
+        s = self._signals({"year_of_incorporation": "2021", "entity_type": "Corporation", "jurisdiction": "DELAWARE",
+                           "previous_names": ["Argon AI LLC"]}, form_d=(recent,))
+        self.assertEqual(s["B6"]["value"], "yes")
+
+    def test_last_year_is_not_decided(self):
+        from datetime import date
+        s = self._signals({"year_of_incorporation": str(date.today().year - 1), "entity_type": "Corporation",
+                           "previous_names": []})
+        self.assertEqual(s["B7"]["value"], "unknown")  # may or may not be within 12 months
+
+
+class FounderSearches(unittest.TestCase):
+    def test_linkedin_post_search_uses_a_founder_when_known(self):
+        from enrich.ai import prompts as P
+        pid = "buying/new_board_member_or_investor_updates"
+        plain = P.queries(pid, P.variables("Argon AI", "argon-ai.com"))[-1]
+        named = P.queries(pid, P.variables("Argon AI", "argon-ai.com", founders=["Samy Danesh"]))[-1]
+        self.assertTrue(plain.startswith('site:linkedin.com/posts "Argon AI" '))
+        self.assertIn('("Argon AI" OR "Samy Danesh")', named)
+
+    def test_founders_come_from_the_team_list(self):
+        from enrich.checks.rules import SIGNALS, UNKNOWN
+        from enrich.providers.apply import apply
+        from enrich.providers.run import people_record
+        team = [{"name": "Samy Danesh", "title": "Co-Founder, CEO"}, {"name": "Bo", "title": "Engineer"},
+                {"name": "Cyrus Jia", "title": "Co-Founder"}]
+        result = {"domain": "x.com", "signals": {k: {"value": UNKNOWN, "evidence": "", "url": "", "note": "", "method": "code"}
+                                                 for k in SIGNALS}, "crawl": {}, "facts": {}}
+        out = apply(result, {"prospeo": {"people": people_record(team, team)}}, "signals")
+        self.assertEqual(out["facts"]["founders"], ["Samy Danesh", "Cyrus Jia"])
+
+
+class Opposites(unittest.TestCase):
+    def test_w1_is_no_when_f5_is_proven(self):
+        from enrich.checks.rules import SIGNALS
+        from enrich.engine.layers import RULES, decided_by
+        from enrich.engine.resolve import derive
+        s = {k: {"value": "unknown", "evidence": "", "url": "", "note": "", "method": "code"} for k in SIGNALS}
+        s["F5"] = {"value": "yes", "evidence": "Out of the box software", "url": "https://x.com/", "note": "", "method": "ai"}
+        r = {"signals": s}
+        derive(r)
+        self.assertEqual(s["W1"]["value"], "no")
+        self.assertIn("Startup selling nationally is Yes", s["W1"]["evidence"])
+        self.assertIs(decided_by(s["W1"]), RULES)
+
+    def test_never_overrides_a_decided_answer_or_an_open_f5(self):
+        from enrich.checks.rules import SIGNALS
+        from enrich.engine.resolve import derive
+        s = {k: {"value": "unknown", "evidence": "", "url": "", "note": "", "method": "code"} for k in SIGNALS}
+        derive({"signals": s})
+        self.assertEqual(s["W1"]["value"], "unknown")  # F5 still open: nothing derived
+        s["F5"]["value"], s["W1"]["value"] = "yes", "yes"
+        derive({"signals": s})
+        self.assertEqual(s["W1"]["value"], "yes")  # already decided by its own proof: left alone
+
+
+class LongPageExcerpt(unittest.TestCase):
+    def test_decisive_sentences_past_the_cut_are_kept(self):
+        from enrich.checks.rules import excerpt
+        text = "Intro sentence about the service. " * 200 + "All payments shall be in US dollars. " + "Filler text here. " * 100
+        out = excerpt(text, 4000)
+        self.assertLessEqual(len(out), 4000)
+        self.assertIn("All payments shall be in US dollars.", out)
+        self.assertTrue(out.startswith("Intro sentence"))
+
+    def test_short_pages_are_whole(self):
+        from enrich.checks.rules import excerpt
+        self.assertEqual(excerpt("Short terms. Payments in USD.", 4000), "Short terms. Payments in USD.")
+
+
+class WebOnClue(unittest.TestCase):
+    def test_rarely_public_data_points_search_only_on_a_clue(self):
+        from enrich.checks import datapoints as d
+        pid = "weak/accountant_controls_tools"  # W11
+        self.assertEqual(d.step("W11", "ai_web")["run"], "if_clue")
+        self.assertFalse(d.web_after(pid, {"answer": "unknown"}, True))
+        self.assertTrue(d.web_after(pid, {"answer": "yes", "confidence": "low"}, True))
+        self.assertTrue(d.web_after(pid, {"answer": "unknown"}, True, clue=True))
+        self.assertFalse(d.web_after(pid, {"answer": "yes"}, False))  # already decided
+        self.assertEqual(d.step("B1", "ai_web")["run"], "if_open")      # others unchanged
+
+
 if __name__ == "__main__":
     unittest.main()

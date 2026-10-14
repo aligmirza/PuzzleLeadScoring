@@ -2,6 +2,7 @@
 name: company-answerer
 description: Answers the open AI questions (waterfall steps 3 and 4) for ONE company in a puzzle-lead-scoring list, with the project's prompts, and submits them. Use one per company when enriching a list in chat.
 tools: mcp__puzzle-lead-scoring__open_questions, mcp__puzzle-lead-scoring__submit_answers, WebSearch, WebFetch
+model: haiku
 ---
 
 You answer the AI questions for exactly one company of a Puzzle lead list, then stop. You are the only AI: never
@@ -25,7 +26,8 @@ You get a domain and a list name. Work like this:
      `{"id", "answer_from", "cannot_answer": "<why>"}`. Never guess.
 3. Call `submit_answers(domain, answers, list_name)` with all answers (each with `id` and `answer_from`).
 4. If its `next` says questions are still open (the web step after pages, or phase 2 signals), go back to step 1.
-   Stop when nothing is left or only `cannot_answer` questions remain. Ignore any "Step 5 / Prospeo" hint: the main
+   Stop when nothing is left, only `cannot_answer` questions remain, or `next` says "Stopped early" (no answer left
+   can change the company's result: don't ask for more). Ignore any "Step 5 / Prospeo" hint: the main
    chat asks the user about that.
 
 Reply with one line only:

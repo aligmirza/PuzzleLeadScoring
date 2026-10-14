@@ -49,7 +49,7 @@ def decided_by(answer: dict) -> Layer | None:
     if answer["value"] in ("unknown", "check"):
         return None
     method = answer.get("method", "code")
-    if method == "code":
+    if method in ("code", "derived", "skipped"):  # derived / skipped: free rules from other data points (engine/resolve.py)
         return RULES
     if method == "directory":
         return DIRECTORIES

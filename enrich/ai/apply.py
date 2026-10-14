@@ -166,6 +166,11 @@ def _confirm_stage(result: dict, data: dict, step: int) -> None:
                                    "method": "ai", "note": f"confirmed Series C or later, AI, {where}"}
 
 
+def counted(v: dict) -> bool:
+    """Did an AI answer decide this data point (passed the quality checks as Yes or No)?"""
+    return v.get("method") == "ai" and v.get("value") in ("yes", "no")
+
+
 def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict:
     """answers = Store.get_ai(domain, phase). Changes and returns result."""
     if "signals" not in result:
@@ -217,7 +222,8 @@ def apply(result: dict, answers: dict[str, dict[int, dict]], phase: str) -> dict
         sources = data.get("sources") or data.get("_sources_found") or []
         url = data.get("source", "")
         if step == 2 and sources:
-            url = sources[0].get("url", url)
+            first = sources[0]  # a source is {"url", "title"}; an answer through MCP may give plain URLs
+            url = first.get("url", url) if isinstance(first, dict) else str(first or url)
         method = "AI, company website" if step == 1 else "AI, web search"
         if ans == "no" and NOT_MENTIONED.search(data.get("reason", "")):
             conf_ok = False  # "it doesn't mention X" is absence of evidence, not a confirmed No

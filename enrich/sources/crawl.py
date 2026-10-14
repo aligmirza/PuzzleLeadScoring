@@ -11,7 +11,6 @@ import asyncio
 import contextvars
 import hashlib
 import html as htmllib
-import json
 import re
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
@@ -20,6 +19,8 @@ from urllib.robotparser import RobotFileParser
 import httpcore
 import httpx
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
+
+from ..core import timing
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
 MAX_BYTES = 3_000_000
@@ -63,14 +64,6 @@ GUESSES = {
 }
 SECOND_HOP = ["team", "careers", "privacy", "terms", "legal", "security"]
 
-ATS_PATTERNS = [
-    ("greenhouse", re.compile(r"(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io/(?:embed/job_board(?:/js)?\?for=)?([A-Za-z0-9_-]+)")),
-    ("lever", re.compile(r"jobs\.lever\.co/([A-Za-z0-9_.-]+)")),
-    ("ashby", re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9_.%-]+)")),
-    ("workable", re.compile(r"apply\.workable\.com/([A-Za-z0-9_-]+)")),
-    ("rippling", re.compile(r"ats\.rippling\.com/([A-Za-z0-9_-]+)")),
-]
-BAD_SLUGS = {"embed", "v1", "api", "j", "jobs", "js", "static", "assets"}
 _REQ_COUNT: contextvars.ContextVar[list] = contextvars.ContextVar("req_count")
 _VIA_BROWSER: contextvars.ContextVar[bool] = contextvars.ContextVar("via_browser", default=False)
 BROWSER_ENABLED = True  # switched off with --no-browser
@@ -198,6 +191,17 @@ def needs_browser(html: str) -> bool:
     return len(html) > 2000 and text_chars(html) < 250
 
 
+RE_PLACEHOLDER = re.compile(r"\b(?:loading|fetching)\b[^.<]{0,30}(?:\.\.\.|…)|\benable javascript\b", re.I)
+
+
+def unrendered(html: str) -> bool:
+    """A page whose content arrives by JavaScript: almost no text, or a "Loading blog..." placeholder."""
+    if needs_browser(html):
+        return True
+    n = text_chars(html)
+    return n < 600 and bool(RE_PLACEHOLDER.search(html))
+
+
 class BrowserFallback:
     """A real browser (your installed Google Chrome, driven by Playwright) for sites a plain download can't read:
     pages that need JavaScript, and short "checking your browser" challenges. Started only when first needed, and
@@ -235,24 +239,32 @@ class BrowserFallback:
     async def fetch(self, url: str) -> tuple[Fetched | None, str | None]:
         if not await self._start():
             return None, self.unavailable
-        async with self.sem:
-            page = await self._ctx.new_page()
-            try:
-                r = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                for _ in range(5):  # let JavaScript render, and give a "checking your browser" page time to pass
-                    await page.wait_for_timeout(1500)
-                    if not BLOCK_TITLES.search(await page.title()):
-                        break
-                html = await page.content()
-                self.pages += 1
-                status = r.status if r else 200
-                if BLOCK_TITLES.search(await page.title()):
-                    status = 403
-                return Fetched(page.url, status, "text/html", html, {"x-fetched-with": "real browser"}), None
-            except Exception as e:  # noqa: BLE001
-                return None, f"real browser: {str(e).splitlines()[0][:120]}"
-            finally:
-                await page.close()
+        with timing.stage("chrome: waiting for one of the 3 slots"):
+            await self.sem.acquire()
+        try:
+            with timing.stage("chrome: rendering"):
+                return await self._render(url)
+        finally:
+            self.sem.release()
+
+    async def _render(self, url: str) -> tuple[Fetched | None, str | None]:
+        page = await self._ctx.new_page()
+        try:
+            r = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            for _ in range(5):  # let JavaScript render, and give a "checking your browser" page time to pass
+                await page.wait_for_timeout(1500)
+                if not BLOCK_TITLES.search(await page.title()):
+                    break
+            html = await page.content()
+            self.pages += 1
+            status = r.status if r else 200
+            if BLOCK_TITLES.search(await page.title()):
+                status = 403
+            return Fetched(page.url, status, "text/html", html, {"x-fetched-with": "real browser"}), None
+        except Exception as e:  # noqa: BLE001
+            return None, f"real browser: {str(e).splitlines()[0][:120]}"
+        finally:
+            await page.close()
 
     async def close(self):
         for thing in (self._ctx, self._browser):
@@ -289,39 +301,46 @@ class Crawler:
             if counter is not None:
                 counter[0] += 1
             return await self.browser.fetch(url)
-        async with self.sem:
+        with timing.stage("http: waiting for a free request slot"):
+            await self.sem.acquire()
+        try:
             self.requests += 1
             counter = _REQ_COUNT.get(None)
             if counter is not None:
                 counter[0] += 1
-            try:
-                async with self.client.stream("GET", url) as r:
-                    chunks, size = [], 0
-                    async for chunk in r.aiter_bytes():
-                        size += len(chunk)
-                        chunks.append(chunk)
-                        if size > MAX_BYTES:
-                            break
-                    body = b"".join(chunks)
-                    enc = r.charset_encoding or "utf-8"
-                    try:
-                        text = body.decode(enc, errors="replace")
-                    except LookupError:
-                        text = body.decode("utf-8", errors="replace")
-                    keep = {k: v for k, v in r.headers.items() if k.lower() in (
-                        "server", "x-powered-by", "via", "x-shopify-stage", "x-wix-request-id", "x-generator", "cf-mitigated")}
-                    return Fetched(str(r.url), r.status_code, r.headers.get("content-type", ""), text, keep), None
-            except httpx.TimeoutException:
-                return None, "timeout"
-            except httpx.ConnectError as e:
-                msg = str(e).lower()
-                if "ssl" in msg or "certificate" in msg:
-                    return None, "ssl error"
-                if any(s in msg for s in DNS_FAIL):
-                    return None, "domain does not resolve"
-                return None, "cannot connect"
-            except Exception as e:  # noqa: BLE001  (bad redirects, broken encodings, etc.)
-                return None, f"{type(e).__name__}: {str(e)[:120]}"
+            return await self._get(url)
+        finally:
+            self.sem.release()
+
+    async def _get(self, url: str) -> tuple[Fetched | None, str | None]:
+        try:
+            async with self.client.stream("GET", url) as r:
+                chunks, size = [], 0
+                async for chunk in r.aiter_bytes():
+                    size += len(chunk)
+                    chunks.append(chunk)
+                    if size > MAX_BYTES:
+                        break
+                body = b"".join(chunks)
+                enc = r.charset_encoding or "utf-8"
+                try:
+                    text = body.decode(enc, errors="replace")
+                except LookupError:
+                    text = body.decode("utf-8", errors="replace")
+                keep = {k: v for k, v in r.headers.items() if k.lower() in (
+                    "server", "x-powered-by", "via", "x-shopify-stage", "x-wix-request-id", "x-generator", "cf-mitigated")}
+                return Fetched(str(r.url), r.status_code, r.headers.get("content-type", ""), text, keep), None
+        except httpx.TimeoutException:
+            return None, "timeout"
+        except httpx.ConnectError as e:
+            msg = str(e).lower()
+            if "ssl" in msg or "certificate" in msg:
+                return None, "ssl error"
+            if any(s in msg for s in DNS_FAIL):
+                return None, "domain does not resolve"
+            return None, "cannot connect"
+        except Exception as e:  # noqa: BLE001  (bad redirects, broken encodings, etc.)
+            return None, f"{type(e).__name__}: {str(e)[:120]}"
 
     async def _public_dns(self, domain: str) -> str:
         """Ask public DNS (Google, then Cloudflare) over HTTPS. Returns exists, nxdomain or unknown."""
@@ -381,23 +400,45 @@ class Crawler:
             return None
         return f
 
-    async def _jobs(self, provider: str, slug: str) -> list[dict] | None:
-        api = {
-            "greenhouse": f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true",
-            "lever": f"https://api.lever.co/v0/postings/{slug}?mode=json",
-            "ashby": f"https://api.ashbyhq.com/posting-api/job-board/{slug}",
-            "workable": f"https://apply.workable.com/api/v1/widget/accounts/{slug}",
-        }.get(provider)
-        if not api:
-            return None
-        f, _ = await self.fetch(api)
-        if not f or f.status != 200:
-            return None
-        try:
-            data = json.loads(f.text)
-        except ValueError:
-            return None
-        return normalize_jobs(provider, data)
+    async def render_if_needed(self, kind: str, f: "Fetched", record: dict) -> "Fetched":
+        """A page that only shows its content after JavaScript runs (a "Loading blog..." placeholder, or almost no
+        text) is fetched again in the real browser; the rendered copy is kept when it has more text."""
+        if _VIA_BROWSER.get() or not unrendered(f.text):
+            return f
+        rendered, _ = await self.browser.fetch(f.url)
+        if rendered and rendered.status < 400 and text_chars(rendered.text) > text_chars(f.text) + 150:
+            record.setdefault("rendered_pages", []).append(kind)
+            return rendered
+        return f
+
+    async def find_jobs(self, home_url: str, pages: dict[str, str], record: dict) -> list[dict]:
+        """Open jobs from the company's own job board (13 boards, public feeds: sources/jobboards.py), else jobs listed
+        on its careers page. Sets record ats / ats_slug / jobs_count / jobs_url."""
+        from . import jobboards
+        all_html = " ".join(pages.values())
+        for board, params in jobboards.detect(all_html)[:3]:
+            record["ats"], record["ats_slug"] = board, params.get("slug") or params.get("site") or ""
+            record["jobs_url"] = jobboards.public_url(board, params)
+            method, url, body = jobboards.request(board, params)
+            try:
+                r = await (self.client.post(url, json=body) if method == "POST" else self.client.get(url))
+                self.requests += 1
+            except Exception:  # noqa: BLE001  a board that doesn't answer: try the next one, then the careers page
+                continue
+            jobs = jobboards.parse(board, params, r.text) if r.status_code == 200 else None
+            if jobs is not None:
+                record["jobs_count"] = len(jobs)
+                return jobs
+        if pages.get("careers"):
+            listed = jobboards.careers_page_jobs(pages["careers"], record.get("pages", {}).get("careers", home_url))
+            if listed:
+                if record.get("ats"):  # a board was linked but didn't answer: say so, the jobs come from the page
+                    record["board_unreadable"] = record["ats"]
+                record["ats"], record["ats_slug"] = "careers page", ""
+                record["jobs_url"] = record.get("pages", {}).get("careers", "")
+                record["jobs_count"] = len(listed)
+                return listed
+        return []
 
     async def crawl(self, domain: str, kinds: set[str]) -> tuple[dict, dict[str, str], list[dict]]:
         """Phase 1: load the homepage, then only the page kinds asked for, plus open jobs."""
@@ -447,24 +488,20 @@ class Crawler:
         record["status"] = "live"
         record["final_url"] = home.url
         record["headers"] = home.headers
-        pages = await self._fetch_kinds(domain, home.url, home.text, kinds, {}, record, guess=True)
+        with timing.stage("1 download: pages"):
+            pages = await self._fetch_kinds(domain, home.url, home.text, kinds, {}, record, guess=True)
         pages = {"home": home.text, **pages}
 
-        # job board
-        all_html = " ".join(pages.values())
-        jobs: list[dict] = []
-        for provider, pattern in ATS_PATTERNS:
-            slugs = [s for s in pattern.findall(all_html) if s.lower() not in BAD_SLUGS]
-            if slugs:
-                record["ats"], record["ats_slug"] = provider, slugs[0]
-                result = await self._jobs(provider, slugs[0])
-                if result is not None:
-                    jobs = result
-                    record["jobs_count"] = len(jobs)
-                break
-
         record["pages"] = {"home": home.url, **record["pages"]}
-        await self.payment_scan(domain, home.url, pages, record)
+
+        async def jobs_():
+            with timing.stage("1 download: job boards"):
+                return await self.find_jobs(home.url, pages, record)
+
+        async def code_():
+            with timing.stage("1 download: code scan"):
+                await self.payment_scan(domain, home.url, pages, record)
+        jobs, _ = await asyncio.gather(jobs_(), code_())  # independent: they write different fields
         record["requests"] = counter[0]
         return record, pages, jobs
 
@@ -510,8 +547,9 @@ class Crawler:
             gateways.setdefault(g, v)
         record["payment_code"] = {"gateways": gateways, "checked": checked[:40]}
         from . import wappalyzer
-        techs = await asyncio.to_thread(wappalyzer.analyze, {urls.get(k, home_url): h for k, h in pages.items()},
-                                        record.get("headers"), None, home_url)
+        with timing.stage("code scan: wappalyzer (CPU)"):
+            techs = await on_cpu(wappalyzer.analyze, {urls.get(k, home_url): h for k, h in pages.items()},
+                                 record.get("headers"), None, home_url)
         record["technologies"] = {**(record.get("technologies") or {}), **techs}
 
     async def crawl_more(self, record: dict, home_html: str, kinds: set[str]) -> dict[str, str]:
@@ -555,7 +593,7 @@ class Crawler:
         async def grab(kind, url):
             f = await self._get_page(url, home_hash, robots, record)
             if f:
-                got[kind] = f
+                got[kind] = await self.render_if_needed(kind, f, record)
 
         await asyncio.gather(*(grab(k, u) for k, u in chosen.items()))
 
@@ -581,45 +619,23 @@ class Crawler:
         return {k: f.text for k, f in got.items()}
 
 
-def _plain(html_text: str | None) -> str:
-    if not html_text:
-        return ""
-    text = htmllib.unescape(html_text)
+_CPU_POOL = None
+
+
+async def on_cpu(fn, *args):
+    """Heavy pure-Python work (Wappalyzer: 7,600 fingerprints per company) in separate processes: in a thread it held
+    Python's lock, so every company's downloads stalled while it ran. Falls back to a thread if processes can't start."""
+    global _CPU_POOL
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures.process import BrokenProcessPool
+    if _CPU_POOL is None:
+        _CPU_POOL = ProcessPoolExecutor(max_workers=max(2, (os.cpu_count() or 4) - 2))
     try:
-        text = HTMLParser(text).text(separator=" ")
-    except Exception:
-        text = re.sub(r"<[^>]+>", " ", text)
-    return " ".join(text.split())[:4000]
-
-
-def normalize_jobs(provider: str, data) -> list[dict]:
-    jobs = []
-    if provider == "greenhouse":
-        for j in (data or {}).get("jobs", []):
-            loc = (j.get("location") or {}).get("name", "")
-            jobs.append({"title": j.get("title", ""), "location": loc, "remote": "remote" in loc.lower(),
-                         "description": _plain(j.get("content"))})
-    elif provider == "lever":
-        for j in data if isinstance(data, list) else []:
-            cats = j.get("categories") or {}
-            loc = cats.get("location", "") or ""
-            desc = " ".join([j.get("descriptionPlain", "") or ""] + [
-                _plain(x.get("content")) for x in j.get("lists", []) or []] + [j.get("additionalPlain", "") or ""])
-            jobs.append({"title": j.get("text", ""), "location": loc,
-                         "remote": j.get("workplaceType") == "remote" or "remote" in loc.lower(),
-                         "description": " ".join(desc.split())[:4000]})
-    elif provider == "ashby":
-        for j in (data or {}).get("jobs", []):
-            loc = j.get("location", "") or ""
-            jobs.append({"title": j.get("title", ""), "location": loc,
-                         "remote": bool(j.get("isRemote")) or "remote" in loc.lower(),
-                         "description": (j.get("descriptionPlain") or _plain(j.get("descriptionHtml")))[:4000]})
-    elif provider == "workable":
-        for j in (data or {}).get("jobs", []):
-            loc = ", ".join(x for x in [j.get("city"), j.get("country")] if x)
-            jobs.append({"title": j.get("title", ""), "location": loc, "remote": bool(j.get("telecommuting")),
-                         "description": _plain(j.get("description"))})
-    return jobs[:200]
+        return await asyncio.get_running_loop().run_in_executor(_CPU_POOL, fn, *args)
+    except (BrokenProcessPool, OSError):
+        _CPU_POOL = None
+        return await asyncio.to_thread(fn, *args)
 
 
 # ---------------------------------------------------------------------------

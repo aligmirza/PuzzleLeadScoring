@@ -14,7 +14,7 @@
       "prompt": "fit/runs_several_us_companies"
     },
     "ai_web": {
-      "run": "if_open",
+      "run": "if_clue",
       "when_site_unreached": false
     },
     "provider": {

@@ -22,7 +22,7 @@ The short codes in this file (M1, E3, F12...) are only used here and in the code
 
 ## How to read this file
 
-Every check answers **Yes**, **No**, **Needs check** or **Unknown**. Yes and No only when confirmed by proof; a guess is Needs check or Unknown, and Unknown is left empty in the output columns. Unknown never counts against a company ([PIPELINE.md, step 5](PIPELINE.md#5-apply-the-rules)). For each signal the methods are tried from cheapest to most expensive, stopping at the first clear answer:
+Every check answers **Yes**, **No**, **Needs check** or **Unknown**, or is **Not applicable** when a data point it depends on rules it out (no paid step runs; it scores nothing; see [Waterfall per data point](#waterfall-per-data-point)). Yes and No only when confirmed by proof; a guess is Needs check or Unknown, and Unknown is left empty in the output columns. Unknown never counts against a company ([PIPELINE.md, step 5](PIPELINE.md#5-apply-the-rules)). For each signal the methods are tried from cheapest to most expensive, stopping at the first clear answer:
 
 | Method | What it means | Cost |
 |---|---|---|
@@ -495,8 +495,17 @@ Includes seed extensions, bridge rounds and SAFEs, not only priced rounds.
 
 #### B10. Tax filing or extension deadline coming up (medium)
 
-- **How we check:** **calendar rules, not research.** For US C-Corps (calendar year), it fires in the weeks before April 15 and before the October 15 extension deadline. The window size can be changed.
-- **Watch out for:** this applies to almost every US company at the same time. So it works more as a "send now" flag than a way to tell companies apart.
+- **How we check:** **calendar rules, not research.** For US C-Corps (calendar year), it fires in the 45 days before April 15 (the filing deadline) and before October 15 (the extension deadline). The window size can be changed (`tax_deadline` in `enrich/checks/rules.py`).
+- **Yes only when all three hold:**
+  1. the company is a **confirmed C-Corp**: F3 Delaware C-Corp is Yes, or the entity type is a US C-Corp, proven by the site (an "Inc." plus Delaware governing law) or by **SEC** (state of incorporation, Form D entity type);
+  2. it is **based in the US** (M1 Yes);
+  3. today is **0 to 45 days before** a deadline.
+- **Otherwise Unknown, never No:** a company that isn't a confirmed C-Corp gets no points, so this doesn't add points to every company.
+- **No AI, no web search, no provider:** it's date arithmetic, so steps 3 to 5 are off.
+- **Proof shown:** "N days to the Oct 15 C-Corp filing deadline", with the note "calendar based, for a confirmed C-Corp (Delaware C-Corp)".
+- **Example (manual review, 2026-10-14):** Argon AI: SEC confirms a Delaware corporation since 2023, US-based, and 1 day to October 15, so Yes.
+- **Display note:** the waterfall view's step 1 row can show Unknown while the final answer is Yes from the rules: the C-Corp confirmation often comes from SEC in step 2, and the deadline rule runs after it.
+- **Watch out for:** this applies to almost every US C-Corp at the same time. So it works more as a "send now" timing flag than a way to tell companies apart, and it switches off right after each deadline.
 
 #### B11. Publicly complaining about QuickBooks (medium)
 
@@ -640,6 +649,108 @@ decided in the MCP review of each data point.
   cached 90 days. The company details that come with it go to the contacts file (`<list>_contacts.csv`), not into
   other answers.
 - A question already settled (for example by Prospeo data bought since) is not asked again.
+- **Pages that need JavaScript:** any downloaded page that comes back empty or with a placeholder ("Loading
+  blog...") is opened again in the real browser (Chrome) and the rendered copy is kept. `python -m enrich render
+  <list>` does it for lists downloaded before (free). Example: Argon AI's blog went from a placeholder to its 4
+  dated announcements.
+- **Open jobs (step 1):** read for free from the company's own job board: Greenhouse, Lever, Ashby, Workable,
+  Rippling, Workday, BambooHR, Dover, SmartRecruiters, Recruitee, Teamtailor, Personio, Breezy (their public
+  listing feeds), else from roles listed on its careers page (schema.org JobPosting, job links, or job-title
+  headings). Every job proof links to the board or job page. `python -m enrich jobs <list>` re-reads jobs for a list
+  downloaded before (free). On the 100-company test list: 4 → 13 companies with readable jobs.
+- **Job sites in step 4:** for every data point that depends on job posts (F4, F9, F12, F16, B3, B4, B5, B9, B14,
+  W10, competitors), the web search looks first at job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a
+  Startup, Wellfound) through search results, not by logging in or scraping. A listing counts only if its employer is
+  this company (same company page, domain or location). This matters most when the company's own job board can't
+  be read (34 of 82 live companies in the test list).
+- **Rarely public data points search only on a clue** (F17, B8, B9, B11, B13, B14, W11: `ai_web.run: if_clue`):
+  the web search runs only when the rules flagged something (Needs check) or the page answer saw an unproven yes/no.
+  A clean "unknown" from the pages ends there. In the manual review all seven came back Unknown after a paid search.
+- **Opposite data points are settled for free:** when one is proven Yes, its opposite is No without an AI call,
+  with that proof (`OPPOSITES` in `checks/datapoints.py`). The opposite waits while the other still has a question.
+  F5 selling nationally → W1 one local area, W3 single location, F7 local services firm; M4 transactions → W5 not
+  making money; F3 Delaware C-Corp → W4 LLC; F13 no finance person → W10 NetSuite with a finance team; M3 fintech
+  tool → W12 no fintech tools; E6 holds stock → W9 store without stock. Not opposites: W2 and W7 (a national
+  services firm can bill hours, a national startup can make hardware).
+- **Conditional runs between data points (`run_if` in a data point's file):** a data point's paid steps (AI pages,
+  AI web, Prospeo) run only when each parent's answer is one it runs on. While a parent still has a question waiting,
+  the child waits (asked in the next round); once the parent is final with another value, the child shows **Not
+  applicable** with the reason and costs nothing. Proof the free steps already found is kept. Built links:
+  - **Must-haves one after another:** M2 waits for M1; M3 for M1 and M2; M4 for M1 to M3; the six exclusions for all
+    four must-haves. Each goes on when the ones before are Yes or Unknown; a proven No stops the rest.
+  - **ICP already NO** (a must-have No or an exclusion Yes): every phase 1 data point still open is Not applicable.
+  - **F12 runs only when F1 is Yes** (several open roles only for a venture-backed company; F1 Unknown or No skips it).
+  - **Buying signals skipped when the parent is proven No** (still asked when it is Unknown): B1, B2, B13 after F1
+    (no venture funding: no new round, investor or board); B12 after F8 (no paid pricing: no pricing launch); B11
+    after F4 (not on QuickBooks Online: no complaints about it).
+  - Not linked: B4 and B5 to B3 (one open role can be the finance or ops hire).
+  - Test mode (`dp_test_*`, `all_questions=true`) still asks everything.
+- **Phase 2 stops when the result can't change:** questions are asked most valuable first (high, medium, low
+  weight; weak signals; then the extra fields), and once no question still waiting can move the lead tier across
+  the Strong-fit line (12), the rest are skipped. Unknown after a data point's whole waterfall counts as final (0
+  points). Phase 1 stops only through the conditional runs above (ICP already NO), and nothing is skipped while the company's size is unknown. `open_questions`
+  with `all_questions=true` asks everything anyway. On the 100-company test list this cut phase 2 questions by
+  about half.
+- **Through MCP, best leads first:** `questions_overview` returns a `work_order` (ICP YES, then highest score), and
+  the `company-answerer` helper runs on Haiku to use less of the Claude plan.
+
+**How data points depend on each other.** Thick lines are conditional runs (`run_if` in the child's file): the
+child waits while its parent still has a question, and is **Not applicable** (no paid step) when the parent ends on a
+value it doesn't run on. Thin lines are opposites (`OPPOSITES` in `checks/datapoints.py`): a proven Yes makes the other
+No for free. Dotted lines feed an answer in. The same map is in the "Depends on" column of the table below.
+
+```mermaid
+flowchart LR
+    M1["M1 · Based and operating in t…"]
+    M2["M2 · Live website with a real…"]
+    M1 ==>|not No| M2
+    M3["M3 · Uses a fintech tool Puzz…"]
+    M2 ==>|not No| M3
+    M4["M4 · Real transaction activity"]
+    M3 ==>|not No| M4
+    EX["E1–E6 · Exclusions"]
+    M4 ==>|all 4 not No| EX
+    F1["F1 · Venture-backed, pre-seed…"]
+    F12["F12 · Several open roles"]
+    F1 ==>|Yes only| F12
+    B1["B1 · Raised money in the last…"]
+    F1 ==>|No → skip| B1
+    B2["B2 · New investor or accelera…"]
+    F1 ==>|No → skip| B2
+    B13["B13 · New board member or inve…"]
+    F1 ==>|No → skip| B13
+    F8["F8 · Publishes real paid pric…"]
+    B12["B12 · Recently launched paid p…"]
+    F8 ==>|No → skip| B12
+    F4["F4 · Uses QuickBooks Online"]
+    B11["B11 · Complaining about QuickB…"]
+    F4 ==>|No → skip| B11
+    F5["F5 · Startup selling nationally"]
+    W1["W1 · Serves one local area"]
+    F5 -->|Yes → No| W1
+    W3["W3 · Physical or single-locat…"]
+    F5 -->|Yes → No| W3
+    F7["F7 · Local professional servi…"]
+    F5 -->|Yes → No| F7
+    W5["W5 · Not making money yet"]
+    M4 -->|Yes → No| W5
+    F3["F3 · Delaware C-Corp"]
+    W4["W4 · LLC or sole owner, no ve…"]
+    F3 -->|Yes → No| W4
+    F13["F13 · No finance person visible"]
+    W10["W10 · Already on NetSuite or s…"]
+    F13 -->|Yes → No| W10
+    W12["W12 · No fintech tools, spread…"]
+    M3 -->|Yes → No| W12
+    E6["E6 · E-commerce holding physi…"]
+    W9["W9 · Shopify store without st…"]
+    E6 -->|Yes → No| W9
+    B10["B10 · Tax deadline coming up"]
+    F3 -.->|feeds| B10
+    M1 -.->|feeds| B10
+    F14["F14 · Has a finance lead (mid-…"]
+    F13 -.->|feeds| F14
+```
 
 **Size first (segment)**: the list's employee count, then the Prospeo headcount (if already bought), then the YC
 team size, then the AI estimate, then SMB. Data points worth nothing for that size are skipped with no AI or credits
@@ -650,65 +761,65 @@ portal, publishable keys; plus Wappalyzer's 7,600 technology fingerprints), ever
 feed. **Step 2 sources**: YC, SEC (EDGAR, Form D), IRS (non-profits), Internet Archive, and the DNS check (domain
 verification records, SPF senders, email provider).
 
-| ID | Data point | 1 Rules | 2 Directories | 3 AI pages | 4 AI web | 5 Prospeo | Strategy |
-|---|---|---|---|---|---|---|---|
-| M1 | Based and operating in the US | Rules | YC, SEC | if open | if open | off | US address or US governing law on the site (proof keeps its page link); YC / SEC location agrees or decides. |
-| M2 | Live website with a real product | Rules | - | if open | off | n/a | The site loads with real pages. Web search off: search results can't prove a site is live. |
-| M3 | Uses a fintech tool Puzzle connects to | Rules + Wappalyzer + payment-code scan | DNS | if open | if open | off | Tool proven in the site's code (payment-code scan, Wappalyzer) or its DNS (domain verified with Rippling, Stripe...), or named as used (privacy policy). |
-| M4 | Real transaction activity | Rules | - | if open | if open | off | Prices, a checkout, or open jobs from the job-board feed. |
-| E1 | Series C or later, or public | Rules | SEC, YC | if open | if open | off | Exclusion needs a stated Series C+ round, IPO or ticker. High = clearly stated, about this company (domain), under ~2 years old. |
-| E2 | New company, no website, no funding | Rules | SEC Form D | if open | if open | n/a | A live site alone rules it out (rules: No). Only dead/parked sites stay open. |
-| E3 | Accounting or bookkeeping firm | Rules | - | if open | if open | n/a | Rules look for accounting services; else AI reads the pages, then the web. |
-| E4 | Mainly operates outside the US | Rules | YC | if open | if open | off | Same address proof as M1 (with its page link). |
-| E5 | Non-profit or government body | Rules | IRS, YC | if open | if open | off | Legal suffix is a weak clue; IRS register (non-profit) and YC decide. |
-| E6 | E-commerce holding physical stock | Rules | - | if open | if open | n/a | AI reads the pages: a stocked store, shipping, warehouse jobs. |
-| F1 | Venture-backed, pre-seed to Series B | Rules | YC, SEC Form D | if open | if open | off | A bare 'Backed by' (logo images) is only a clue; a named investor counts. YC / Form D prove venture-backed, and the AI steps continue until the stage is confirmed; a confirmed round becomes the proof (Series C+ turns it No). |
-| F2 | Uses Stripe for billing | Rules + Wappalyzer + payment-code scan | DNS | if open | if open | off | Payment-code scan (raw pages, the site's JS bundles, the app's sign-in page), Wappalyzer, DNS stripe-verification. The note says 'found in code' or 'stated on the site, not seen in code'. |
-| F3 | Delaware C-Corp | Rules | SEC | if open | if open | n/a | Governing law is only a clue; the SEC state of incorporation decides. |
-| F4 | Uses QuickBooks Online | Rules + Wappalyzer | DNS | if open | if open | off | Every job post is read (rules and AI); a finance job asking for QuickBooks is Yes. 'Nothing found' lists the job posts checked. |
-| F5 | Startup selling nationally | Rules | - | if open | if open | n/a | A clearly stated software product counts as selling nationally; a services firm needs stated customers beyond its city. |
-| F6 | B2B SaaS or tech-enabled service | Rules | - | if open | if open | n/a | Software (or a tech service) sold to businesses, stated on the site. |
-| F7 | Local professional services firm | Rules | - | if open | if open | n/a | Opposite of F5: a stated scalable product is No. |
-| F8 | Publishes real paid pricing | Rules | - | if open | if open | n/a | No pricing page after the full search (links, sitemap, /pricing, /plans) and only 'Contact sales', or no prices and no pricing words anywhere: No. Prices elsewhere: Needs check. |
-| F9 | Payroll on Gusto, Rippling or Deel | Rules + Wappalyzer | DNS | if open | if open | off | DNS verification (Rippling, Gusto, Deel) = Yes at medium (account stated, payroll use not); job posts read in full. |
-| F10 | AI is core to the product | Rules | - | if open | if open | n/a | The product itself is AI (model, agent, assistant), stated on the site. |
-| F11 | YC or similar accelerator | Rules | YC | if open | if open | n/a | YC directory: exact website domain plus a name match; acquired or renamed entries don't count. |
-| F12 | Several open roles | Rules | - | if open | if open | off | 3+ open roles from the job-board feed (Ashby, Greenhouse, Lever, Workable, Rippling). |
-| F13 | No finance person visible | Rules | - | if open (needs team page) | off | if open | Size first. SMB / MM: one Prospeo whole-team search (1 credit): a full list (2-24 people) with no finance title = Yes. Skipped for ENT. Web search off: absence can't be found online. |
-| F14 | Has a finance lead (mid-size and up) | Rules | - | if open (needs team page) | if open | if open | Size first. Skipped for SMB. MM: the same whole-team search (no finance title = No). ENT: Prospeo finance-department search. |
-| F15 | Publishes revenue or growth numbers | Rules | - | if open | if open | n/a | Rules read pages and job posts for the company's own ARR, revenue, customer count or growth ('7-figure ARR up 5x'); others' numbers don't count. |
-| F16 | Remote-first or hybrid | Rules | - | if open | if open | n/a | Job locations and 'In person' / remote wording. Watch: 'hybrid search' is a technology, not hybrid work. |
-| F17 | Runs several US companies | Rules | - | if open | if open | n/a | Several named entities under one owner; boilerplate 'subsidiaries' doesn't count. |
-| F18 | Early adopter | Rules | - | if open | if open | n/a | Product Hunt launch or engineering blog. Gap: blogs loaded by JavaScript aren't read yet. |
-| F19 | Banks with Mercury or Brex | Rules + Wappalyzer | DNS | off | off | off | Rules (names in text and code), DNS and Wappalyzer only: an AI reading the same text adds cost, not proof. |
-| F20 | Uses Ramp or Brex cards | Rules + Wappalyzer | DNS | off | off | off | Rules, DNS and Wappalyzer only (as F19). |
-| F21 | Cap table in Carta or Pulley | Rules + Wappalyzer | DNS | off | off | off | Rules, DNS and Wappalyzer only (as F19; a Carta fingerprint exists). |
-| B1 | Raised money in the last 6 months | Rules | SEC Form D | if open | if open | off | Not reviewed in the MCP test yet. |
-| B2 | New investor or accelerator | Rules | YC | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B3 | Hiring for several roles | Rules | - | if open | if open | off | Not reviewed in the MCP test yet. |
-| B4 | Hiring a finance lead | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B5 | Hiring ops or chief of staff | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B6 | Converted from an LLC to a C-Corp | Rules | Wayback, SEC | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B7 | Incorporated in the last 12 months | Rules | Wayback | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B8 | Registered a new subsidiary | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B9 | Lost or replacing a bookkeeper | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B10 | Tax deadline coming up | Rules | - | n/a | n/a | n/a | Not reviewed in the MCP test yet. |
-| B11 | Complaining about QuickBooks | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B12 | Recently launched paid pricing | Rules | SEC | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B13 | New board member or investor updates | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| B14 | Preparing for a first audit | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W1 | Serves one local area | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W2 | Sells hours of labour, not a product | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W3 | Physical or single-location business | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W4 | LLC or sole owner, no venture funding | Rules | Wayback | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W5 | Not making money yet | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W6 | Needs more than one currency | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W7 | Manufacturing or hardware | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W8 | Heavy invoicing and bill-paying | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W9 | Shopify store without stock | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W10 | Already on NetSuite or similar | Rules | - | if open | if open | off | Not reviewed in the MCP test yet. |
-| W11 | Accountant picks the tools | Rules | - | if open | if open | n/a | Not reviewed in the MCP test yet. |
-| W12 | No fintech tools, spreadsheets and a traditional bank | Rules | - | if open | off | n/a | Not reviewed in the MCP test yet. |
+| ID | Data point | 1 Rules | 2 Directories | 3 AI pages | 4 AI web | 5 Prospeo | Depends on | Strategy |
+|---|---|---|---|---|---|---|---|---|
+| M1 | Based and operating in the US | Rules | YC, SEC | if open | if open | off | - | US address or US governing law on the site (proof keeps its page link); YC / SEC location agrees or decides. |
+| M2 | Live website with a real product | Rules | - | if open | off | n/a | after M1 | The site loads with real pages. Web search off: search results can't prove a site is live. |
+| M3 | Uses a fintech tool Puzzle connects to | Rules + Wappalyzer + payment-code scan | DNS | if open | if open | off | after M1; after M2 | Tool proven in the site's code (payment-code scan, Wappalyzer) or its DNS (domain verified with Rippling, Stripe...), or named as used (privacy policy). |
+| M4 | Real transaction activity | Rules | - | if open | if open | off | after M1; after M2; after M3 | Prices, a checkout, or open jobs from the job-board feed. |
+| E1 | Series C or later, or public | Rules | SEC, YC | if open | if open | off | after M1–M4 | Exclusion needs a stated Series C+ round, IPO or ticker. High = clearly stated, about this company (domain), under ~2 years old. |
+| E2 | New company, no website, no funding | Rules | SEC Form D | if open | if open | n/a | after M1–M4 | A live site alone rules it out (rules: No). Only dead/parked sites stay open. |
+| E3 | Accounting or bookkeeping firm | Rules | - | if open | if open | n/a | after M1–M4 | Rules look for accounting services; else AI reads the pages, then the web. |
+| E4 | Mainly operates outside the US | Rules | YC | if open | if open | off | after M1–M4 | Same address proof as M1 (with its page link). |
+| E5 | Non-profit or government body | Rules | IRS, YC | if open | if open | off | after M1–M4 | Legal suffix is a weak clue; IRS register (non-profit) and YC decide. |
+| E6 | E-commerce holding physical stock | Rules | - | if open | if open | n/a | after M1–M4 | AI reads the pages: a stocked store, shipping, warehouse jobs. |
+| F1 | Venture-backed, pre-seed to Series B | Rules | YC, SEC Form D | if open | if open | off | - | A bare 'Backed by' (logo images) is only a clue; a named investor counts. YC / Form D prove venture-backed, and the AI steps continue until the stage is confirmed; a confirmed round becomes the proof (Series C+ turns it No). |
+| F2 | Uses Stripe for billing | Rules + Wappalyzer + payment-code scan | DNS | if open | if open | off | - | Payment-code scan (raw pages, the site's JS bundles, the app's sign-in page), Wappalyzer, DNS stripe-verification. The note says 'found in code' or 'stated on the site, not seen in code'. |
+| F3 | Delaware C-Corp | Rules | SEC | if open | if open | n/a | - | Governing law is only a clue; the SEC state of incorporation decides. |
+| F4 | Uses QuickBooks Online | Rules + Wappalyzer | DNS | if open | if open | off | - | Every job post is read (rules and AI); a finance job asking for QuickBooks is Yes. 'Nothing found' lists the job posts checked. |
+| F5 | Startup selling nationally | Rules | - | if open | if open | n/a | - | A clearly stated software product counts as selling nationally; a services firm needs stated customers beyond its city. |
+| F6 | B2B SaaS or tech-enabled service | Rules | - | if open | if open | n/a | - | Software (or a tech service) sold to businesses, stated on the site. |
+| F7 | Local professional services firm | Rules + derived from F5 | - | if open | if open | n/a | No when F5 is Yes | Opposite of F5: a stated scalable product is No. |
+| F8 | Publishes real paid pricing | Rules | - | if open | if open | n/a | - | No pricing page after the full search (links, sitemap, /pricing, /plans) and only 'Contact sales', or no prices and no pricing words anywhere: No. Prices elsewhere: Needs check. |
+| F9 | Payroll on Gusto, Rippling or Deel | Rules + Wappalyzer | DNS | if open | if open | off | - | DNS verification (Rippling, Gusto, Deel) = Yes at medium (account stated, payroll use not); job posts read in full. |
+| F10 | AI is core to the product | Rules | - | if open | if open | n/a | - | The product itself is AI (model, agent, assistant), stated on the site. |
+| F11 | YC or similar accelerator | Rules | YC | if open | if open | n/a | - | YC directory: exact website domain plus a name match; acquired or renamed entries don't count. |
+| F12 | Several open roles | Rules | - | if open | if open | off | after F1 (Yes only) | 3+ open roles from the job-board feed (Ashby, Greenhouse, Lever, Workable, Rippling). Runs only when F1 is Yes (`run_if`); otherwise Not applicable. |
+| F13 | No finance person visible | Rules | - | if open (needs team page) | off | if open | - | Size first. SMB / MM: one Prospeo whole-team search (1 credit): a full list (2-24 people) with no finance title = Yes. Skipped for ENT. Web search off: absence can't be found online. |
+| F14 | Has a finance lead (mid-size and up) | Rules | - | if open (needs team page) | if open | if open | uses F13 | Size first. Skipped for SMB. MM: the same whole-team search (no finance title = No). ENT: Prospeo finance-department search. |
+| F15 | Publishes revenue or growth numbers | Rules | - | if open | if open | n/a | - | Rules read pages and job posts for the company's own ARR, revenue, customer count or growth ('7-figure ARR up 5x'); others' numbers don't count. |
+| F16 | Remote-first or hybrid | Rules | - | if open | if open | n/a | - | Job locations and 'In person' / remote wording. Watch: 'hybrid search' is a technology, not hybrid work. |
+| F17 | Runs several US companies | Rules | - | if open | on clue | n/a | - | Several named entities under one owner; boilerplate 'subsidiaries' doesn't count. |
+| F18 | Early adopter | Rules | - | if open | if open | n/a | - | Product Hunt launch or engineering blog. Gap: blogs loaded by JavaScript aren't read yet. |
+| F19 | Banks with Mercury or Brex | Rules + Wappalyzer | DNS | off | off | off | - | Rules (names in text and code), DNS and Wappalyzer only: an AI reading the same text adds cost, not proof. |
+| F20 | Uses Ramp or Brex cards | Rules + Wappalyzer | DNS | off | off | off | - | Rules, DNS and Wappalyzer only (as F19). |
+| F21 | Cap table in Carta or Pulley | Rules + Wappalyzer | DNS | off | off | off | - | Rules, DNS and Wappalyzer only (as F19; a Carta fingerprint exists). |
+| B1 | Raised money in the last 6 months | Rules | SEC Form D | if open | if open | off | after F1 | Dated round in the last 6 months; SEC Form D date. |
+| B2 | New investor or accelerator | Rules | YC | if open | if open | n/a | after F1 | New investor / accelerator; LinkedIn posts. |
+| B3 | Hiring for several roles | Rules | - | if open | if open | off | - | 3+ open roles (same proof as F12). |
+| B4 | Hiring a finance lead | Rules | - | if open | if open | n/a | - | An open finance role (job board or careers page). |
+| B5 | Hiring ops or chief of staff | Rules | - | if open | if open | n/a | - | An open ops / chief-of-staff role. |
+| B6 | Converted from an LLC to a C-Corp | Rules | Wayback, SEC | if open | if open | n/a | - | SEC Form D previous names (LLC → Inc.). |
+| B7 | Incorporated in the last 12 months | Rules | Wayback | if open | if open | n/a | - | SEC Form D year of incorporation. |
+| B8 | Registered a new subsidiary | Rules | - | if open | on clue | n/a | - | A second entity registered recently. |
+| B9 | Lost or replacing a bookkeeper | Rules | - | if open | on clue | n/a | - | Bookkeeper / fractional CFO change. |
+| B10 | Tax deadline coming up | Rules (calendar) | - | off | off | n/a | uses F3; uses M1 | Calendar rule: confirmed C-Corp + US-based + 0-45 days before Apr 15 or Oct 15 = Yes; otherwise Unknown. A timing flag, the same for every C-Corp. |
+| B11 | Complaining about QuickBooks | Rules | - | if open | on clue | n/a | after F4 | Company or founder complaining about QuickBooks. |
+| B12 | Recently launched paid pricing | Rules | SEC | if open | if open | n/a | after F8 | Pricing or product launch in the last 6 months (blog). |
+| B13 | New board member or investor updates | Rules | - | if open | on clue | n/a | after F1 | Board member or investor updates (LinkedIn posts). |
+| B14 | Preparing for a first audit | Rules | - | if open | on clue | n/a | - | Financial audit or diligence (not SOC 2). |
+| W1 | Serves one local area | Rules + derived from F5 | - | if open | if open | n/a | No when F5 is Yes | The opposite of F5: when F5 (startup selling nationally) is proven Yes, W1 is No for free with F5's proof. Its prompt uses the F5 rule: a stated software product = national; a services firm needs stated customers beyond its city. |
+| W2 | Sells hours of labour, not a product | Rules | - | if open | if open | n/a | - | Billed hours, not a product. |
+| W3 | Physical or single-location business | Rules + derived from F5 | - | if open | if open | n/a | No when F5 is Yes | A venue with hours / menu / storefront. |
+| W4 | LLC or sole owner, no venture funding | Rules + derived from F3 | Wayback | if open | if open | n/a | No when F3 is Yes | LLC and no funding. |
+| W5 | Not making money yet | Rules + derived from M4 | - | if open | if open | n/a | No when M4 is Yes | Waitlist only, no revenue or jobs. |
+| W6 | Needs more than one currency | Rules | - | if open | if open | n/a | - | Non-USD or multi-currency (terms, prices). |
+| W7 | Manufacturing or hardware | Rules | - | if open | if open | n/a | - | Makes physical products. |
+| W8 | Heavy invoicing and bill-paying | Rules | - | if open | if open | n/a | - | Invoicing on net terms vs subscriptions. |
+| W9 | Shopify store without stock | Rules + derived from E6 | - | if open | if open | n/a | No when E6 is Yes | Store platform in code, no stock. |
+| W10 | Already on NetSuite or similar | Rules + derived from F13 | - | if open | if open | off | No when F13 is Yes | NetSuite / QB Enterprise + a finance team. |
+| W11 | Accountant picks the tools | Rules | - | if open | on clue | n/a | - | An outside accountant picks the tools. |
+| W12 | No fintech tools, spreadsheets and a traditional bank | Rules + derived from M3 | - | if open | off | n/a | No when M3 is Yes | No fintech tools at all. |
 
 ## Build status
 

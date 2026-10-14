@@ -97,11 +97,32 @@ async def _ai(store: Store, domains: list[str], phase: str, opts: dict) -> dict:
     return {**usage, "estimate_worst_usd": round(worst, 4), "reused_answers": reused}
 
 
+async def both_phases(store: Store, rows: list[dict], signals: bool, workers: int, refresh: bool) -> None:
+    """Phase 1 then, for a company that passes, phase 2 right away: no company waits for the slowest one of the list.
+    Same checks and results as running the phases one after the other (phase2_signals.select picks the same ones)."""
+    from ..pipeline.common import each_row
+    from ..sources.crawl import Crawler
+    crawler = Crawler(max_requests=200)
+    p1 = phase1_icp.handler(store, Dashboard("", len(rows), "icp"), crawler, refresh)
+    p2 = phase2_signals.handler(store, Dashboard("", len(rows), "signals"), crawler, refresh)
+
+    async def handle(row):
+        r = await p1(row)
+        if signals and r.get("icp_verdict") in phase2_signals.PASSING:
+            await p2({**row, "icp": r})
+        return r
+    await each_row(rows, workers, crawler, handle)
+
+
 async def run_rows(folder: Path, rows: list[dict], signals: bool = True, use_ai: bool = False, web: bool = True,
                    refresh: bool = False, workers: int = 20, on_step=None, ai: dict | None = None) -> Store:
     store = Store(folder)
     step = on_step or (lambda s, **kw: None)
     opts = {**ai_options(ai), "web": web if ai is None else ai_options(ai)["web"]}
+    if not use_ai:  # free steps only: each company goes on to phase 2 as soon as its own phase 1 passes
+        step("phase 1 and 2: ICP check, then signals for each company that passes")
+        await both_phases(store, rows, signals, workers, refresh)
+        return store
     step("phase 1: ICP check")
     await phase1_icp._crawl_and_check(rows, store, Dashboard("", len(rows), "icp"), workers, 200, refresh)
     if use_ai:
@@ -153,6 +174,48 @@ async def check_one(domain: str, company: str = "", employees: str = "", signals
     if step5 is not None:
         out["prospeo"] = step5
     return out
+
+
+MAX_BATCH = 25
+
+
+async def check_many(companies: list, signals: bool = True, use_prospeo: bool = False, wait_seconds: float = 300) -> dict:
+    """Several companies at once (free steps, up to 25): all of them download and run their rules at the same time,
+    each going on to phase 2 as soon as it passes. Items are domains or {domain, company, employees}. Cached like
+    check_one; a company already being checked is waited for, not started twice."""
+    rows, bad = [], []
+    for c in companies:
+        c = {"domain": c} if isinstance(c, str) else dict(c)
+        d = normalize_domain(c.get("domain", ""))
+        if not d:
+            bad.append(c.get("domain", ""))
+        elif d not in {r["domain"] for r in rows}:
+            rows.append({"domain": d, "company": c.get("company", ""), "employees": c.get("employees", ""), "input": {}})
+    if len(rows) > MAX_BATCH:
+        raise ValueError(f"{len(rows)} companies: up to {MAX_BATCH} at a time here. For more, start a list (enrich_list).")
+    folder = LISTS / SINGLE_LIST
+    folder.mkdir(parents=True, exist_ok=True)
+    busy = [r["domain"] for r in rows if _inflight.get(r["domain"]) and not _inflight[r["domain"]].done()]
+    new = [r for r in rows if r["domain"] not in busy]
+    tasks = {_inflight[d] for d in busy}
+    if new:
+        task = asyncio.ensure_future(run_rows(folder, new, signals, False, True, False, workers=len(new)))
+        for r in new:
+            _inflight[r["domain"]] = task
+        tasks.add(task)
+    done, pending = await asyncio.wait({asyncio.shield(x) for x in tasks}, timeout=wait_seconds)
+    if pending:
+        return {"status": "still running", "companies": len(rows),
+                "message": "Still checking; call again in a minute (finished companies are cached)."}
+    store = Store(folder)
+    out = []
+    for r in rows:
+        item = {"status": "done", **findings(store, r["domain"], r["company"], r["employees"])}
+        if use_prospeo:
+            from ..providers import run as prun
+            item["prospeo"] = await asyncio.to_thread(prun.step5_one, folder, store, r["domain"])
+        out.append(item)
+    return {"status": "done", "companies": out, "bad_domains": bad}
 
 
 # ---------------------------------------------------------------------------
