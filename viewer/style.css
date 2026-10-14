@@ -129,3 +129,14 @@ td.sel { outline: 2px solid var(--accent); outline-offset: -2px; background: var
 .cgroup label.item:hover { color: var(--accent); }
 .crow { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1b1b1f; color: #fff; padding: 8px 14px; border-radius: 10px; z-index: 50; }
+
+/* login gate (password-protected static build) */
+#login { position: fixed; inset: 0; z-index: 100; background: var(--soft); display: flex; align-items: center; justify-content: center; padding: 20px; }
+#login[hidden] { display: none; }
+#loginform { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 34px rgba(0,0,0,.12); padding: 28px; width: min(380px, 100%); display: flex; flex-direction: column; gap: 14px; }
+#loginform h1 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+#loginform p { margin: 0; color: var(--muted); }
+#loginform label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
+#loginform input { font-weight: 400; font-size: 15px; padding: 9px 12px; }
+#loginform .tbtn { justify-content: center; padding: 10px; font-weight: 600; }
+#loginerr { color: var(--red); min-height: 18px; font-size: 13px; }

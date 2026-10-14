@@ -4,9 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lead list viewer</title>
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="login" hidden>
+  <form id="loginform" autocomplete="off">
+    <h1>Lead list viewer</h1>
+    <p>Sign in to view the list.</p>
+    <label>Username<input id="loginuser" type="text" autocomplete="username" required></label>
+    <label>Password<input id="loginpass" type="password" autocomplete="current-password" required></label>
+    <div id="loginerr" role="alert"></div>
+    <button class="tbtn primary" id="logingo" type="submit">Open</button>
+  </form>
+</div>
 <div id="app">
   <div class="bar" id="top">
     <span class="brand">Lead list viewer</span>
@@ -14,6 +24,7 @@
     <div class="stats" id="stats"></div>
     <span class="grow"></span>
     <span class="count">Read-only</span>
+    <button class="tbtn" id="lock" hidden title="Lock and forget the login" onclick="location.reload()">&#128274; Lock</button>
   </div>
   <div class="bar" id="tools">
     <div class="seg" id="quick" role="group" aria-label="ICP quick filter"></div>
@@ -44,6 +55,6 @@
     </aside>
   </div>
 </div>
-<script src="/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

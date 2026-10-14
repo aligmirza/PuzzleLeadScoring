@@ -24,4 +24,19 @@ and source link in a side panel.
   confidence for each data point.
 - Text from websites is shown as plain text, never as HTML. Light theme.
 
-Files: `server.py` (data and static files), `index.html` (markup), `style.css` (styles), `app.js` (behaviour).
+## Put it on GitHub Pages behind a password
+
+    .venv/bin/python viewer/build_static.py <list name> --out docs
+
+It asks for a username and password, then writes `docs/` with the page and one encrypted data file
+(AES-256-GCM, key from username + password via PBKDF2, 600,000 rounds). The browser asks for the login and decrypts
+the data on the visitor's machine; nothing readable is ever published. In the repo settings, set Pages to deploy from
+`main` / `docs`.
+
+- The encrypted file is public, so the password is the only protection. Use a long one (12+ characters is enforced).
+- Anyone who knows the login can read the data. To change it or refresh the data, build again and commit `docs/`.
+- Never commit anything but the build output; lists/ stays git-ignored.
+- The "Lock" button forgets the login. The local server (above) needs no login and listens on 127.0.0.1 only.
+
+Files: `server.py` (data and static files), `index.html` (markup), `style.css` (styles), `app.js` (behaviour),
+`build_static.py` (encrypted Pages build).

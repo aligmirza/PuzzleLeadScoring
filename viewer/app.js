@@ -32,10 +32,47 @@ function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
 
 /* ===== loading ===== */
-async function loadLists() {
-  let lists;
-  try { lists = await (await fetch('/api/lists')).json(); }
-  catch (e) { $('gridwrap').replaceChildren(el('div', { class: 'empty' }, el('b', { textContent: 'Cannot reach the viewer server' }), 'Start it with: .venv/bin/python viewer/server.py')); return; }
+/* ===== password-protected static mode (GitHub Pages): data.enc.json is decrypted in the browser ===== */
+const STATIC = window.VIEWER_STATIC || null;
+let VAULT = null;
+const b64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function unlock(user, pass) {
+  let f;
+  try { f = await (await fetch(STATIC.data, { cache: 'no-store' })).json(); }
+  catch (e) { throw new Error('data'); }  // file missing or unreadable: not a wrong login
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(user.normalize('NFC') + '\n' + pass.normalize('NFC')),
+    'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(f.salt), iterations: f.iter, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(f.iv) }, key, b64(f.data));  // throws on a wrong login
+  const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  return JSON.parse(text);
+}
+
+function showLogin() {
+  $('lock').hidden = false;
+  $('login').hidden = false;
+  $('gridwrap').replaceChildren();
+  const form = $('loginform'), err = $('loginerr'), go = $('logingo');
+  $('loginuser').focus();
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    err.textContent = ''; go.disabled = true; go.textContent = 'Checking…';
+    try {
+      VAULT = await unlock($('loginuser').value.trim(), $('loginpass').value);
+      $('loginpass').value = '';
+      $('login').hidden = true;
+      fillLists(VAULT.lists);
+    } catch (x) {
+      err.textContent = x.message === 'data' ? 'Could not load the data file. Try again later.' : 'Wrong username or password.';
+      $('loginpass').select();
+    }
+    go.disabled = false; go.textContent = 'Open';
+  };
+}
+
+function fillLists(lists) {
   const sel = $('list');
   sel.replaceChildren(...lists.map(l => el('option', { value: l.list, textContent: `${l.list}  ·  ${l.state}` })));
   const saved = new URLSearchParams(location.search).get('list') || load('viewer.list');
@@ -44,13 +81,21 @@ async function loadLists() {
   else $('gridwrap').replaceChildren(el('div', { class: 'empty' }, el('b', { textContent: 'No lists yet' }), 'Enrich a list first; it will show up here.'));
 }
 
+async function loadLists() {
+  if (STATIC) { showLogin(); return; }
+  let lists;
+  try { lists = await (await fetch('/api/lists')).json(); }
+  catch (e) { $('gridwrap').replaceChildren(el('div', { class: 'empty' }, el('b', { textContent: 'Cannot reach the viewer server' }), 'Start it with: .venv/bin/python viewer/server.py')); return; }
+  fillLists(lists);
+}
+
 async function loadTable(name) {
   save('viewer.list', name);
   $('gridwrap').replaceChildren(el('div', { class: 'empty', textContent: 'Loading…' }));
   closePanel(); closePops();
   FILTERS = { type: 'g', op: 'and', items: [], on: true }; SORTS = []; QUICK = ''; $('q').value = '';
   let d;
-  try { d = await (await fetch('/api/table?list=' + encodeURIComponent(name))).json(); }
+  try { d = STATIC ? (VAULT.tables[name] || { error: 'List not found' }) : await (await fetch('/api/table?list=' + encodeURIComponent(name))).json(); }
   catch (e) { d = { error: String(e) }; }
   if (d.error) { $('gridwrap').replaceChildren(el('div', { class: 'empty' }, el('b', { textContent: 'Could not open this list' }), d.error)); return; }
   DATA = d;
