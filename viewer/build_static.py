@@ -1,6 +1,6 @@
 """Build a password-protected static copy of the viewer for GitHub Pages.
 
-    .venv/bin/python viewer/build_static.py <list> [<list> ...] [--out docs]
+    .venv/bin/python viewer/build_static.py <list> [<list> ...] [--out docs/viewer]
 
 It asks for a username and password (or reads VIEWER_USER / VIEWER_PASSWORD from the environment), then writes the
 page plus ONE encrypted data file into the output folder. The list data is compressed and encrypted with
@@ -50,7 +50,7 @@ def encrypt(payload: dict, user: str, password: str) -> dict:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("lists", nargs="+", help="list folder names under lists/")
-    ap.add_argument("--out", default=str(HERE.parent / "docs"), help="output folder (default: docs/)")
+    ap.add_argument("--out", default=str(HERE.parent / "docs" / "viewer"), help="output folder (default: docs/viewer/)")
     args = ap.parse_args()
 
     user = (os.environ.get("VIEWER_USER") or input("Username: ")).strip()  # the page trims it too

@@ -26,7 +26,7 @@ and source link in a side panel.
 
 ## Put it on GitHub Pages behind a password
 
-    .venv/bin/python viewer/build_static.py <list name> --out docs
+    .venv/bin/python viewer/build_static.py <list name> --out docs/viewer
 
 It asks for a username and password, then writes `docs/` with the page and one encrypted data file
 (AES-256-GCM, key from username + password via PBKDF2, 600,000 rounds). The browser asks for the login and decrypts
