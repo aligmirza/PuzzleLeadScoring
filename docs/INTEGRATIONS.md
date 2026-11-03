@@ -45,6 +45,7 @@ All keys live in `.env` at the project root, each with a comment saying what it'
 | AI | `ANTHROPIC_API_KEY` | Claude as an alternative AI provider | Not used yet |
 | Clay | `CLAY_WEBHOOK_URL` | Default Clay table to push results to | Used |
 | Clay | `CLAY_WEBHOOK_TOKEN` | That webhook's auth token, if it has one | Used |
+| Clay | `CLAY_CONTACTS_WEBHOOK_URL` | Clay table for contacts (`push_contacts_to_clay`); same token | Used |
 | Clay | `CLAY_API_KEY` | Clay Public API (pull and push work without it, through `clay login`) | Not used yet |
 | Data providers | `PROSPEO_API_KEY` | Prospeo: company data (last layer of the waterfall) and people | Used when set |
 | Data providers | `PROVIDER_MONTHLY_CREDITS` | Cap on provider credits per month | Optional |
@@ -298,6 +299,11 @@ Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring
 | `clay_tables` | Tables in your Clay workspace |
 | `pull_clay_table` | Read a Clay table and run it as a list |
 | `push_list_to_clay` | Send a finished list to a Clay webhook |
+| `push_contacts_to_clay` | Send a list's Prospeo contacts, one row per person with the company's ICP, score and tier, to a Clay contacts table. Uses its own webhook (`webhook_url`, else `CLAY_CONTACTS_WEBHOOK_URL`), never the companies one |
+| `prospeo_status` | Prospeo key, plan, credits left, credits our lists used this month and the monthly cap. Free |
+| `prospeo_companies` | Prospeo company data for a list's companies whose Prospeo-covered data points are still open (1 credit each at most, never twice). Called without a cap it only returns the plan; it runs only with `max_credits` set to a cap you approved |
+| `find_contacts` | Decision-makers at a list's ICP YES companies (founder, CEO, owner first, then finance, then operations); `emails=true` also reveals verified emails (1 credit each); `strong_only` for Strong fit only. Plan first; runs only with an approved `max_credits` |
+| `list_contacts` | The contacts already bought for a list (or one company). Free |
 | `improvement_report` | What the pipeline learned from its runs, as proposals with proof; safe setting changes are applied automatically (tests run, reverted if they fail) |
 | `apply_improvement` | Apply a setting proposal after your yes (tests run, reverted if they fail) |
 | `mark_improvement` | Record a proposal's outcome: done (fixed by hand), rejected, applied or failed |

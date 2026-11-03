@@ -38,6 +38,7 @@ mcp = MCPServer(
         "Each data point follows its own waterfall (config/datapoints): free steps in check_company / enrich_list, then "
         "your answers (pages, then web), then step 5, Prospeo, only for the finance-person check: when submit_answers "
         "says it's next, ask the user (1 credit per company) and only then call check_company with use_prospeo=true. "
+        "Prospeo for a whole list: prospeo_companies (open data points) and find_contacts (decision-makers, optional emails) first return a plan with the most credits they could use; show it, and run only with a max_credits cap the user approved. prospeo_status shows credits left; list_contacts reads contacts already bought; Clay: clay_tables, pull_clay_table, push_list_to_clay (companies) and push_contacts_to_clay (people, its own webhook). "
         "Lists up to about 100 companies: answer in the chat, one company at a time per helper (in Claude Code, the "
         "company-answerer subagent, about 5 in parallel; the /enrich-chat command runs the whole flow). BIGGER LISTS: "
         "don't answer in the chat; offer list_ai, which runs the AI steps with the OpenAI engine: show its estimate "
@@ -180,6 +181,88 @@ async def pull_clay_table(table_id: str, list_name: str = "", limit: int = 0, in
 async def push_list_to_clay(list_name: str, webhook_url: str = "", only_icp: bool = False, icp: str = "") -> dict:
     """Send a finished list's rows to a Clay table webhook (one row per request). Default webhook comes from settings."""
     return await service.push_list(list_name, webhook_url or None, only_icp)
+
+
+@tool()
+async def push_contacts_to_clay(list_name: str, webhook_url: str = "", decision_makers_only: bool = False,
+                                icp: str = "") -> dict:
+    """Send a list's Prospeo contacts (one row per person, with the company's ICP, score and tier) to a Clay contacts
+    table webhook. Uses webhook_url, else CLAY_CONTACTS_WEBHOOK_URL from .env (never the companies webhook)."""
+    return await service.push_contacts(list_name, webhook_url or None, decision_makers_only)
+
+
+def _list_folder(list_name: str):
+    from pathlib import Path
+    from ..pipeline.common import LISTS
+    from ..pipeline.common import list_name as clean
+    folder = LISTS / (clean(Path(list_name)) if list_name.endswith(".csv") else list_name)
+    if not (folder / "input.csv").exists():  # common.list_dir exits the process, which would stop the server
+        raise ValueError(f"No list '{list_name}'. Start it with enrich_list or pull_clay_table.")
+    return folder
+
+
+def _need_prospeo():
+    from ..providers import prospeo
+    if not prospeo.enabled():  # a ValueError, not the CLI's SystemExit, so the server keeps running
+        raise ValueError("PROSPEO_API_KEY is not set. Add it to .env (python -m enrich settings --set PROSPEO_API_KEY=...).")
+
+
+@tool()
+def prospeo_status() -> dict:
+    """Prospeo: is the key set, plan, credits left, credits our lists used this month, and the monthly cap. Free."""
+    from ..providers import run
+    return run.status()
+
+
+@tool()
+async def prospeo_companies(list_name: str, phase: str = "icp", limit: int = 0, max_credits: float = 0,
+                            icp: str = "") -> dict:
+    """Prospeo company data (size, funding, location, team) for a list's companies whose data points Prospeo covers
+    are still open after the free steps and your answers. 1 credit per company at most, never twice for a company.
+    max_credits=0 (default) only returns the plan: which companies and the most it could cost. Show it to the user;
+    run only after they approve, by calling again with max_credits = the approved cap. phase: icp or signals."""
+    import asyncio
+    from ..providers import run
+    folder = _list_folder(list_name)
+    plan = run.company_plan(folder, phase, limit)
+    if max_credits <= 0 or not plan["domains"]:
+        return {"estimate_only": True, **plan, "prospeo": run.status(),
+                "next": "Ask the user to approve a cap, then call again with max_credits." if plan["domains"]
+                        else "Nothing to send: the earlier steps answered what Prospeo covers."}
+    _need_prospeo()
+    return await asyncio.to_thread(run.company_step, folder, phase, limit, True, max_credits)
+
+
+@tool()
+async def find_contacts(list_name: str, emails: bool = False, per_company: int = 3, strong_only: bool = False,
+                        limit: int = 0, max_credits: float = 0, icp: str = "") -> dict:
+    """Decision-makers at a list's ICP YES companies from Prospeo (founder, CEO, owner first, then finance, then COO /
+    operations). 1 credit per company (never twice for a company); emails=true also reveals verified emails, 1 credit
+    each, for the top per_company people. strong_only: Strong fit companies only.
+    max_credits=0 (default) only returns the plan and the most it could cost. Show it to the user; run only after
+    they approve, by calling again with max_credits = the approved cap. Then list_contacts or push_contacts_to_clay."""
+    import asyncio
+    from ..providers import run
+    folder = _list_folder(list_name)
+    plan = run.people_plan(folder, emails, per_company, strong_only, limit)
+    if max_credits <= 0 or not plan["domains"]:
+        return {"estimate_only": True, **plan, "prospeo": run.status(),
+                "next": "Ask the user to approve a cap, then call again with max_credits." if plan["domains"]
+                        else "No ICP company is waiting for contacts (see list_contacts)."}
+    _need_prospeo()
+    return await asyncio.to_thread(run.people_step, folder, emails, per_company, strong_only, limit, True, max_credits)
+
+
+@tool()
+def list_contacts(list_name: str, domain: str = "", decision_makers_only: bool = False, limit: int = 50,
+                  icp: str = "") -> dict:
+    """The contacts Prospeo found for a list (name, title, LinkedIn, email if revealed, with the company's ICP, score
+    and tier), one company with domain=. Free: reads what was already bought. Also written to
+    lists/<list>/output/<list>_contacts.csv."""
+    from ..providers import run
+    from ..core.inputs import normalize_domain
+    rows = run.read_contacts(_list_folder(list_name), normalize_domain(domain) if domain else "", decision_makers_only)
+    return {"count": len(rows), "rows": [{k: v for k, v in r.items() if v} for r in rows[: limit or None]]}
 
 
 @tool()

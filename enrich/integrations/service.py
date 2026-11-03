@@ -360,6 +360,20 @@ async def push_list(name: str, webhook_url: str | None = None, only_icp: bool = 
     return await clay.push_rows(list_results(name, only_icp), webhook_url)
 
 
+async def push_contacts(name: str, webhook_url: str | None = None, decision_makers_only: bool = False) -> dict:
+    """One row per Prospeo contact to a Clay contacts table. Its own webhook: a contacts table is not the companies table."""
+    import os
+    from ..providers import run
+    url = webhook_url or os.environ.get("CLAY_CONTACTS_WEBHOOK_URL")
+    if not url:
+        raise RuntimeError("No Clay webhook for contacts. Pass webhook_url (the contacts table's webhook), or set "
+                           "CLAY_CONTACTS_WEBHOOK_URL in .env.")
+    rows = run.read_contacts(LISTS / list_name(Path(name)), decision_makers_only=decision_makers_only)
+    if not rows:
+        return {"sent": 0, "failed": 0, "errors": [], "note": "No contacts yet: run find_contacts first."}
+    return await clay.push_rows(rows, url)
+
+
 def start_from_clay(table_id: str, name: str | None = None, limit: int = 0, **options) -> dict:
     rows, info = clay.pull_table(table_id, limit)
     if not rows:

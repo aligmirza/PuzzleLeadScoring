@@ -93,6 +93,28 @@ def _balance() -> str:
         return f"Prospeo balance unknown ({e})"
 
 
+def status() -> dict:
+    """Prospeo key, plan and credits left, credits used this month by our lists, and the monthly cap. Free."""
+    cap = os.environ.get("PROVIDER_MONTHLY_CREDITS", "").strip()
+    out = {"key_set": prospeo.enabled(), "credits_used_this_month": _credits_this_month(),
+           "monthly_cap": float(cap) if cap.replace(".", "", 1).isdigit() else None}
+    if out["key_set"]:
+        try:
+            a = prospeo.account()
+            out.update(plan=a.get("current_plan"), credits_left=a.get("remaining_credits"))
+        except prospeo.ProspeoError as e:
+            out["balance_error"] = str(e)
+    return out
+
+
+def read_contacts(folder: Path, domain: str = "", decision_makers_only: bool = False) -> list[dict]:
+    """The contacts file (rewritten first, so it is current), optionally one company or decision-makers only."""
+    path = write_contacts(folder, Store(folder))
+    with open(path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    return [r for r in rows if (not domain or r["Domain"] == domain) and (not decision_makers_only or r["Decision maker"])]
+
+
 def _rewrite(folder: Path, store: Store, rows: list[dict], domains: set[str]) -> None:
     from ..pipeline import phase1_icp, phase2_signals
     for row in rows:
@@ -132,16 +154,29 @@ async def _run_many(fn, items, workers: int = 4):
     return await asyncio.gather(*(one(x) for x in items), return_exceptions=True)
 
 
-def company_step(folder: Path, phase: str, limit: int = 0, assume_yes: bool = False, max_credits: float | None = None) -> dict:
+def _need_key() -> None:
     if not prospeo.enabled():
         raise SystemExit("Set PROSPEO_API_KEY first: python -m enrich settings --set PROSPEO_API_KEY=...")
+
+
+def company_plan(folder: Path, phase: str, limit: int = 0) -> dict:
+    """Which companies the company step would send to Prospeo, and the most it could cost. Spends nothing."""
     store = Store(folder)
     rows, _ = load_leads(folder / "input.csv")
     domains = pick_company(store, rows, phase)[: limit or None]
+    return {"domains": domains, "credits_at_most": len(domains), "covers": [SIGNALS[s][1] for s in COVERS[phase]]}
+
+
+def company_step(folder: Path, phase: str, limit: int = 0, assume_yes: bool = False, max_credits: float | None = None) -> dict:
+    _need_key()
+    store = Store(folder)
+    rows, _ = load_leads(folder / "input.csv")
+    plan = company_plan(folder, phase, limit)
+    domains = plan["domains"]
     if not domains:
         console.print("No company needs provider data: the earlier layers answered what Prospeo covers.")
         return {"companies": 0, "credits": 0}
-    covered = ", ".join(SIGNALS[s][1] for s in COVERS[phase])
+    covered = ", ".join(plan["covers"])
     refused = _refuse(len(domains), max_credits, "Use a limit or raise max_credits.")
     if refused:
         return refused
@@ -277,18 +312,27 @@ def people_record(chosen: list[dict], people: list[dict], search: str = "whole t
             "team": [{k: p.get(k) for k in ("name", "title", "linkedin", "location", "person_id")} for p in people]}
 
 
-def people_step(folder: Path, emails: bool = False, per_company: int = 3, strong_only: bool = False,
-                limit: int = 0, assume_yes: bool = False, max_credits: float | None = None) -> dict:
-    if not prospeo.enabled():
-        raise SystemExit("Set PROSPEO_API_KEY first: python -m enrich settings --set PROSPEO_API_KEY=...")
+def people_plan(folder: Path, emails: bool = False, per_company: int = 3, strong_only: bool = False,
+                limit: int = 0) -> dict:
+    """Which ICP companies the people step would search, and the most it could cost. Spends nothing."""
     store = Store(folder)
     rows, _ = load_leads(folder / "input.csv")
-    out_rows = final.read_rows(folder)
-    keep = {r["_domain"] for r in out_rows if r.get("ICP") == "YES"
+    keep = {r["_domain"] for r in final.read_rows(folder) if r.get("ICP") == "YES"
             and (not strong_only or (r.get("Lead tier") or "").startswith("Strong"))}
     candidates = [d for d in dict.fromkeys(r["domain"] for r in rows) if d in keep and finance_open(store, d)]
     used = [d for d in candidates if has_prospeo(store, d)]  # already spent their 1 credit: never a second one
     domains = [d for d in candidates if d not in used][: limit or None]
+    return {"domains": domains, "already_have_prospeo": used,
+            "credits_at_most": len(domains) + (len(domains) * per_company if emails else 0)}
+
+
+def people_step(folder: Path, emails: bool = False, per_company: int = 3, strong_only: bool = False,
+                limit: int = 0, assume_yes: bool = False, max_credits: float | None = None) -> dict:
+    _need_key()
+    store = Store(folder)
+    rows, _ = load_leads(folder / "input.csv")
+    plan = people_plan(folder, emails, per_company, strong_only, limit)
+    domains, used = plan["domains"], plan["already_have_prospeo"]
     if used:
         console.print(f"[dim]{len(used)} companies already have Prospeo data (their one credit is used); "
                       f"their contacts are in the contacts file.[/]")
@@ -296,8 +340,7 @@ def people_step(folder: Path, emails: bool = False, per_company: int = 3, strong
         console.print("No ICP company is waiting for contacts.")
         write_contacts(folder, store)
         return {"companies": 0, "credits": 0}
-    most = len(domains) + (len(domains) * per_company if emails else 0)
-    refused = _refuse(most, max_credits, "Use a limit, fewer contacts, or raise max_credits.")
+    refused = _refuse(plan["credits_at_most"], max_credits, "Use a limit, fewer contacts, or raise max_credits.")
     if refused:
         return refused
     if not _confirm(f"[bold]Prospeo people[/] for {len(domains)} ICP companies{' (Strong fit only)' if strong_only else ''}: "
