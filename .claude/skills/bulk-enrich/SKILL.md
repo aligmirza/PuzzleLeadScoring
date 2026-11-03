@@ -5,6 +5,8 @@ description: Enrich big lead lists (over ~100 up to thousands of companies) with
 
 # Big lists (over ~100 companies)
 
+Pipeline: **services** is the default ICP. Use `icp="product"` on every call only when the user asks for the product (platform) ICP, and keep the same `icp` for all calls on a list.
+
 Up to ~100 companies, use `/enrich-chat` (Claude answers in chat, $0 API). Above that, Claude can't answer tens of
 thousands of questions in a chat, so the AI steps run on the OpenAI engine, only with the user's approved cap.
 

@@ -17,12 +17,16 @@ from . import client_ai, service  # noqa: E402
 from ..checks.rules import SIGNALS, VALUE_NAMES  # noqa: E402
 from ..core.store import Store  # noqa: E402
 
+from ..core import icp as pipelines  # noqa: E402
 from ..core import learning  # noqa: E402
 
 mcp = MCPServer(
     name="puzzle-lead-scoring",
     instructions=(
-        "Checks companies against Puzzle's ideal customer profile (ICP) and scores them. Work as an experienced GTM "
+        "Checks companies against Puzzle's ideal customer profile (ICP) and scores them. There are two ICP pipelines: "
+        "'services' (the default: operators who want the bookkeeping done for them) and 'product' (early-stage startups "
+        "for the platform). Every list or company tool takes icp='services' or icp='product'; use product only when the "
+        "user asks for it, and keep the same icp for all calls on a list. Work as an experienced GTM "
         "engineer who owns this lead scoring pipeline: run it, judge the evidence the way the prompts ask, and keep "
         "improving it. After each company or list, say in a few lines what you noticed (data points that keep coming "
         "back Unknown, suspicious matches, costs) and call improvement_report: tell the user what was applied "
@@ -61,11 +65,14 @@ def tool():
     import inspect
 
     def wrap(fn):
+        # icp: the ICP pipeline for this call ("services" by default, or "product"); results and files are kept per
+        # pipeline, and work started in the background keeps the pipeline it was started with
         if inspect.iscoroutinefunction(fn):
             @functools.wraps(fn)
             async def run(*a, **k):
                 try:
-                    return await fn(*a, **k)
+                    with pipelines.use(k.pop("icp", "") or None):
+                        return await fn(*a, **k)
                 except Exception as e:
                     learning.error(f"mcp {fn.__name__}", e, domain=k.get("domain", ""))
                     raise
@@ -73,7 +80,8 @@ def tool():
             @functools.wraps(fn)
             def run(*a, **k):
                 try:
-                    return fn(*a, **k)
+                    with pipelines.use(k.pop("icp", "") or None):
+                        return fn(*a, **k)
                 except Exception as e:
                     learning.error(f"mcp {fn.__name__}", e, domain=k.get("domain", ""))
                     raise
@@ -83,7 +91,7 @@ def tool():
 
 @tool()
 async def check_company(domain: str, company: str = "", employees: str = "", include_signals: bool = True,
-                        use_prospeo: bool = False) -> dict:
+                        use_prospeo: bool = False, icp: str = "") -> dict:
     """Check one company against the ICP: the free waterfall steps (size, website rules and code checks, YC, SEC,
     IRS, DNS). Example: domain='linear.app'. No OpenAI: questions still open are answered by you via open_questions
     and submit_answers. use_prospeo=true (only after the user agrees: 1 Prospeo credit at most) runs step 5, the
@@ -93,7 +101,7 @@ async def check_company(domain: str, company: str = "", employees: str = "", inc
 
 
 @tool()
-async def check_companies(domains: list[str], include_signals: bool = True, use_prospeo: bool = False) -> dict:
+async def check_companies(domains: list[str], include_signals: bool = True, use_prospeo: bool = False, icp: str = "") -> dict:
     """Check several companies at once (up to 25): their free waterfall steps run at the same time, so 10 companies
     take about as long as the slowest one, not ten times one. Example: domains=['linear.app', 'resend.com'].
     Then answer each company's open questions (open_questions / submit_answers; in Claude Code one company-answerer
@@ -104,7 +112,7 @@ async def check_companies(domains: list[str], include_signals: bool = True, use_
 
 @tool()
 async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool = True, push_to_clay: bool = False,
-                      use_prospeo: bool = False) -> dict:
+                      use_prospeo: bool = False, icp: str = "") -> dict:
     """Start enriching a CSV file of companies (needs a Domain or Website column) with the free waterfall steps.
     Runs in the background; check progress with list_status, then answer open questions (questions_overview).
     push_to_clay sends the results to the Clay webhook in settings when done. use_prospeo=true (only after the user
@@ -118,13 +126,13 @@ async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool 
 
 
 @tool()
-def list_status(list_name: str) -> dict:
+def list_status(list_name: str, icp: str = "") -> dict:
     """Progress and summary of a list: state, current step, ICP YES / NO / PENDING counts, Strong fit count."""
     return service.list_status(list_name)
 
 
 @tool()
-def list_results(list_name: str, only_icp: bool = True, limit: int = 25) -> dict:
+def list_results(list_name: str, only_icp: bool = True, limit: int = 25, icp: str = "") -> dict:
     """Rows of a finished list with ICP, lead score, tier and signals found. only_icp=True returns ICP = YES only."""
     keep = ("Domain", "Company Name", "Company", "ICP", "ICP status", "Why", "Lead score", "Lead tier", "Segment",
             "Vertical", "Fit signals found", "Buying signals found", "Weak fit signals found", "Funding stage",
@@ -134,7 +142,7 @@ def list_results(list_name: str, only_icp: bool = True, limit: int = 25) -> dict
 
 
 @tool()
-def explain_company(domain: str, list_name: str = service.SINGLE_LIST) -> dict:
+def explain_company(domain: str, list_name: str = service.SINGLE_LIST, icp: str = "") -> dict:
     """Every answer for one company with its proof (quote and page link), for phase 1 and phase 2."""
     from ..pipeline.common import LISTS
     from ..core.inputs import normalize_domain
@@ -162,21 +170,21 @@ def clay_tables() -> dict:
 
 @tool()
 async def pull_clay_table(table_id: str, list_name: str = "", limit: int = 0, include_signals: bool = True,
-                          push_to_clay: bool = False) -> dict:
+                          push_to_clay: bool = False, icp: str = "") -> dict:
     """Read a Clay table (id like t_abc123) and enrich it as a new list in the background."""
     return service.start_from_clay(table_id, list_name or None, limit, signals=include_signals, use_ai=False,
                                    web=True, push_to_clay=push_to_clay)
 
 
 @tool()
-async def push_list_to_clay(list_name: str, webhook_url: str = "", only_icp: bool = False) -> dict:
+async def push_list_to_clay(list_name: str, webhook_url: str = "", only_icp: bool = False, icp: str = "") -> dict:
     """Send a finished list's rows to a Clay table webhook (one row per request). Default webhook comes from settings."""
     return await service.push_list(list_name, webhook_url or None, only_icp)
 
 
 @tool()
 def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 12,
-                   all_questions: bool = False) -> dict:
+                   all_questions: bool = False, icp: str = "") -> dict:
     """The questions the free layers left open for a company, for YOU to answer (not OpenAI): the company's page text,
     each question's instructions and its answer fields, and whether to answer from the pages or the web.
     phase: auto (default), icp or signals. Answer them, then call submit_answers. Most valuable questions come
@@ -185,7 +193,7 @@ def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str
 
 
 @tool()
-def submit_answers(domain: str, answers: list[dict], list_name: str = service.SINGLE_LIST, phase: str = "auto") -> dict:
+def submit_answers(domain: str, answers: list[dict], list_name: str = service.SINGLE_LIST, phase: str = "auto", icp: str = "") -> dict:
     """Save your answers to open_questions. Each answer: {"id": <question id>, "answer_from": "pages" or "web", plus the
     answer fields (answer, confidence, evidence_quote, source, reason, and for web: entity_match)}. They pass the same
     quality checks as any AI answer; the result says which counted, the new ICP verdict and score, and what's next.
@@ -195,7 +203,7 @@ def submit_answers(domain: str, answers: list[dict], list_name: str = service.SI
 
 
 @tool()
-async def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "") -> dict:
+async def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "", icp: str = "") -> dict:
     """BIG LISTS ONLY (more than about 100 companies): the AI steps (pages, then web) for a whole list with the OpenAI
     engine, in the background, with the same prompts and checks. Up to about 100 companies answer the questions
     yourself instead (open_questions, one company per helper). max_cost_usd=0 (default) only returns the cost estimate: show it to the user. Run it only after
@@ -216,7 +224,7 @@ async def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, m
 
 
 @tool()
-def questions_overview(list_name: str) -> dict:
+def questions_overview(list_name: str, icp: str = "") -> dict:
     """For a whole list: open questions per company (phase 1 and phase 2) and work_order: the companies to answer,
     best leads first (ICP YES, then by current score)."""
     return client_ai.overview(list_name)
@@ -227,14 +235,14 @@ from . import dp_test  # noqa: E402
 
 
 @tool()
-def dp_test_setup(source_list: str = "mcp_test", test_list: str = "dp_test", reset: bool = False) -> dict:
+def dp_test_setup(source_list: str = "mcp_test", test_list: str = "dp_test", reset: bool = False, icp: str = "") -> dict:
     """TEST MODE. Copy a finished list into an isolated test list (name must start with dp_test), without AI answers.
     The source list is opened read-only and never changed."""
     return dp_test.setup(source_list, test_list, reset)
 
 
 @tool()
-def dp_test_run(domain: str, data_point: str, test_list: str = "dp_test", confirm_next: bool = False) -> dict:
+def dp_test_run(domain: str, data_point: str, test_list: str = "dp_test", confirm_next: bool = False, icp: str = "") -> dict:
     """TEST MODE. Run ONE data point (ID like E1 or its name) for ONE company through its own waterfall and return
     every stage: executed / skipped / waiting, source, evidence, output, confidence, why the next stage was or wasn't
     triggered, actual and estimated cost, the final answer, and the next question if an AI stage is waiting.
@@ -245,7 +253,7 @@ def dp_test_run(domain: str, data_point: str, test_list: str = "dp_test", confir
 
 
 @tool()
-def dp_test_answer(domain: str, data_point: str, answer: dict, test_list: str = "dp_test") -> dict:
+def dp_test_answer(domain: str, data_point: str, answer: dict, test_list: str = "dp_test", icp: str = "") -> dict:
     """TEST MODE. Save YOUR answer for the stage dp_test_run says is next (answer_from 'pages' or 'web', plus the
     answer fields). Same quality checks as production; saved to the test list only, never the shared cache."""
     return dp_test.answer(domain, data_point, answer, test_list)
@@ -253,19 +261,19 @@ def dp_test_answer(domain: str, data_point: str, answer: dict, test_list: str = 
 
 @tool()
 def dp_test_record(action: str, expected_value: str = "", notes: str = "", reference: str = "", domain: str = "",
-                   data_point: str = "", test_list: str = "dp_test") -> dict:
+                   data_point: str = "", test_list: str = "dp_test", icp: str = "") -> dict:
     """TEST MODE. The user's review of the data point under test; call it only with the action THE USER chose.
     approve | reject | correct (expected_value required, notes optional) | partially_correct | insufficient_evidence |
     conflicting_evidence: logged, then ask "Ready to move to the next data point?" and wait.
     investigate: returns more evidence and how the result was produced; stays on this data point.
     retry: re-runs only this data point (its test answers cleared); stays on it.  stop: ends the session.
-    domain and data_point default to the current one; progress across the 57 data points comes back every time."""
+    domain and data_point default to the current one; progress across the pipeline's data points comes back every time."""
     return dp_test.review(domain, data_point, action, expected_value, notes, reference, test_list)
 
 
 @tool()
-def dp_test_summary(test_list: str = "dp_test") -> dict:
-    """TEST MODE. Progress across the 57 data points (tested, reviewed, approved, rejected, corrected, needing
+def dp_test_summary(test_list: str = "dp_test", icp: str = "") -> dict:
+    """TEST MODE. Progress across the pipeline's data points (tested, reviewed, approved, rejected, corrected, needing
     investigation, retries, current, remaining) and totals from the review log."""
     return dp_test.summary(test_list)
 

@@ -7,7 +7,7 @@ Each data point is answered in up to two steps:
                           or only low confidence, or straight away for "primary" web data points.
 
 Step 1 message layout (so a company's page text can be cached and reused across its prompts):
-  system          shared role, ICP summary, ground rules
+  system          shared role, ground rules (no ICP description: questions ask for facts)
   context         company, domain, today, facts known from code, page texts   <- same for every prompt of a company
   instruction     the data point's sections and output schema                  <- changes per prompt
 """
@@ -85,7 +85,8 @@ def system_text() -> str:
     s = load()[0]["system"]
     rules = "\n".join(f"- {r}" for r in s["ground_rules"])
     conf = "\n".join(f"- {k}: {v}" for k, v in s["confidence_scale"].items())
-    return f"{s['role']}\n\nAbout the ideal customer:\n{s['icp_summary']}\n\nRules:\n{rules}\n\nConfidence:\n{conf}"
+    # no ICP description: the questions ask for facts, so an answer means the same for every ICP pipeline
+    return f"{s['role']}\n\nRules:\n{rules}\n\nConfidence:\n{conf}"
 
 
 def context_text(company: str, domain: str, known_facts: dict, context: dict, today: str | None = None) -> str:

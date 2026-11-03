@@ -61,7 +61,6 @@ def resolve(store, row: dict, record: dict, phase: str) -> dict:
     return result
 
 
-from ..checks.datapoints import OPPOSITES  # noqa: E402  (defined with the conditional runs)
 
 
 def close_skipped(store, domain: str, phase: str, result: dict) -> None:
@@ -80,7 +79,8 @@ def close_skipped(store, domain: str, phase: str, result: dict) -> None:
 def derive(result: dict) -> None:
     """Settle a data point from its opposite's proven Yes (no AI call). Only fills what is still open."""
     s = result.get("signals") or {}
-    for sid, other in OPPOSITES.items():
+    from ..checks.datapoints import opposites
+    for sid, other in opposites().items():
         o = s.get(other) or {}
         if o.get("value") == "yes" and s.get(sid, {}).get("value") in ("unknown", "check"):
             from ..checks.rules import NO, SIGNALS, sig

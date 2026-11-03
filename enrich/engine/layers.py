@@ -25,9 +25,10 @@ ORDER = [RULES, DIRECTORIES, AI_PAGES, AI_WEB, PROVIDER]
 
 # which data points each layer can answer at all (code support); settings outside this have no effect
 DIRECTORY_COVERS = {"M1", "M3", "E1", "E2", "E4", "E5", "F1", "F2", "F3", "F4", "F9", "F11", "F19", "F20", "F21",
-                    "B1", "B2", "B6", "B7", "B12", "W4"}  # M3, F2, F4, F9, F19-F21 from the DNS check
+                    "B1", "B2", "B6", "B7", "B12", "W4", "S7", "S8"}  # M3, F2, F4, F9, F19-F21 from the DNS check;
+# S7, S8 from the YC team size
 PROVIDER_COVERS = {"M1", "M3", "M4", "E1", "E4", "E5", "F1", "F2", "F4", "F9", "F12", "F13", "F14", "F19", "F20",
-                   "F21", "B1", "B3", "W10"}
+                   "F21", "B1", "B3", "W10", "S7", "S8"}  # S7, S8 from a headcount already bought (never bought for them)
 
 
 def covers(layer: Layer, sid: str) -> bool:

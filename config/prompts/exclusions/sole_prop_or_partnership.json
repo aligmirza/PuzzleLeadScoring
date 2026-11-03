@@ -1,0 +1,102 @@
+{
+  "id": "exclusions/sole_prop_or_partnership",
+  "data_point": "Sole proprietorship or partnership",
+  "group": "Exclusion",
+  "signal_id": "S1",
+  "profile_section": "exclusions",
+  "weight": "hard stop (services)",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "The rules found no corporation or LLC on record.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "terms",
+      "legal",
+      "privacy"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company itself is a sole proprietorship or a partnership (general, limited or limited liability partnership).",
+    "definition": "Exclusions need positive evidence. Sole proprietorships and partnerships can't be served today (services ICP). A company that is a corporation (Inc., Corp., PBC) or an LLC is not one.",
+    "yes_when": [
+      "The company states it is a sole proprietorship or a partnership",
+      "Its own legal name ends in LLP, LP or 'General Partnership'"
+    ],
+    "no_when": [
+      "Its legal name or terms show a corporation (Inc., Corp., PBC) or an LLC"
+    ],
+    "unknown_when": [
+      "Only a person's name or a trade name is shown, with no entity type"
+    ],
+    "watch_out_for": [
+      "Terms that talk about customers ('if you are a sole proprietor...') are about the customer, not the company",
+      "Law and accounting firms named 'Partners' may still be LLCs or corporations: answer from the stated entity, not the brand",
+      "'Partner' in 'our partners' or 'partner program' is not a partnership"
+    ],
+    "where_to_look": [
+      "Footer legal name",
+      "Terms of service ('We are ...')",
+      "Privacy policy (the data controller)"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" {domain} LLP OR \"limited partnership\" OR \"sole proprietor\"",
+      "\"{legal_name}\" entity type"
+    ],
+    "good_sources": [
+      "state business registries (Secretary of State)",
+      "OpenCorporates",
+      "company website"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": []
+}

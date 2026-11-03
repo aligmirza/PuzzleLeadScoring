@@ -60,7 +60,8 @@ def run(csv_path: Path, label: str, workers: int = 50, limit: int = 0) -> dict:
         icp, sig = store.get_result(d, "icp") or {}, store.get_result(d, "signals") or {}
         answers[d] = {"icp": icp.get("icp_verdict"),
                       "signals": {k: v["value"] for k, v in {**icp.get("signals", {}), **sig.get("signals", {})}.items()}}
-    out = {"label": label, "companies": len(rows), "workers": workers, "wall_s": round(wall, 1),
+    from ..core import icp
+    out = {"label": label, "pipeline": icp.name(), "companies": len(rows), "workers": workers, "wall_s": round(wall, 1),
            "loop_blocked_s": round(lag["total"], 1), "loop_blocked_worst_s": round(lag["worst"], 2),
            "stages": timing.summary(), "answers": answers}
     _out(label).parent.mkdir(parents=True, exist_ok=True)

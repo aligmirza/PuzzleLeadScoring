@@ -2,12 +2,6 @@
   "id": "B13",
   "name": "New board member or investor updates",
   "group": "buying",
-  "run_if": {
-    "F1": [
-      "yes",
-      "unknown"
-    ]
-  },
   "steps": {
     "rules": {
       "on": true

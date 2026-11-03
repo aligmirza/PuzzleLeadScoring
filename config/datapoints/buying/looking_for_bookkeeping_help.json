@@ -1,0 +1,29 @@
+{
+  "id": "S4",
+  "name": "Looking for bookkeeping help",
+  "group": "buying",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "buying/looking_for_bookkeeping_help"
+    },
+    "ai_web": {
+      "run": "if_clue",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": false
+  }
+}

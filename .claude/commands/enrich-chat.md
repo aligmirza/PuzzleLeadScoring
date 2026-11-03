@@ -5,6 +5,8 @@ argument-hint: <path/to/list.csv> [list_name]
 
 Enrich this list with the puzzle-lead-scoring MCP server, Claude answering the AI steps: $ARGUMENTS
 
+Pipeline: services (the default). If I wrote `product` in the arguments, pass `icp="product"` to every tool call and to every company-answerer; otherwise pass `icp="services"`.
+
 1. Call `enrich_list` with the CSV path (and the list name if given). Then call `list_status` every 30 seconds until
    the state is `done`. Tell me how many companies and the ICP YES / NO / PENDING counts.
 2. Call `questions_overview(list_name)`. If more than 100 companies have open questions, stop and suggest `list_ai`

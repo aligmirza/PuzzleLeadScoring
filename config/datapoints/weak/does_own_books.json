@@ -1,0 +1,29 @@
+{
+  "id": "S5",
+  "name": "Does its own books (DIY)",
+  "group": "weak",
+  "steps": {
+    "rules": {
+      "on": true
+    },
+    "directories": {
+      "on": false
+    },
+    "ai_pages": {
+      "run": "if_open",
+      "prompt": "weak/does_own_books"
+    },
+    "ai_web": {
+      "run": "if_clue",
+      "when_site_unreached": false
+    },
+    "provider": {
+      "run": "off",
+      "provider": "prospeo"
+    }
+  },
+  "covers": {
+    "directories": false,
+    "provider": false
+  }
+}

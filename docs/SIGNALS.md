@@ -14,7 +14,7 @@ This is the reference for individual checks. How the checks fit into the pipelin
 **Where each part lives:**
 - the code rules: [enrich/checks/rules.py](../enrich/checks/rules.py)
 - the AI prompt for each data point: [config/prompts/](../config/prompts/), one JSON file each
-- the points per signal: [config/scoring.json](../config/scoring.json)
+- the points per signal: [config/scoring.json](../config/icps/product/scoring.json)
 
 The short codes in this file (M1, E3, F12...) are only used here and in the code, to match each signal to its rule. Output files and the terminal use plain names.
 
@@ -105,6 +105,14 @@ Each signal below lists:
 | W10 | Already on NetSuite or similar with a full finance team | Weak | | Code, Paid data | competitors |
 | W11 | An outside accountant picks their tools | Weak | | Search | |
 | W12 | No fintech tools at all | Weak | | Code | |
+| S1 | Sole proprietorship or partnership | Services hard stop | | Code, AI read, Search | |
+| S2 | Marketplace | Services hard stop | | Code, AI read | |
+| S3 | Books behind or messy | Services buying | High | Code (job posts), Search on a clue | |
+| S4 | Looking for bookkeeping help | Services buying | High | Code (job posts), Search on a clue | |
+| S5 | Does its own books (DIY) | Services weak | | Code, AI read, Search on a clue | |
+| S6 | Series D or later, or public | Services hard stop | | Code (from E1's proof), AI read, Search | |
+| S7 | 100 or more people | Services hard stop | | List count, Prospeo, YC | |
+| S8 | 50 to 99 people | Services weak | | List count, Prospeo, YC | |
 
 ---
 
@@ -538,7 +546,7 @@ Includes seed extensions, bridge rounds and SAFEs, not only priced rounds.
 
 These lower the score but **never disqualify**. A company with several of these is still a valid lead, just a lower priority one that suits self-serve rather than sales outreach.
 
-Each weak signal answered Yes takes away **2 points**. Change this in [config/scoring.json](../config/scoring.json) (`weak_signal_points`).
+Each weak signal answered Yes takes away **2 points**. Change this in [config/scoring.json](../config/icps/product/scoring.json) (`weak_signal_points`).
 
 ### Small-business markers
 
@@ -627,6 +635,25 @@ Digital goods, print-on-demand or dropshipping.
 
 ---
 
+## 5. Services facts (S1–S8)
+
+Added for the services ICP (October 2026). In the services pipeline they decide the verdict or the score: S1, S2,
+S6 and S7 are hard stops, S3 and S4 score up (high), S5 and S8 score down. In the product pipeline they are
+**info**: found by the free steps and shown, never scored and never asked about. E1 (Series C or later) is info in
+services, where S6 (Series D or later) replaces it, since founders up to Series C are in.
+
+- **S1 Sole proprietorship or partnership:** only the company's statement about itself, or its legal name. "If you
+  are a sole proprietor…" in terms of service is about the customer.
+- **S2 Marketplace:** the company has to say it *is* one. "Available on the AWS Marketplace", an integrations
+  marketplace, or a tool *for* marketplaces don't count.
+- **S3 Books behind or messy** and **S4 Looking for bookkeeping help:** rarely public; mostly found in the company's
+  own finance and bookkeeping job posts. The web search runs only on a clue.
+- **S5 Does its own books (DIY):** a statement that they do their own books, or a founder who is an accountant
+  keeping them. Being an AI company is not DIY.
+- **S6 Series D or later, or public:** from what E1's proof names; its own AI question otherwise.
+- **S7 100 or more people** and **S8 50 to 99 people:** from the list's employee count (lower band on a range),
+  a Prospeo headcount already bought, or the YC team size. No AI question.
+
 ## Waterfall per data point
 
 Each data point runs its own waterfall, cheapest first, and stops at the first step that proves it (Yes or No). The
@@ -667,12 +694,12 @@ decided in the MCP review of each data point.
   the web search runs only when the rules flagged something (Needs check) or the page answer saw an unproven yes/no.
   A clean "unknown" from the pages ends there. In the manual review all seven came back Unknown after a paid search.
 - **Opposite data points are settled for free:** when one is proven Yes, its opposite is No without an AI call,
-  with that proof (`OPPOSITES` in `checks/datapoints.py`). The opposite waits while the other still has a question.
+  with that proof (`opposites` in `config/icps/<pipeline>/roles.json`). The opposite waits while the other still has a question.
   F5 selling nationally → W1 one local area, W3 single location, F7 local services firm; M4 transactions → W5 not
   making money; F3 Delaware C-Corp → W4 LLC; F13 no finance person → W10 NetSuite with a finance team; M3 fintech
   tool → W12 no fintech tools; E6 holds stock → W9 store without stock. Not opposites: W2 and W7 (a national
   services firm can bill hours, a national startup can make hardware).
-- **Conditional runs between data points (`run_if` in a data point's file):** a data point's paid steps (AI pages,
+- **Conditional runs between data points (`run_if` in `config/icps/<pipeline>/roles.json`):** a data point's paid steps (AI pages,
   AI web, Prospeo) run only when each parent's answer is one it runs on. While a parent still has a question waiting,
   the child waits (asked in the next round); once the parent is final with another value, the child shows **Not
   applicable** with the reason and costs nothing. Proof the free steps already found is kept. Built links:
@@ -694,9 +721,9 @@ decided in the MCP review of each data point.
 - **Through MCP, best leads first:** `questions_overview` returns a `work_order` (ICP YES, then highest score), and
   the `company-answerer` helper runs on Haiku to use less of the Claude plan.
 
-**How data points depend on each other.** Thick lines are conditional runs (`run_if` in the child's file): the
+**How data points depend on each other.** Thick lines are conditional runs (`run_if` in the pipeline's `roles.json`): the
 child waits while its parent still has a question, and is **Not applicable** (no paid step) when the parent ends on a
-value it doesn't run on. Thin lines are opposites (`OPPOSITES` in `checks/datapoints.py`): a proven Yes makes the other
+value it doesn't run on. Thin lines are opposites (`opposites` in `config/icps/<pipeline>/roles.json`): a proven Yes makes the other
 No for free. Dotted lines feed an answer in. The same map is in the "Depends on" column of the table below.
 
 ```mermaid
@@ -820,6 +847,14 @@ verification records, SPF senders, email provider).
 | W10 | Already on NetSuite or similar | Rules + derived from F13 | - | if open | if open | off | No when F13 is Yes | NetSuite / QB Enterprise + a finance team. |
 | W11 | Accountant picks the tools | Rules | - | if open | on clue | n/a | - | An outside accountant picks the tools. |
 | W12 | No fintech tools, spreadsheets and a traditional bank | Rules + derived from M3 | - | if open | off | n/a | No when M3 is Yes | No fintech tools at all. |
+| S1 | Sole proprietorship or partnership | Rules | - | if open | if open | n/a | services: after M1–M4 | A self-statement ("X is a general partnership") or a legal name ending in LLP or LP. Terms about customers ("if you are a sole proprietor") don't count. The No is free: a corporation or LLC on record, or a legal name ending in Inc., Corp., PBC or LLC (reviewed on argon-ai.com). |
+| S2 | Marketplace | Rules | - | if open | off | n/a | services: after M1–M4 | Says it is a marketplace ("we are a … marketplace", "the marketplace for …", connects hosts and guests). Cloud and app marketplaces don't count; Stripe Connect in the code is only a clue. |
+| S3 | Books behind or messy | Rules | - | if open | on clue | n/a | - | A finance or bookkeeping job post asking for catch-up, cleanup or a reconciliation backlog. |
+| S4 | Looking for bookkeeping help | Rules | - | if open | on clue | n/a | - | An open bookkeeper, staff accountant, AP/AR or fractional finance role, or a public request for a bookkeeper. |
+| S5 | Does its own books (DIY) | Rules | - | if open | on clue | n/a | - | "We do our own books" or a founder who is an accountant keeping them. An AI product alone is not DIY. |
+| S6 | Series D or later, or public | Rules + derived from E1 | - | if open | if open | n/a | services: after M1–M4 | Yes when E1's proof names Series D or later, an IPO or a ticker; No when it names Series C, the stage is earlier, or the company announces its own round of seed to Series C (reviewed on argon-ai.com). |
+| S7 | 100 or more people | Rules (size sources) | - | off | off | n/a | services: after M1–M4 | The $500K monthly-expense proxy: the list's count (lower band), a Prospeo headcount already bought, or the YC team size; credited to that source (rules, provider, directories). |
+| S8 | 50 to 99 people | Rules (size sources) | - | off | off | n/a | - | Same sources as S7; scores down in services. |
 
 ## Build status
 
@@ -840,4 +875,4 @@ Signals the AI decides count 0 points until the AI step has run for that phase, 
 
 ## How the answers are used
 
-The ICP verdict (phase 1) and the lead score (phase 2) are calculated from these answers as described in [PIPELINE.md, step 6](PIPELINE.md#6-decide-the-icp-verdict-phase-1) and [step 8](PIPELINE.md#8-lead-score-phase-2). Weights are in [config/scoring.json](../config/scoring.json).
+The ICP verdict (phase 1) and the lead score (phase 2) are calculated from these answers as described in [PIPELINE.md, step 6](PIPELINE.md#6-decide-the-icp-verdict-phase-1) and [step 8](PIPELINE.md#8-lead-score-phase-2). Weights are in [config/scoring.json](../config/icps/product/scoring.json).

@@ -19,7 +19,7 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
 | AI answer quality checks | `enrich/ai/apply.py` |
 | Prospeo (step 5) | `enrich/providers/` (`run.py`, `apply.py`, `prospeo.py`) |
 | Merge rules for directory / provider answers | `enrich/engine/merge.py` (`settle`) |
-| Scoring and segments | `config/scoring.json`, `enrich/checks/scoring.py` |
+| Scoring and segments | `config/icps/<pipeline>/scoring.json` and `roles.json`, `enrich/core/icp.py`, `enrich/checks/scoring.py` |
 
 ## Checklist for every change
 

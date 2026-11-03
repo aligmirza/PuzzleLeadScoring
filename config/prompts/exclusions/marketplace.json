@@ -1,0 +1,92 @@
+{
+  "id": "exclusions/marketplace",
+  "data_point": "Marketplace",
+  "group": "Exclusion",
+  "signal_id": "S2",
+  "profile_section": "exclusions",
+  "weight": "hard stop (services)",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "The rules found a marketplace clue (Stripe Connect) or nothing either way.",
+  "input": {
+    "pages": [
+      "home_meta",
+      "home",
+      "about",
+      "pricing"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company runs a marketplace: a platform where third parties (sellers, hosts, freelancers, providers) sell to buyers and the company takes a cut or splits payments.",
+    "definition": "Exclusions need positive evidence. Payment splits are unsupported today (services ICP). A company selling its own product or service is not a marketplace.",
+    "yes_when": [
+      "The company calls itself a marketplace",
+      "It connects buyers and sellers (or hosts and guests, clients and freelancers) and takes a fee or commission"
+    ],
+    "no_when": [
+      "The company sells its own software, product or service directly"
+    ],
+    "unknown_when": [
+      "A platform where it's unclear whether third parties sell through it"
+    ],
+    "watch_out_for": [
+      "'Available on the AWS / Salesforce / Shopify marketplace' describes where they list, not what they are",
+      "An 'integrations marketplace' inside a software product is not a marketplace business",
+      "Stripe Connect alone is only a clue: software platforms also use it for payouts"
+    ],
+    "where_to_look": [
+      "Homepage headline",
+      "How it works",
+      "Pricing (commission or take rate)"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "off",
+    "why": "What the company is comes from its own site; web pages describe it less reliably."
+  },
+  "examples": []
+}

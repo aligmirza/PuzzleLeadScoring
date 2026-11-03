@@ -55,8 +55,10 @@ def auto_on() -> bool:
 def record(kind: str, **fields) -> None:
     try:
         DIR.mkdir(parents=True, exist_ok=True)
+        from . import icp
         with open(EVENTS, "a") as f:
-            f.write(json.dumps({"at": time.strftime("%Y-%m-%d %H:%M:%S"), "kind": kind, **fields}, default=str) + "\n")
+            f.write(json.dumps({"at": time.strftime("%Y-%m-%d %H:%M:%S"), "kind": kind, "pipeline": icp.name(), **fields},
+                               default=str) + "\n")
     except Exception:  # noqa: BLE001  (learning never breaks a run)
         pass
 

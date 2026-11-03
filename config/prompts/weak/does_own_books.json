@@ -1,0 +1,98 @@
+{
+  "id": "weak/does_own_books",
+  "data_point": "Does its own books (DIY)",
+  "group": "Weak fit",
+  "signal_id": "S5",
+  "profile_section": "weak_fit_signals",
+  "weight": "-2 (services)",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "The rules found a clue, or the company's founders have a finance background.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "team",
+      "blog"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company deliberately does its own books: the founders state they run their own bookkeeping or accounting (by hand, in spreadsheets, or with AI, MCP or API workflows), or a founder is an accountant who keeps the books.",
+    "definition": "Do-it-yourself operators rarely buy services. It lowers the score but never disqualifies; DIY is often a question of timing.",
+    "yes_when": [
+      "The company or a founder says they do their own books or accounting",
+      "A founder is a CPA or accountant who handles the company's own books"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is found"
+    ],
+    "unknown_when": [
+      "An AI or developer-tools company with no statement about its own books",
+      "A founder with a finance background but no statement about the books"
+    ],
+    "watch_out_for": [
+      "A company that sells bookkeeping software or services describes its product, not its own books",
+      "Enthusiasm for AI on its own is not DIY"
+    ],
+    "where_to_look": [
+      "Founder bios",
+      "Blog posts about how they run the company",
+      "About page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "(\"{company}\" OR \"{founders}\") \"our own books\" OR \"my own bookkeeping\" OR \"do our own accounting\""
+    ],
+    "good_sources": [
+      "founder blogs and posts",
+      "interviews and podcasts with the founders"
+    ]
+  },
+  "examples": []
+}

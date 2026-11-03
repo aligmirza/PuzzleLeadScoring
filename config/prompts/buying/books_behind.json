@@ -1,0 +1,99 @@
+{
+  "id": "buying/books_behind",
+  "data_point": "Books behind or messy",
+  "group": "Buying signal",
+  "signal_id": "S3",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "high (services)",
+  "version": 1,
+  "stage": "job_posts",
+  "model": "small",
+  "run_when": "A finance or bookkeeping job post mentions catch-up or cleanup work, or search results are available.",
+  "input": {
+    "pages": [
+      "careers",
+      "search_results"
+    ],
+    "extra": [
+      "job_snippets",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company's books are behind or messy: months not closed, a bookkeeping backlog, or past periods that need to be cleaned up or rebuilt.",
+    "definition": "The strongest services trigger: 69% of companies that wanted help on sales calls had books behind or messy.",
+    "yes_when": [
+      "A job post asks for catch-up or cleanup bookkeeping, a backlog of reconciliations, or rebuilding past periods",
+      "The company or a founder says publicly that their books are behind or a mess"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is found"
+    ],
+    "unknown_when": [
+      "An open finance role with no sign of a backlog"
+    ],
+    "watch_out_for": [
+      "'Clean up data' or 'technical backlog' in an engineering post is not about the books",
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location)"
+    ],
+    "where_to_look": [
+      "Finance and bookkeeping job descriptions",
+      "Public posts by the founders"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" bookkeeper OR accountant \"catch-up\" OR cleanup OR backlog site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
+      "site:linkedin.com/posts (\"{company}\" OR \"{founders}\") \"behind on\" books OR bookkeeping"
+    ],
+    "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
+      "job posts",
+      "public posts by the founders"
+    ]
+  },
+  "examples": []
+}

@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 import httpx
+from ..core import icp as pipelines
 
 CLAY = shutil.which("clay") or str(Path.home() / ".local" / "bin" / "clay")
 
@@ -97,7 +98,7 @@ async def push_rows(rows: list[dict], webhook_url: str | None = None, token: str
 
 
 def final_rows(folder: Path, only_icp: bool = False) -> list[dict]:
-    path = folder / "output" / f"{folder.name}_enriched.csv"
+    path = pipelines.enriched_csv(folder)
     if not path.exists():
         raise RuntimeError(f"No results yet for list '{folder.name}'.")
     with open(path, newline="") as f:

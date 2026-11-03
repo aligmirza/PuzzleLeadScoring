@@ -29,8 +29,14 @@ from ..core.inputs import load_leads, normalize_domain
 from ..core.store import Store
 
 SINGLE_LIST = "api_checks"          # where one-off company checks are cached
-_inflight: dict[str, asyncio.Task] = {}
+_inflight: dict[tuple[str, str], asyncio.Task] = {}  # (pipeline, domain) -> the check running
 _jobs: dict[str, asyncio.Task] = {}
+
+
+def _key(domain: str) -> tuple[str, str]:
+    """A check is shared only within one ICP pipeline: product and services results are separate."""
+    from ..core import icp
+    return icp.name(), domain
 
 
 # ---------------------------------------------------------------------------
@@ -156,11 +162,11 @@ async def check_one(domain: str, company: str = "", employees: str = "", signals
     folder = LISTS / SINGLE_LIST
     folder.mkdir(parents=True, exist_ok=True)
     row = {"domain": d, "company": company, "employees": employees, "input": {}}
-    task = _inflight.get(d)
+    task = _inflight.get(_key(d))
     if task is None or task.done():
         task = asyncio.ensure_future(run_rows(folder, [row], signals, use_ai, web, refresh, workers=1,
                                               ai={**(ai or {}), "web": web}))
-        _inflight[d] = task
+        _inflight[_key(d)] = task
     try:
         store = await asyncio.wait_for(asyncio.shield(task), timeout=wait_seconds)
     except asyncio.TimeoutError:
@@ -195,13 +201,13 @@ async def check_many(companies: list, signals: bool = True, use_prospeo: bool = 
         raise ValueError(f"{len(rows)} companies: up to {MAX_BATCH} at a time here. For more, start a list (enrich_list).")
     folder = LISTS / SINGLE_LIST
     folder.mkdir(parents=True, exist_ok=True)
-    busy = [r["domain"] for r in rows if _inflight.get(r["domain"]) and not _inflight[r["domain"]].done()]
+    busy = [r["domain"] for r in rows if _inflight.get(_key(r["domain"])) and not _inflight[_key(r["domain"])].done()]
     new = [r for r in rows if r["domain"] not in busy]
-    tasks = {_inflight[d] for d in busy}
+    tasks = {_inflight[_key(d)] for d in busy}
     if new:
         task = asyncio.ensure_future(run_rows(folder, new, signals, False, True, False, workers=len(new)))
         for r in new:
-            _inflight[r["domain"]] = task
+            _inflight[_key(r["domain"])] = task
         tasks.add(task)
     done, pending = await asyncio.wait({asyncio.shield(x) for x in tasks}, timeout=wait_seconds)
     if pending:
@@ -249,7 +255,8 @@ def start_list(name: str | None, rows: list[dict], signals: bool = True, use_ai:
     folder = LISTS / name
     folder.mkdir(parents=True, exist_ok=True)
     _write_input(folder, rows)
-    status = _status(folder, list=name, state="queued", step="", rows=len(rows), source=source,
+    from ..core import icp
+    status = _status(folder, list=name, pipeline=icp.name(), state="queued", step="", rows=len(rows), source=source,
                      options={"signals": signals, "ai": use_ai, "web": web, "push_to_clay": push_to_clay,
                               "ai_options": {**ai_options(ai), "web": web} if use_ai else None, "callback_url": callback_url,
                               "clay_webhook_url": clay_webhook_url, "prospeo": use_prospeo},

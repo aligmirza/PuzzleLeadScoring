@@ -14,12 +14,13 @@ import secrets
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import clay
 from . import service
+from ..core import icp as pipelines
 from ..core import settings
 
 TAGS = [
@@ -40,9 +41,18 @@ async def lifespan(_app):
     yield
 
 
+async def pick_pipeline(icp: Literal["services", "product"] | None = Query(
+        None, description="ICP pipeline: services (default) or product. Results and files are kept per pipeline.")):
+    """Every call runs with one ICP pipeline; background work started by the call keeps it."""
+    with pipelines.use(icp):
+        yield
+
+
 app = FastAPI(title="PuzzleLeadScoring API", version="2.0", openapi_tags=TAGS, lifespan=lifespan,
+              dependencies=[Depends(pick_pipeline)],
               description="Check companies against Puzzle's ICP, score them, and exchange lists with other tools. "
-                          "Every /v1 call needs the header `x-api-key`. AI only runs when asked, within a cost limit.")
+                          "Every /v1 call needs the header `x-api-key`. Add `?icp=product` to use the product ICP "
+                          "pipeline; services is the default. AI only runs when asked, within a cost limit.")
 
 
 def require_key(x_api_key: str | None = Header(None), authorization: str | None = Header(None)) -> None:

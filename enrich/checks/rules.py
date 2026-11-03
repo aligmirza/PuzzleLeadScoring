@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 
@@ -21,9 +22,11 @@ from ..ai import prompts as prompt_files
 from ..sources import wappalyzer
 
 YES, NO, UNKNOWN, CHECK = "yes", "no", "unknown", "check"
-NA = "na"  # skipped by a conditional run (config/datapoints run_if): no step ran
+NA = "na"  # skipped by a conditional run (the pipeline's run_if): no step ran
 
-SIGNALS = {
+# every data point: (the group it has in the product pipeline, and where its files live; its name). How a data point
+# counts in the pipeline running now (must-have, exclusion, fit, buying, weak) comes from config/icps/<pipeline>/.
+FACTS = {
     # must-haves
     "M1": ("must", "Based and operating in the US"),
     "M2": ("must", "Live website with a real product"),
@@ -86,14 +89,64 @@ SIGNALS = {
     "W10": ("weak", "Already on NetSuite or similar"),
     "W11": ("weak", "Accountant picks the tools"),
     "W12": ("weak", "No fintech tools, spreadsheets and a traditional bank"),
+    # services facts (the operator ICP, Oct 2026): the group here is the services one and decides the file folders;
+    # the product pipeline keeps them as "info" (found and shown, never scored or asked)
+    "S1": ("exclusion", "Sole proprietorship or partnership"),
+    "S2": ("exclusion", "Marketplace"),
+    "S3": ("buying", "Books behind or messy"),
+    "S4": ("buying", "Looking for bookkeeping help"),
+    "S5": ("weak", "Does its own books (DIY)"),
+    "S6": ("exclusion", "Series D or later, or public"),
+    "S7": ("exclusion", "100 or more people"),
+    "S8": ("weak", "50 to 99 people"),
 }
+BASE_GROUP = {sid: g for sid, (g, _) in FACTS.items()}  # folders of the data point and prompt files
+
+
+class _Signals(Mapping):
+    """SIGNALS[sid] -> (group in the running pipeline, name). Everything that asks a data point's group follows the
+    pipeline (core/icp.py), so the same facts can count differently for product and services."""
+
+    def __getitem__(self, sid: str) -> tuple[str, str]:
+        from ..core import icp
+        return icp.group(sid), FACTS[sid][1]
+
+    def __iter__(self):
+        return iter(FACTS)
+
+    def __len__(self) -> int:
+        return len(FACTS)
+
+    def __contains__(self, sid) -> bool:
+        return sid in FACTS
+
+
+SIGNALS = _Signals()
+
+def zero_point_sids() -> set[str]:
+    """Data points that can't change the running pipeline's verdict or score: "info", or a fit or buying signal worth
+    nothing at every company size. They keep what the free steps find but get no AI question."""
+    from . import scoring
+    cfg = scoring.config()
+    weights = {**cfg["fit_signals"], **cfg["buying_signals"]}
+    out = set()
+    for sid, (group, name) in SIGNALS.items():
+        if group == "info":
+            out.add(sid)
+        elif group in ("fit", "buying"):
+            w = weights.get(name)
+            if all(level in (None, "none") for level in (w.values() if isinstance(w, dict) else [w])):
+                out.add(sid)
+    return out
+
 
 def phase_of(sid: str) -> str:
     """Which phase checks a data point: must-haves and exclusions decide ICP (phase 1), the rest score (phase 2)."""
     return "icp" if SIGNALS[sid][0] in ("must", "exclusion") else "signals"
 
 
-GROUP_NAMES = {"must": "Must-have", "exclusion": "Exclusion", "fit": "Fit", "buying": "Buying signal", "weak": "Weak fit"}
+GROUP_NAMES = {"must": "Must-have", "exclusion": "Exclusion", "fit": "Fit", "buying": "Buying signal", "weak": "Weak fit",
+               "info": "Info"}  # info: found and shown, but not part of this pipeline's verdict or score
 VALUE_NAMES = {"yes": "Yes", "no": "No", "check": "Needs check", "unknown": "Unknown", "na": "Not applicable"}
 CELL_NAMES = {**VALUE_NAMES, "unknown": ""}  # CSV cells: left empty until something is confirmed
 GATE_NAMES = {"pass": "Pass", "pass (some unknown)": "Pass (some checks unknown)", "failed must-have": "Failed a must-have",
@@ -195,7 +248,36 @@ TOOL_RULES = {
     "Pulley": {"raw": None, "text": r"\bPulley\b"},
     "Chase": {"raw": None, "text": r"\bChase (?:Bank|Business|for Business|business banking)\b|\bJPMorgan Chase\b"},
     "Wise": {"raw": None, "text": r"\bWise (?:Business|Platform)\b|\bTransferWise\b"},
+    "Rho": {"raw": None, "text": r"\bRho\b(?=[^.]{0,40}\b(?:bank|banking|business account|checking|treasury|cards?)\b)|"
+                                r"\b(?:bank|banking|banks)\b[^.]{0,40}\bRho\b"},
 }
+# services facts --------------------------------------------------------------------------------------------------
+# S1: the company says what it is (not "if you are a sole proprietor..." about its customers), or its legal name is one
+RE_SOLE_SELF = re.compile(r"\b(?:we are|we're|is|operates as|organized as|registered as)\s+an?\s+(?:[A-Za-z]+\s+){0,3}?"
+                          r"(sole proprietorship|general partnership|limited liability partnership|limited partnership)\b", re.I)
+RE_PARTNERSHIP_NAME = re.compile(r"\b(L\.?L\.?P\.?|L\.?P\.?|General Partnership)$")
+# S2: calls itself a marketplace; "available on the AWS Marketplace" and app stores are not
+RE_MARKETPLACE_SELF = re.compile(
+    r"\b(?:(?:we are|we're|is)\s+(?:a|an|the)\s+(?:[\w-]+\s+){0,3}marketplace\b|"
+    r"the (?:[\w-]+\s+){0,2}marketplace (?:for|that connects|connecting)\b|"
+    r"connect(?:s|ing)? (?:buyers|brands|creators|hosts|freelancers|vendors|sellers|clients|patients|students) "
+    r"(?:and|with) (?:sellers|buyers|guests|clients|customers|businesses|brands|providers|tutors|teachers))", re.I)
+RE_NOT_MARKETPLACE = re.compile(r"\b(?:AWS|Amazon Web Services|Azure|Google Cloud|GCP|Salesforce|HubSpot|Shopify|Atlassian|"
+                                r"Slack|app|apps|integrations?|plugin|extension)\s+(?:App\s+)?(?:Marketplace|Exchange|Store)\b", re.I)
+# S3 and S4: what open finance jobs say
+RE_BOOKS_BEHIND = re.compile(r"\b(?:catch[- ]?up|clean[- ]?up|backlog|behind on (?:the |our )?(?:books|bookkeeping|"
+                             r"reconciliations?|accounting)|historical (?:books|bookkeeping|records|reconciliations?)|"
+                             r"reconstruct(?:ing)? (?:the |our )?(?:books|financials))\b", re.I)
+RE_BOOKKEEPING_ROLE = re.compile(r"\b(?:bookkeep\w*|staff accountant|accountant|accounting (?:manager|specialist|"
+                                 r"associate|assistant|clerk)|fractional (?:cfo|controller|accountant)|ap/ar|accounts "
+                                 r"(?:payable|receivable))\b", re.I)
+# S5: the company says it does its own books
+RE_DIY_BOOKS = re.compile(r"\b(?:we|I) (?:do|handle|manage|run|keep) (?:all )?(?:our|my) own (?:books|bookkeeping|"
+                          r"accounting)\b", re.I)
+# S6: what the late-stage proof names
+RE_LATE_D = re.compile(r"\bseries\s+[d-h]\b|\bIPO\b|\bpublicly traded\b|\b(?:NASDAQ|NYSE|TSX|LSE)\b|ticker", re.I)
+RE_ONLY_C = re.compile(r"\bseries\s+c\b", re.I)
+RE_ROUND_WORDS = re.compile(r"\b(?:rais(?:ed|es|ing)|round|funding|closed|led by|investment)\b", re.I)
 JOB_BOARDS = {"ashby": "https://jobs.ashbyhq.com/{slug}", "greenhouse": "https://boards.greenhouse.io/{slug}",
               "lever": "https://jobs.lever.co/{slug}", "workable": "https://apply.workable.com/{slug}",
               "rippling": "https://ats.rippling.com/{slug}/jobs"}
@@ -212,6 +294,9 @@ COMPETITOR_RULES = {
     "Kick": r"\bKick (?:bookkeeping|accounting)\b|\bkick\.co\b",
     "Inkle": r"\bInkle\b",
     "Pry": r"\bPry Financials\b|\bpry\.co\b",
+    # AI-native accounting firms selling the outcome to the services buyer; common words, so only with accounting words
+    "Gradient": r"\bGradient (?:accounting|bookkeeping|finance team)\b",
+    "Minerva": r"\bMinerva (?:accounting|bookkeeping|finance)\b",
 }
 USAGE_KINDS = {"privacy", "security", "terms", "legal"}
 INTEGRATION_CONTEXT = re.compile(r"connect|integrat|sync|import|your [\w ]{0,20}account|plug(?:s|in)|(?<!we )works? (?:best |seamlessly |great )?with|supports?|partners?|investors?|backed by|financing", re.I)
@@ -231,9 +316,19 @@ RE_FUND_SENT = re.compile(r"\b(raised|raise|raising|funding|round|backed by|inve
 RE_MONEY = re.compile(r"\$\s?(\d+(?:\.\d+)?)\s?(million|billion|[MB])\b", re.I)
 RE_BIG_RAISE = re.compile(r"\b(?:rais(?:ed|es|ing)|closed|secur(?:ed|es)|announc(?:ed|es|ing))\b[^.]{0,40}\$\s?\d", re.I)
 RE_VALUATION = re.compile(r"valuation of \$\s?\d|\$\s?\d+(?:\.\d+)?\s?(?:billion|B)\s+valuation|valued at \$\s?\d", re.I)
-_late = json.loads((__import__("pathlib").Path(__file__).resolve().parents[2] / "config" / "scoring.json").read_text()).get("late_stage_proof", {})
-LATE_STAGE_ROUND_USD = _late.get("round_at_least_usd", 100_000_000)          # a single round this big is beyond Series B
-LATE_STAGE_VALUATION_USD = _late.get("valuation_at_least_usd", 1_000_000_000)
+
+
+def late_stage_round_usd() -> float:
+    """A single round this big is beyond the pipeline's last stage (scoring.json late_stage_proof)."""
+    from ..core import icp
+    return icp.scoring().get("late_stage_proof", {}).get("round_at_least_usd", 100_000_000)
+
+
+def late_stage_valuation_usd() -> float:
+    from ..core import icp
+    return icp.scoring().get("late_stage_proof", {}).get("valuation_at_least_usd", 1_000_000_000)
+
+
 RE_STAGE = re.compile(r"\b(pre-?seed|seed|series ([a-h]))\b", re.I)
 RE_FIRST_PERSON = re.compile(r"\b(we|we've|we're|our|us)\b", re.I)
 # "Backed by X": an investor's name right after the phrase (fund words, or well-known names). Logos are images, so
@@ -291,6 +386,16 @@ LD_LOCAL_SERVICE = {"LegalService", "Attorney", "RealEstateAgent", "Professional
 
 
 # ---------------------------------------------------------------------------
+def exclusion_reason(signals: dict, excluded: list[str]) -> str:
+    """Why the company is out: each hard stop with its proof; stops that share one rule in this pipeline say so first."""
+    from ..core import icp
+    def one(sid):
+        label = icp.reason_label(sid)
+        name = SIGNALS[sid][1]
+        return f"{label} ({name}): {signals[sid]['evidence']}" if label else f"{name}: {signals[sid]['evidence']}"
+    return "; ".join(one(sid) for sid in excluded)
+
+
 def decide(signals: dict, site_status: str | None) -> dict:
     """The ICP verdict from must-have and exclusion answers. Used by the rules and again after AI answers."""
     def val(sid):
@@ -321,7 +426,7 @@ def decide(signals: dict, site_status: str | None) -> dict:
         verdict = "Yes (some must-haves unconfirmed)"
     return {"gate": gate, "verdict": verdict, "checks": checks, "excluded": excluded, "failed": failed,
             "confirmed": confirmed,
-            "exclusion_reason": "; ".join(f"{SIGNALS[sid][1]}: {signals[sid]['evidence']}" for sid in excluded)}
+            "exclusion_reason": exclusion_reason(signals, excluded)}
 
 
 @dataclass
@@ -467,10 +572,11 @@ class Extractor:
         self.nonprofit()
         self.inventory()
         self.business_type()
-        if self.phase == "signals":
-            self.misc_fit()
+        self.services_facts()
+        if self.phase == "signals" or any(phase_of(s) == "icp" for s in ("F17", "F18")):
+            self.misc_fit()  # phase 1 too when the pipeline makes one of these a hard stop (services: F17)
         self.must_haves()
-        if self.phase == "signals":
+        if self.phase == "signals" or phase_of("W4") == "icp":
             self.weak_derived()
         return True
 
@@ -478,7 +584,95 @@ class Extractor:
         """After the free layers: derived signals, the verdict and the AI questions still open."""
         if self.phase == "signals" and self.record.get("status") == "live":
             self.tax_deadline()
+        self.services_derived()
         return self._result()
+
+    def services_facts(self):
+        """S1-S5 from the pages and job posts (free). Proof only: a generic mention never counts."""
+        # S1 sole proprietorship or partnership: a self-statement, or a legal name that is one; a corporation or an
+        # LLC on record is the No
+        p, snip = self.find(RE_SOLE_SELF, kinds=["terms", "legal", "privacy", "about", "home"])
+        legal = self.facts.get("legal_name") or ""
+        if p:
+            self.s["S1"] = sig(YES, snip, p.url)
+        elif legal and RE_PARTNERSHIP_NAME.search(legal.strip()):
+            self.s["S1"] = sig(YES, f"legal name: {legal}", note="the legal name is a partnership")
+        elif self.facts.get("entity_type") in ("Delaware C-Corp", "Other US C-Corp", "Public Benefit Corporation", "LLC"):
+            self.s["S1"] = sig(NO, self.facts.get("entity_evidence") or legal, note=f"a {self.facts['entity_type']}")
+        elif legal and (m := RE_ENTITY.search(legal)) and any(
+                re.match(rx, m.group(2)) for rx, kind in SUFFIX_KIND if kind in ("corp", "llc", "pbc")):
+            # Inc., Corp., PBC or LLC in its own legal name: a corporation or an LLC is never one
+            self.s["S1"] = sig(NO, f"legal name: {legal}", note=f"its legal name ends in {m.group(2)}")
+        # S2 marketplace: says it is one (Stripe Connect in its code is only a clue: platforms also pay out with it)
+        for page in self.pages.values():
+            if page.kind not in ("home", "about", "pricing"):
+                continue
+            m = RE_MARKETPLACE_SELF.search(page.text)
+            if m and not RE_NOT_MARKETPLACE.search(_snip(page.text, m, 80)):
+                self.s["S2"] = sig(YES, _snip(page.text, m), page.url)
+                break
+        if self.s.get("S2", {}).get("value") != YES:
+            connect = (self.payment_code().get("Stripe") or {}).get("methods") or []
+            if "Stripe Connect" in connect:
+                self.s["S2"] = sig(CHECK, "Stripe Connect in the site's code", note="payment splits or payouts: confirm")
+        # S3 books behind and S4 looking for bookkeeping help: open finance and bookkeeping jobs
+        for j in self.jobs:
+            title, text = j.get("title") or "", j.get("description") or ""
+            finance_job = RE_FIN_ROLE.search(title) or RE_BOOKKEEPING_ROLE.search(title)
+            if finance_job and "S4" not in self.s and RE_BOOKKEEPING_ROLE.search(title):
+                self.s["S4"] = sig(YES, f"open role: {title}", j.get("url", ""), note="hiring someone to do the books")
+            m = RE_BOOKS_BEHIND.search(text)
+            if finance_job and m and "S3" not in self.s:
+                self.s["S3"] = sig(YES, f"job post '{title}': {_snip(text, m)}", j.get("url", ""))
+            elif m and "S3" not in self.s and re.search(r"book|account|reconcil", _snip(text, m, 80), re.I):
+                self.s["S3"] = sig(CHECK, f"job post '{title}': {_snip(text, m)}", j.get("url", ""))
+        # S5 does its own books
+        p, snip = self.find(RE_DIY_BOOKS, kinds=["home", "about", "blog", "team"])
+        if p:
+            self.s["S5"] = sig(YES, snip, p.url)
+
+    def _headcount(self) -> tuple[int | None, str, str]:
+        """(people, proof, method) from: the list's count, a Prospeo headcount already bought, the YC team size."""
+        m = re.search(r"\d[\d,]*", self.employees or "")
+        if m:
+            return int(m.group(0).replace(",", "")), f"{self.employees} employees in the list", "code"
+        hint = self.record.get("headcount_hint") or {}
+        if str(hint.get("value", "")).isdigit():
+            return int(hint["value"]), f"{hint['value']} people per the {hint.get('source', 'provider')}", "provider"
+        yc = self.facts.get("team_size_directory") or {}
+        if str(yc.get("value", "")).isdigit():
+            return int(yc["value"]), f"{yc['value']} people per the {yc.get('source', 'YC directory')}", "directory"
+        return None, "", "code"
+
+    def services_derived(self):
+        """S6-S8 from what the earlier layers found (after the directories)."""
+        # S6 Series D or later, or public: what the late-stage proof names (Series C itself is in)
+        e1 = self.s.get("E1") or {}
+        stage = self.facts.get("funding_stage") or ""
+        if e1.get("value") == YES and RE_LATE_D.search(e1.get("evidence") or ""):
+            self.s["S6"] = sig(YES, e1["evidence"], e1.get("url", ""), method=e1.get("method", "code"))
+        elif e1.get("value") == YES and RE_ONLY_C.search(e1.get("evidence") or ""):
+            self.s["S6"] = sig(NO, e1["evidence"], e1.get("url", ""), note="Series C, which the services ICP includes")
+        elif e1.get("value") == YES:
+            self.s["S6"] = sig(CHECK, e1.get("evidence", ""), e1.get("url", ""), note="late stage, but the round isn't named")
+        elif stage.startswith(("Pre-Seed", "Seed", "Series A", "Series B")):
+            self.s["S6"] = sig(NO, f"funding stage {stage}", note="earlier than Series D")
+        else:  # the company announces its own round of seed to Series C ("Argon AI Raises $5.5 Million Seed Round")
+            for page in self.pages.values():
+                if page.kind not in ("blog", "home", "about", "investors"):
+                    continue
+                for m in RE_STAGE.finditer(page.text):
+                    around = _snip(page.text, m, 90)
+                    letter = (m.group(2) or "").lower()
+                    if (RE_ROUND_WORDS.search(around) and not RE_NOT_OWN_MONEY.search(around) and letter in ("", "a", "b", "c")
+                            and self.mentions_company(around) and "S6" not in self.s):
+                        self.s["S6"] = sig(NO, around, page.url, note="its own announced round is Series C or earlier")
+                        break
+        # S7 100+ people (the $500K monthly-expense proxy) and S8 50-99 people
+        n, basis, method = self._headcount()
+        if n is not None:  # credited to where the count came from: the list (rules), YC (directory), Prospeo (provider)
+            self.s["S7"] = sig(YES if n >= 100 else NO, basis, method=method)
+            self.s["S8"] = sig(YES if 50 <= n < 100 else NO, basis, method=method)
 
     def _not_live(self, status) -> None:
         err = self.record.get("error") or ""
@@ -1201,7 +1395,7 @@ class Extractor:
             "gate": gate,
             "icp_verdict": verdict,
             "icp_checks": [SIGNALS[sid][1] for sid in checks],
-            "exclusion_reason": "; ".join(f"{SIGNALS[sid][1]}: {self.s[sid]['evidence']}" for sid in excluded),
+            "exclusion_reason": exclusion_reason(self.s, excluded),
             "must_haves_confirmed": len(confirmed),
             "entity_type": self.facts.get("entity_type", "Unknown"),
             "legal_name": self.facts.get("legal_name"),
@@ -1240,7 +1434,9 @@ class Extractor:
             chosen.append("fields/competitors_used")
         # phase 1 asks only must-have and exclusion prompts; phase 2 asks everything else.
         # Only prompts that read the website or job posts; search and final-output prompts run in later steps.
-        icp_prompt = lambda pid: pid.startswith(("must_haves/", "exclusions/"))  # noqa: E731
+        def icp_prompt(pid):  # phase 1 asks the pipeline's must-haves and exclusions
+            sid = prompt_files.load()[1].get(pid, {}).get("signal_id")
+            return bool(sid) and SIGNALS[sid][0] in ("must", "exclusion")
         # AI only for what scraping, rules and lookups didn't answer: a data point already confirmed (Yes or No) by
         # code or a directory is never asked. The one exception: funding proven but its stage unknown.
         known_prompts = prompt_files.load()[1]
@@ -1258,6 +1454,10 @@ class Extractor:
                 pid = datapoints.step(sid, "ai_pages").get("prompt")
                 if pid:
                     settled.add(pid)
+        for sid in zero_point_sids():  # can't change this pipeline's verdict or score: no paid question
+            pid = datapoints.step(sid, "ai_pages").get("prompt")
+            if pid:
+                settled.add(pid)
         if self.facts.get("entity_type", "Unknown") != "Unknown":
             settled.add("fields/legal_entity_type")
         if not self.facts.get("funding_stage") and self.s.get("F1", {}).get("value") == YES:
@@ -1375,9 +1575,9 @@ def _late_stage_amount(sentence: str, company: str = "") -> str | None:
         after = sentence[m.end(): m.end() + 15].lower()
         before = sentence[max(0, m.start() - 20): m.start()].lower()
         is_valuation = "valuation" in after or "valued at" in before or "valuation of" in before
-        if is_valuation and usd >= LATE_STAGE_VALUATION_USD:
+        if is_valuation and usd >= late_stage_valuation_usd():
             return f"valued at ${m.group(1)} {m.group(2)}"
-        if not is_valuation and usd >= LATE_STAGE_ROUND_USD and RE_BIG_RAISE.search(sentence):
+        if not is_valuation and usd >= late_stage_round_usd() and RE_BIG_RAISE.search(sentence):
             return f"raised ${m.group(1)} {m.group(2)} in one round"
     return None
 

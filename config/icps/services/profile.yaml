@@ -1,0 +1,98 @@
+job_type: icp_evaluation
+schema_version: 3
+pipeline: services
+source: "Updated ICP Notion page (Oct 22-23, 2026) and Alexey's thread. The Notion page is the source of truth."
+job_fields:
+  icp_definition: |-
+    An operating US business with supportable USD books, run by someone who needs
+    dependable books but doesn't want to own all the work, and who will pay for a
+    named person to do it or check it.
+
+    Operators: founders up to Series C and SMB owners. Defined by situation more
+    than stage. Puzzle sells the service (Catch-Up, Full Service, Expert Review),
+    bills for it, and partner or in-house accounting firms do the work in Puzzle.
+
+    They arrive one of two ways. Reactive (the more common path): the books broke
+    or a provider failed them; a tax extension, an audit or diligence often forces
+    the decision. Proactive: they decide to delegate before it breaks, often newly
+    formed or just raised.
+
+  must_haves: |-
+    Judge each on positive evidence; an unconfirmed criterion is not a failed one.
+
+    - A US entity with USD books (C-Corps are the clearest fit; LLCs and S-Corps qualify)
+    - An operating business with a live website and real activity
+    - Source data we can reach: Mercury, Rho, Brex, Ramp, Chase, Stripe, Gusto, Rippling
+    - Real transaction activity
+
+  exclusions: |-
+    Hard stops: outside the ICP whatever else is true. Route to a partner referral,
+    not to Sales.
+
+    - Sole proprietorships and partnerships
+    - Non-US entity or owner
+    - Non-USD books or multi-currency
+    - More than one entity in scope
+    - Inventory or physical goods
+    - Marketplaces
+    - Over $500K monthly expenses (proxy: NetSuite with a finance team, Series D or
+      later, or 100+ people)
+    - Series D or later, or public (founders up to and including Series C are in)
+    - Accounting or bookkeeping firms (the Firm ICP is separate)
+    - Non-profits and government bodies (they need audit-specific scoping)
+
+  score_up: |-
+    - Books behind or messy; needs tax filing; preparing for investors, a raise or
+      an audit
+    - Just left a bookkeeper or firm, or the provider failed them
+    - Asking for help, or willing to hand the work over
+    - Budget: payroll, a lean team with real spend ($10K-$50K a month is the sweet spot)
+    - SaaS and professional services (the first lanes)
+
+  score_down: |-
+    - DIY operators: want to run the books themselves (for example with AI, MCP or
+      API workflows), finance-literate owners
+    - No activity yet: no spend, no payroll, no deadline
+    - An owner with an accountant they trust
+    - Early-stage companies are scored lower, not blocked: funding is context, not
+      intent
+
+  segments: |-
+    1-25 employees is a targeting hypothesis inherited from the founder ICP, not a
+    validated services cutoff. On a boundary use the lower band; SMB when unknown.
+
+    - SMB: 1-5 employees
+    - MM: 6-25 employees
+    - ENT: 26 or more employees
+
+  verticals: |-
+    SaaS and professional services are the first lanes. Other businesses need their
+    workflow qualified first. Real estate and legal pass but are marked "qualify the
+    workflow first".
+
+  partners: |-
+    - Mercury
+    - Rho
+    - Brex
+    - Ramp
+    - Chase
+    - Stripe
+    - Gusto
+    - Rippling
+    - Deel
+
+  value_proposition: |-
+    Get current, dependable books without taking bookkeeping away from running your
+    business. Puzzle combines automation with a clear human owner for the work, and
+    you see the numbers the whole time. Lead by situation: replacing a provider,
+    delegating early, or wanting a check.
+
+  competitors: |-
+    - Pilot
+    - Bench
+    - Freelance and Upwork bookkeepers
+    - Local CPA and bookkeeping firms
+    - Gradient
+    - Minerva
+    - Kick
+    - QuickBooks Online (run by the owner)

@@ -176,7 +176,8 @@ def ai_columns(r: dict) -> dict:
 def write_outputs(results: list[dict], rows: list[dict], out: Path, names: dict[str, str]) -> dict[str, Path]:
     """Write the CSV (rows), the evidence file and the AI queue."""
     out.mkdir(parents=True, exist_ok=True)
-    paths = {k: out / v for k, v in names.items()}
+    from ..core import icp
+    paths = {k: out / (Path(v).stem + icp.label() + Path(v).suffix) for k, v in names.items()}  # per pipeline
     fields = list(dict.fromkeys(k for row in rows for k in row))
     with open(paths["csv"], "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields)

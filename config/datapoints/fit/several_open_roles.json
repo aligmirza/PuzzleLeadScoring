@@ -2,11 +2,6 @@
   "id": "F12",
   "name": "Several open roles",
   "group": "fit",
-  "run_if": {
-    "F1": [
-      "yes"
-    ]
-  },
   "steps": {
     "rules": {
       "on": true

@@ -2,12 +2,6 @@
   "id": "B12",
   "name": "Recently launched paid pricing",
   "group": "buying",
-  "run_if": {
-    "F8": [
-      "yes",
-      "unknown"
-    ]
-  },
   "steps": {
     "rules": {
       "on": true

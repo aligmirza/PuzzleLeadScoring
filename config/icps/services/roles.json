@@ -1,0 +1,389 @@
+{
+  "pipeline": "services",
+  "description": "The services ICP (Oct 22, 2026): operators (founders up to Series C and SMB owners) with a US entity and USD books who want the bookkeeping done for them. The default pipeline.",
+  "provisional": [
+    "Decided 2026-11-03: Series C is in; the $500K monthly-expense ceiling is the proxy NetSuite with a finance team (W10), Series D or later (S6) or 100+ people (S7); 50-99 people (S8) only scores down",
+    "Books behind (S3), looking for help (S4) and DIY (S5) are rarely public; Unknown stays Unknown",
+    "Weights and the Strong-fit cut-off are guesses until calibrated on Alexey's 152 companies (stage 5)"
+  ],
+  "reason_groups": {
+    "Too big for services": [
+      "S6",
+      "S7",
+      "W10"
+    ]
+  },
+  "groups": {
+    "M1": "must",
+    "M2": "must",
+    "M3": "must",
+    "M4": "must",
+    "E1": "info",
+    "E2": "weak",
+    "E3": "exclusion",
+    "E4": "exclusion",
+    "E5": "exclusion",
+    "E6": "exclusion",
+    "F1": "fit",
+    "F2": "fit",
+    "F3": "fit",
+    "F4": "fit",
+    "F5": "fit",
+    "F6": "fit",
+    "F7": "fit",
+    "F8": "fit",
+    "F9": "fit",
+    "F10": "fit",
+    "F11": "fit",
+    "F12": "fit",
+    "F13": "fit",
+    "F14": "fit",
+    "F15": "fit",
+    "F16": "fit",
+    "F17": "exclusion",
+    "F18": "fit",
+    "F19": "fit",
+    "F20": "fit",
+    "F21": "fit",
+    "B1": "buying",
+    "B2": "buying",
+    "B3": "buying",
+    "B4": "buying",
+    "B5": "buying",
+    "B6": "buying",
+    "B7": "buying",
+    "B8": "exclusion",
+    "B9": "buying",
+    "B10": "buying",
+    "B11": "buying",
+    "B12": "buying",
+    "B13": "buying",
+    "B14": "buying",
+    "W1": "fit",
+    "W2": "fit",
+    "W3": "fit",
+    "W4": "fit",
+    "W5": "weak",
+    "W6": "exclusion",
+    "W7": "exclusion",
+    "W8": "weak",
+    "W9": "weak",
+    "W10": "exclusion",
+    "W11": "weak",
+    "W12": "weak",
+    "S1": "exclusion",
+    "S2": "exclusion",
+    "S3": "buying",
+    "S4": "buying",
+    "S5": "weak",
+    "S6": "exclusion",
+    "S7": "exclusion",
+    "S8": "weak"
+  },
+  "run_if": {
+    "M2": {
+      "M1": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "M3": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "M4": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "E3": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "E4": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "E5": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "E6": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "F17": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "B8": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "W6": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "W7": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "W10": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "B1": {
+      "F1": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "B2": {
+      "F1": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "B13": {
+      "F1": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "B12": {
+      "F8": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "B11": {
+      "F4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "S1": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "S2": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "S6": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    },
+    "S7": {
+      "M1": [
+        "yes",
+        "unknown"
+      ],
+      "M2": [
+        "yes",
+        "unknown"
+      ],
+      "M3": [
+        "yes",
+        "unknown"
+      ],
+      "M4": [
+        "yes",
+        "unknown"
+      ]
+    }
+  },
+  "opposites": {
+    "W1": "F5",
+    "W3": "F5",
+    "F7": "F5",
+    "W5": "M4",
+    "W4": "F3",
+    "W10": "F13",
+    "W12": "M3",
+    "W9": "E6"
+  }
+}

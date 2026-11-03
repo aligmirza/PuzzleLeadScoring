@@ -99,11 +99,34 @@ class CheckMany(unittest.TestCase):
 
         async def fake_rows(*a, **k):
             return None
+        import tempfile
+        from pathlib import Path
         with mock.patch.object(service, "run_rows", fake_rows), \
+                mock.patch.object(service, "LISTS", Path(tempfile.mkdtemp())), \
                 mock.patch.object(service, "findings", lambda store, d, c="", e="": {"domain": d}):
             out = asyncio.run(service.check_many(["acme.com", "acme.com", "not a domain"]))
         self.assertEqual([c["domain"] for c in out["companies"]], ["acme.com"])
         self.assertEqual(out["bad_domains"], ["not a domain"])
+
+
+class SharedDatabase(unittest.TestCase):
+    def test_many_threads_never_read_each_others_rows(self):
+        import tempfile
+        from concurrent.futures import ThreadPoolExecutor
+        from pathlib import Path
+        from enrich.core.store import Store
+        s = Store(Path(tempfile.mkdtemp()))
+        for i in range(200):
+            s.save_site(f"c{i}.com", {"domain": f"c{i}.com", "n": i})
+
+        def read(i):
+            for _ in range(20):
+                rec = s.get_site(f"c{i}.com")
+                if not rec or rec["n"] != i:
+                    return False
+            return True
+        with ThreadPoolExecutor(64) as pool:
+            self.assertTrue(all(pool.map(read, range(200))))
 
 
 if __name__ == "__main__":

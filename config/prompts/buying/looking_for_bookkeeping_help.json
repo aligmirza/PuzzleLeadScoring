@@ -1,0 +1,101 @@
+{
+  "id": "buying/looking_for_bookkeeping_help",
+  "data_point": "Looking for bookkeeping help",
+  "group": "Buying signal",
+  "signal_id": "S4",
+  "profile_section": "strong_fit_signals (buying)",
+  "weight": "high (services)",
+  "version": 1,
+  "stage": "job_posts",
+  "model": "small",
+  "run_when": "A bookkeeping or accounting role may be open, or search results are available.",
+  "input": {
+    "pages": [
+      "careers",
+      "search_results"
+    ],
+    "extra": [
+      "job_snippets",
+      "search_results"
+    ],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether the company is looking for someone to do its books: hiring a bookkeeper or accountant (full-time, part-time, contract or fractional), or asking publicly for a bookkeeper or accounting firm.",
+    "definition": "Wanting the work off their plate is what the services ICP sells to.",
+    "yes_when": [
+      "An open role for a bookkeeper, staff accountant or AP/AR, or a contract, part-time or fractional finance role",
+      "A public post asking for a bookkeeper or an accounting firm"
+    ],
+    "no_when": [
+      "Not applicable; use unknown when nothing is found"
+    ],
+    "unknown_when": [
+      "Only senior finance roles (CFO, VP Finance) with no bookkeeping work",
+      "No open roles visible"
+    ],
+    "watch_out_for": [
+      "An accountant role at an accounting firm is that firm's own staffing (an exclusion), not a request for help",
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company"
+    ],
+    "where_to_look": [
+      "Job titles and descriptions",
+      "Upwork-style requests",
+      "Public posts by the founders"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" bookkeeper OR \"staff accountant\" OR \"fractional CFO\" site:builtin.com OR site:ziprecruiter.com OR site:linkedin.com/jobs OR site:ycombinator.com OR site:wellfound.com",
+      "(\"{company}\" OR \"{founders}\") \"looking for a bookkeeper\" OR \"recommend a bookkeeper\" OR \"accounting firm\""
+    ],
+    "good_sources": [
+      "job sites (Built In, ZipRecruiter, LinkedIn Jobs, YC Work at a Startup, Wellfound)",
+      "job posts",
+      "public posts by the founders"
+    ]
+  },
+  "examples": []
+}

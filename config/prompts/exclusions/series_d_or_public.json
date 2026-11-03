@@ -1,0 +1,104 @@
+{
+  "id": "exclusions/series_d_or_public",
+  "data_point": "Series D or later, or public",
+  "group": "Exclusion",
+  "signal_id": "S6",
+  "profile_section": "exclusions",
+  "weight": "hard stop (services)",
+  "version": 1,
+  "stage": "site_text",
+  "model": "small",
+  "run_when": "Funding information is on the site, or the rules found a late-stage clue.",
+  "input": {
+    "pages": [
+      "home",
+      "about",
+      "investors",
+      "blog"
+    ],
+    "extra": [],
+    "max_chars_per_page": 4000
+  },
+  "prompt": {
+    "task": "Decide whether THIS company has raised a Series D or later round, or is publicly traded.",
+    "definition": "Exclusions need positive evidence. Founders up to and including Series C are in the services ICP; Series D, later rounds and public companies are not.",
+    "yes_when": [
+      "The company says it raised a Series D, E or later round",
+      "The company shows its own stock ticker, says it is publicly traded, or announces its IPO"
+    ],
+    "no_when": [
+      "The text confirms the latest round is Series C or earlier"
+    ],
+    "unknown_when": [
+      "Only size, polish or customer logos suggest the company is large",
+      "A large round with no letter named"
+    ],
+    "watch_out_for": [
+      "A Series C is NOT a Series D: answer no when the latest round is Series C",
+      "A subsidiary of a public company: answer 'unknown' and explain in the reason",
+      "A tender offer or secondary sale is not a funding round",
+      "The evidence quote must itself show the round letter, the IPO or the listing"
+    ],
+    "where_to_look": [
+      "About page",
+      "Press and funding announcements",
+      "Investor relations page"
+    ]
+  },
+  "output": {
+    "format": "json",
+    "schema": {
+      "type": "object",
+      "required": [
+        "answer",
+        "confidence",
+        "evidence_quote",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "answer": {
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "evidence_quote": {
+          "type": "string",
+          "description": "Exact words copied from the text. Empty when the answer is unknown."
+        },
+        "source": {
+          "type": "string",
+          "description": "Page name or URL the quote came from."
+        },
+        "reason": {
+          "type": "string",
+          "description": "One plain sentence explaining the answer."
+        }
+      }
+    }
+  },
+  "web_search": {
+    "mode": "fallback",
+    "queries": [
+      "\"{company}\" \"Series D\" OR \"Series E\" OR IPO OR NASDAQ OR NYSE",
+      "\"{company}\" {domain} funding round"
+    ],
+    "good_sources": [
+      "SEC EDGAR",
+      "company press releases",
+      "major tech and business press",
+      "Crunchbase"
+    ],
+    "note": "An exclusion found on the web counts only with high confidence and an entity match by domain."
+  },
+  "examples": []
+}

@@ -5,6 +5,8 @@ description: Check one company (or a handful) against Puzzle's ICP with the full
 
 # Check one company
 
+Pipeline: **services** is the default ICP. Use `icp="product"` on every call only when the user asks for the product (platform) ICP, and keep the same `icp` for all calls on a list.
+
 1. `check_company(domain, company?, employees?)`: the free steps (size, website rules and code checks, YC, SEC, IRS,
    DNS) for phase 1 and phase 2. Results are cached, so asking again is instant. If it says "still running", call it
    again after a minute.

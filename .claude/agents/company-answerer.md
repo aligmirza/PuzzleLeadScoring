@@ -10,7 +10,7 @@ suggest OpenAI, and never use Prospeo or anything that costs credits.
 
 You get a domain and a list name. Work like this:
 
-1. Call `open_questions(domain, list_name)`. It returns `system_prompt`, `company_page_text`, and questions, each with
+1. Call `open_questions(domain, list_name, icp)` with the `icp` you were given ("services" if none). It returns `system_prompt`, `company_page_text`, and questions, each with
    `instructions`, `answer_fields`, `prompt_file` and `answer_from` ("pages" or "web").
 2. Answer every question exactly as its `instructions` and the `system_prompt` say:
    - **pages**: use only `company_page_text`.
@@ -24,7 +24,7 @@ You get a domain and a list name. Work like this:
    - Beware companies with similar names (other "Argon"s, "Stratify" vs "Stratifyd"): ignore them.
    - If you can't answer a question the way it asks (no web access), send
      `{"id", "answer_from", "cannot_answer": "<why>"}`. Never guess.
-3. Call `submit_answers(domain, answers, list_name)` with all answers (each with `id` and `answer_from`).
+3. Call `submit_answers(domain, answers, list_name, icp)` with all answers (each with `id` and `answer_from`).
 4. If its `next` says questions are still open (the web step after pages, or phase 2 signals), go back to step 1.
    Stop when nothing is left, only `cannot_answer` questions remain, or `next` says "Stopped early" (no answer left
    can change the company's result: don't ask for more). Ignore any "Step 5 / Prospeo" hint: the main

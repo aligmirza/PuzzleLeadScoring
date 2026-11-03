@@ -15,7 +15,7 @@ view in pipeline/waterfall.py, and the same quality checks every AI answer goes 
     review(action, ...)                           approve / reject / correct / investigate / retry / stop; logged to
                                                   lists/<test_list>/output/dp_test_log.csv
     run(..., confirm_next=True)                   the next data point, only after the user said yes
-    summary(test_list)                            progress across the 57 data points and totals from the log
+    summary(test_list)                            progress across the pipeline's data points and totals from the log
 
 Session progress (current data point, state, retries, reviews) is kept in lists/<test_list>/output/dp_test_session.json.
 """
@@ -276,6 +276,11 @@ def _key(domain: str, sid: str) -> str:
     return f"{domain}|{sid}"
 
 
+def _in_review() -> list[str]:
+    """The running pipeline's data points (its "info" facts are not part of its verdict or score)."""
+    return [sid for sid, (group, _) in SIGNALS.items() if group != "info"]
+
+
 def progress(folder: Path, s: dict | None = None) -> dict:
     s = s or _session(folder)
     latest = s["reviews"]
@@ -283,7 +288,7 @@ def progress(folder: Path, s: dict | None = None) -> dict:
     reviewed_sids = {k.split("|")[1] for k, r in latest.items() if r["action"] in FINAL}
     cur = s.get("current")
     return {
-        "state": s["state"], "total_data_points": len(SIGNALS),
+        "state": s["state"], "total_data_points": len(_in_review()),
         "data_points_tested": len({k.split("|")[1] for k in s["runs"]}), "company_tests": len(s["runs"]),
         "data_points_reviewed": len(reviewed_sids),
         "approved": finals.count("approve"), "rejected": finals.count("reject"), "corrected": finals.count("correct"),
@@ -293,7 +298,7 @@ def progress(folder: Path, s: dict | None = None) -> dict:
                         for k, r in latest.items() if r["action"] == "correct" or r.get("notes")},
         "retries": sum(s["retries"].values()),
         "current": cur and {**cur, "retries": s["retries"].get(_key(cur["domain"], cur["data_point_id"]), 0)},
-        "remaining": [sid for sid in SIGNALS if sid not in reviewed_sids],
+        "remaining": [sid for sid in _in_review() if sid not in reviewed_sids],
     }
 
 
@@ -662,7 +667,7 @@ def summary(test_list: str = PREFIX) -> dict:
     folder = _guard(test_list)
     path = folder / "output" / "dp_test_log.csv"
     if not path.exists():
-        return {"tested": 0, "of": len(SIGNALS), "note": "No reviews recorded yet.", "progress": progress(folder)}
+        return {"tested": 0, "of": len(_in_review()), "note": "No reviews recorded yet.", "progress": progress(folder)}
     with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
     latest = {}
@@ -682,10 +687,10 @@ def summary(test_list: str = PREFIX) -> dict:
         p["est_cost"] += float(r["Estimated cost (USD)"] or 0)
     tested = len(per_dp)
     avg = (sum(p["est_cost"] for p in per_dp.values()) / max(1, sum(p["tests"] for p in per_dp.values())))
-    return {"data_points_tested": tested, "of": len(SIGNALS), "reviews": len(rows), "by_verdict": by_verdict,
+    return {"data_points_tested": tested, "of": len(_in_review()), "reviews": len(rows), "by_verdict": by_verdict,
             "per_data_point": per_dp,
             "estimated_cost_per_test_usd": round(avg, 4),
-            "estimated_cost_all_57_one_company_usd": round(avg * len(SIGNALS), 4),
+            "estimated_cost_all_data_points_one_company_usd": round(avg * len(_in_review()), 4),
             "progress": progress(folder),
             "note": "Manual verdicts are yours; automated columns come from the run. Costs are OpenAI estimates; "
                     "answers given through MCP cost $0 in API."}

@@ -209,7 +209,7 @@ Running the same command again skips what you've already reviewed; add `--redo` 
 
 **What each panel shows:** the final answer and the layer that decided it, the proof and its page, the five layers with what each found and its status, and the data point's waterfall settings with the file to edit (for example `config/datapoints/must_haves/based_in_us.json`).
 
-**How much to review:** 57 data points for a company that passes phase 1; 10 (must-haves and exclusions) for one that doesn't, because phase 2 never counts for a NO. The test list is about 204 checks.
+**How much to review:** the pipeline's data points (57 for product, 64 for services) for a company that passes phase 1; 10 (must-haves and exclusions) for one that doesn't, because phase 2 never counts for a NO. The test list is about 204 checks.
 
 ### When a data point's waterfall needs changing
 
@@ -259,7 +259,7 @@ In Claude Desktop, after `enrich_list` on a CSV (for example `examples/mcp_test.
    **investigate** (more evidence; stays on this data point), **retry** (re-runs only this data point), **stop**.
 4. Claude asks "Ready to move to the next data point?" and runs the next one only after you say yes.
 5. "Show dp_test progress" (`dp_test_summary`): tested, reviewed, approved, rejected, corrected, investigating,
-   retries, current and remaining of the 57.
+   retries, current and remaining of the pipeline's data points.
 
 Test mode asks every question, also those a normal run would hold back (a data point waiting for its parent, or
 skipped because the tier can't change); the result says what a normal run would do.
@@ -301,6 +301,27 @@ Run after changing a rule, a prompt, `scoring.json` or `profile.yaml`:
 3. `python -m enrich evaluate accuracy_test --labels lists/accuracy_test/output/labels.csv`: your review still agrees
 4. `python -m enrich trace linear.app --no-pause`: still NO, with the Series C proof
 5. For a prompt change: answers made with the old prompt are re-asked automatically (version stamps); run `python ai_check.py accuracy_test --phase icp` and evaluate again
+
+### Calibrate the services pipeline: `calibrate`
+
+The services weights and the Strong-fit cut-off are guesses until they are checked against real buyers.
+
+1. **Labels:** a CSV with `Domain`, `Buyer type` (`help` = wants the work done, `review` = does it and wants a check,
+   `diy` = does it themselves) and, if known, `Outcome` (`closed_won`, `open`, `lost`). Blank file:
+   `python -m enrich calibrate --template labels.csv`; example: `examples/calibration_labels_template.csv`.
+2. **Enrich them with the services pipeline** (free steps, then the AI answers in chat or with `list_ai`), e.g.
+   `python -m enrich run labels.csv --list calibration`.
+3. **Report:** `python -m enrich calibrate calibration --labels labels.csv`. It shows:
+   - how well the scores separate the groups: the chance a help-seeker scores above a DIY buyer (0.5 is chance, 1.0
+     is perfect), now and with the suggested weights
+   - for each fact, how often it's Yes among help-seekers and DIY buyers, and the weight that ratio suggests. Facts
+     that are Yes for fewer than 5 labelled companies keep their weight
+   - the cut-off that best separates the groups, and how many closed-won deals reach it
+   - help-seekers that a hard stop excludes (check those exclusions)
+
+   It saves `output/calibration.json` and `calibration.csv` and changes nothing.
+4. **Apply:** `--apply` writes the suggested weights and cut-off to `config/icps/services/scoring.json`, only if the
+   tests pass. Re-run it whenever more labels arrive.
 
 ### Speed: `bench`
 

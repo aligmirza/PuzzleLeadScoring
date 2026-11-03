@@ -1,7 +1,7 @@
 """The final list: every row of the original CSV, in order, with its original columns, plus the findings.
 
 No row is ever dropped. Duplicates get the same findings as their first row, and rows without a usable
-domain are kept with a note. Written after each phase to lists/<list>/output/<list>_enriched.csv.
+domain are kept with a note. Written after each phase to lists/<list>/output/<list>_enriched.csv (another pipeline: <list>_<pipeline>_enriched.csv).
 """
 import csv
 import re
@@ -78,6 +78,43 @@ def reasoning(icp: dict, sig: dict | None, row: dict, sc: dict | None) -> str:
     return "\n".join(lines)
 
 
+def services_columns(yes_no: str, icp: dict, s: dict) -> dict:
+    """Route, arrival and value angle for the services pipeline, from proven facts only (the ICP page's routing
+    table). Route says what to offer; arrival says why now; value angle is the opening line for outreach."""
+    yes = {sid for sid, v in s.items() if v.get("value") == "yes"}
+    if yes_no == "NO":
+        excluded = icp.get("exclusion_reason") or ""
+        route = ("Firm ICP (accounting firm), not services" if "E3" in yes or "Accounting or bookkeeping firm" in excluded
+                 else "Partner referral (hard stop)" if icp.get("gate") == "excluded" else "Not ICP")
+        return {"Route": route, "Arrival": "", "Value angle": ""}
+    if (icp.get("icp_verdict") or "").startswith("Unknown: site not reached"):
+        return {"Route": "Retry: website not reached", "Arrival": "", "Value angle": ""}
+    if "S3" in yes:
+        route = "Catch-Up, then Full Service"
+    elif yes & {"S4", "B9"}:
+        route = "Full Service"
+    elif "S5" in yes:
+        route = "Platform only (does its own books): check back at a trigger"
+    else:
+        route = "Qualify on the call: Full Service or Expert Review"
+    reactive = yes & {"S3", "B9", "B10", "B14"}  # the books broke, a provider failed, a deadline or an audit
+    proactive = yes & {"B1", "B7"}              # just raised or newly formed: delegating before it breaks
+    arrival = "Reactive" if reactive else "Proactive" if proactive else ""
+    if "B9" in yes:
+        angle = "A reliable replacement: agreed close timing, who fixes mistakes, an orderly handoff"
+    elif "S3" in yes:
+        angle = "Get current fast (Catch-Up), then dependable monthly books"
+    elif yes & {"B10", "B14"}:
+        angle = "Books ready for the deadline: tax- and audit-ready, with a person accountable"
+    elif yes & {"B13", "B1"}:
+        angle = "Investor-ready numbers, with a person accountable for them"
+    elif "S5" in yes:
+        angle = "Who is accountable when the numbers don't reconcile? A person checks the work"
+    else:
+        angle = "Current, dependable books without owning the work; you see every step"
+    return {"Route": route, "Arrival": arrival, "Value angle": angle}
+
+
 def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, contacts: list | None = None) -> dict:
     if not icp:
         return {"ICP": "PENDING", "ICP status": "Not checked yet (run phase 1)"}
@@ -139,8 +176,8 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
         "Funding stage": sig.get("funding_stage", "") if sig else "",
         "Found in directories": (sig or {}).get("directories") or icp.get("directories", ""),
         "Website technologies": (sig or {}).get("technologies") or icp.get("technologies", ""),
-        "Partners found": ", ".join(sig.get("partners", [])) if sig else "",
-        "Competitor tools used": ", ".join(sig.get("competitors", [])) if sig else "",
+        "Partners found": ", ".join(src.get("partners", [])),  # also for companies ruled out: free facts
+        "Competitor tools used": ", ".join(src.get("competitors", [])),
         "Job board": (src.get("crawl", {}).get("ats") or "").capitalize(),
         "Open roles": roles if roles is not None else "",
         "Prices found": " | ".join(src.get("facts", {}).get("prices", [])[:3]),
@@ -154,6 +191,9 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
         row.update({"Key contact": top.get("name") or "", "Key contact title": top.get("title") or "",
                     "Key contact email": top.get("email") or "", "Key contact LinkedIn": top.get("linkedin") or "",
                     "Contacts found": len(contacts)})
+    from ..core import icp as pipelines
+    if pipelines.name() == "services":
+        row.update(services_columns(yes_no, icp, s_all))
     row["Reasoning"] = reasoning(icp, sig, row, sc)
     row["Funding stage"] = funding_line(icp, sig).removeprefix("Funding stage: ")
     return row
@@ -161,7 +201,8 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
 
 def write(folder: Path, store: Store) -> Path:
     src = folder / "input.csv"
-    out = folder / "output" / f"{folder.name}_enriched.csv"
+    from ..core import icp
+    out = icp.enriched_csv(folder)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(src, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -180,15 +221,15 @@ def write(folder: Path, store: Store) -> Path:
     for i, raw in enumerate(rows, start=2):  # row 1 is the header
         domain = normalize_domain(raw.get(dcol, "")) if dcol else None
         if not domain:
-            extra = {"ICP": "NO", "ICP status": "No usable domain in this row", "Why": "Domain is empty or not a valid domain",
-                     "Lead tier": "Not ICP"}
+            extra = {"Pipeline": icp.name(), "ICP": "NO", "ICP status": "No usable domain in this row",
+                     "Why": "Domain is empty or not a valid domain", "Lead tier": "Not ICP"}
         else:
             if domain not in cache:
                 people = (store.get_provider(domain).get("prospeo", {}).get("people") or {}).get("list")
                 cache[domain] = findings(domain, raw.get(ecol, "") if ecol else "",
                                          store.get_result(domain, "icp"), store.get_result(domain, "signals"), people)
                 cache[domain]["AI cost (USD)"] = costs.get(domain, {}).get("total_usd", 0)
-            extra = dict(cache[domain])
+            extra = {"Pipeline": icp.name(), **cache[domain]}
             if domain in first_seen:
                 extra["Notes"] = f"Duplicate of row {first_seen[domain]}"
             else:
@@ -199,7 +240,7 @@ def write(folder: Path, store: Store) -> Path:
         out_rows.append({**raw, **{k: v for k, v in extra.items() if k not in original_cols}})
 
     # keep a stable, readable column order for the added columns
-    order = ["ICP", "ICP status", "Why", "Lead score", "Lead tier", "Reasoning", "Score breakdown", "Segment", "Segment based on",
+    order = ["Pipeline", "ICP", "ICP status", "Why", "Route", "Arrival", "Value angle", "Lead score", "Lead tier", "Reasoning", "Score breakdown", "Segment", "Segment based on",
              "Fit signals found", "Buying signals found", "Weak fit signals found", "Needs checking", "Notes"]
     added_cols = [c for c in order if c in added_cols] + [c for c in added_cols if c not in order]
     with open(out, "w", newline="") as f:
@@ -217,7 +258,8 @@ def write(folder: Path, store: Store) -> Path:
 
 def read_rows(folder: Path) -> list[dict]:
     """The final list's rows, each with _domain and _company added for lookups."""
-    path = folder / "output" / f"{folder.name}_enriched.csv"
+    from ..core import icp
+    path = icp.enriched_csv(folder)
     if not path.exists():
         return []
     with open(path, newline="", encoding="utf-8-sig") as f:

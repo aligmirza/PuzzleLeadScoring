@@ -17,7 +17,7 @@ from . import final
 from ..core.dashboard import Dashboard
 from ..core.inputs import load_leads
 from ..checks.rules import SIGNALS
-from ..core import shared, timing
+from ..core import learning, shared, timing
 from ..core.store import Store
 
 OUTPUTS = {"csv": "icp_check.csv", "evidence": "icp_evidence.jsonl", "ai_queue": "icp_ai_queue.jsonl"}
@@ -60,6 +60,7 @@ def handler(store: Store, dash: Dashboard, crawler: Crawler, refresh: bool):
                 result = await in_thread(run_rules, store, row, record, "icp")
         except Exception as e:  # noqa: BLE001  keep the run going; report at the end
             result = {"domain": d, "error": f"rules failed: {e!r}"}
+            learning.error("phase 1 rules", e, domain=d)
             dash.progress.update(dash.t_rules, advance=1)
         else:
             dash.ruled(result)

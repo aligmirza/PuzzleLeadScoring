@@ -1,0 +1,82 @@
+{
+  "description": "Services pipeline lead score. Only signals answered Yes count; Needs check, Unknown and Not applicable count as 0. Provisional weights from the operator ICP (Oct 22, 2026); calibrate in stage 5.",
+  "points": {
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+    "none": 0
+  },
+  "weak_signal_points": -2,
+  "tiers": {
+    "note": "Strong fit at or above this score. Provisional: set from Alexey's labelled companies (stage 5).",
+    "strong_fit_min_score": 12
+  },
+  "segments": {
+    "note": "From the employee count in your list. On a boundary use the lower band. Missing or unreadable: SMB (profile rule).",
+    "SMB": [
+      1,
+      5
+    ],
+    "MM": [
+      6,
+      25
+    ],
+    "ENT": [
+      26,
+      null
+    ]
+  },
+  "skip_rules": [],
+  "fit_signals": {
+    "Venture-backed, pre-seed to Series B": "none",
+    "Uses Stripe for billing": "low",
+    "Delaware C-Corp": "high",
+    "Uses QuickBooks Online": "low",
+    "Startup selling nationally": "none",
+    "B2B SaaS or tech-enabled service": "high",
+    "Local professional services firm": "high",
+    "Publishes real paid pricing": "none",
+    "Payroll on Gusto, Rippling or Deel": "high",
+    "AI is core to the product": "none",
+    "YC or similar accelerator": "none",
+    "Several open roles": "low",
+    "No finance person visible": {
+      "SMB": "medium",
+      "MM": "medium",
+      "ENT": "none"
+    },
+    "Has a finance lead (mid-size and up)": "none",
+    "Publishes revenue or growth numbers": "low",
+    "Remote-first or hybrid": "none",
+    "Early adopter": "none",
+    "Banks with Mercury or Brex": "low",
+    "Uses Ramp or Brex cards": "low",
+    "Cap table in Carta or Pulley": "low",
+    "Serves one local area": "none",
+    "Sells hours of labour, not a product": "none",
+    "Physical or single-location business": "none",
+    "LLC or sole owner, no venture funding": "none"
+  },
+  "buying_signals": {
+    "Raised money in the last 6 months": "low",
+    "New investor or accelerator": "none",
+    "Hiring for several roles": "low",
+    "Hiring a finance lead": "medium",
+    "Hiring ops or chief of staff": "medium",
+    "Converted from an LLC to a C-Corp": "none",
+    "Incorporated in the last 12 months": "none",
+    "Lost or replacing a bookkeeper": "high",
+    "Tax deadline coming up": "high",
+    "Complaining about QuickBooks": "low",
+    "Recently launched paid pricing": "none",
+    "New board member or investor updates": "high",
+    "Preparing for a first audit": "high",
+    "Books behind or messy": "high",
+    "Looking for bookkeeping help": "high"
+  },
+  "late_stage_proof": {
+    "note": "Exclusion 'Series C or later': a confirmed single round or valuation at least this big counts as proof, because it is a stated fact rather than an estimated stage. Used by the rules and the AI prompt.",
+    "round_at_least_usd": 100000000,
+    "valuation_at_least_usd": 1000000000
+  }
+}

@@ -9,6 +9,41 @@ Every step from your CSV to the scored list: what starts each step, what it deci
 
 ---
 
+## Two ICP pipelines: services (default) and product
+
+The data points find **facts** (`config/datapoints/`: how each one is answered). A **pipeline** decides how each fact
+counts: its group (must-have, exclusion, fit, buying, weak), its weight, the conditional runs and the opposites.
+
+| Pipeline | Who | Config | Chosen with |
+|---|---|---|---|
+| **services** (default) | Operators (founders up to Series C, SMB owners) who want the bookkeeping done for them | `config/icps/services/` | nothing (default) |
+| product | Early-stage startups (pre-seed to Series B) for the platform | `config/icps/product/` | `--icp product`, MCP `icp="product"`, API `?icp=product` |
+
+- **One pipeline per run.** Results are stored per pipeline, and output files carry the name of a non-default
+  pipeline (`<list>_enriched.csv` for services, `<list>_product_enriched.csv` for product), with a `Pipeline` column.
+- **Shared between pipelines:** downloads, free checks, directory findings, AI answers (the questions ask for
+  facts, with no ICP description in the prompt) and Prospeo data. Running the other pipeline on a list later is
+  cheap.
+- **Services' hard stops** (on top of E3–E6): several entities (F17), a new subsidiary (B8), non-USD books (W6),
+  manufacturing (W7), NetSuite with a finance team (W10), and the services facts: sole proprietorship or partnership
+  (S1), marketplace (S2), Series D or later (S6, replacing E1: Series C is in), 100+ people (S7). E2 (no activity)
+  and 50–99 people (S8) score down instead of blocking. Books behind (S3) and looking for help (S4) score high.
+- **Services' weights** score the situation, not the startup profile: a failed bookkeeper, a tax deadline, investor
+  updates and an audit are high; funding, AI and YC count 0. Provisional until calibrated (OPERATOR_ICP_PLAN.md,
+  stage 5).
+
+**Services columns** (services pipeline only), from proven facts:
+
+| Column | Values |
+|---|---|
+| Route | Catch-Up, then Full Service (books behind) · Full Service (looking for help, or a failed bookkeeper) · Platform only (does its own books) · Qualify on the call (nothing proven yet) · Partner referral (hard stop) · Firm ICP (accounting firm) · Retry (site not reached) · Not ICP |
+| Arrival | Reactive (books behind, a failed bookkeeper, a tax deadline or an audit) · Proactive (just raised or newly formed) · empty when not known |
+| Value angle | The opening line for outreach, picked from the strongest proof (a reliable replacement, Catch-Up, deadline-ready, investor-ready, accountability for DIY, or the default outcome line) |
+
+Partners and competitors are filled for every company that was read, ICP NO included. The one Prospeo search per
+company (1 credit) ranks the buyers first: founder, owner or CEO, then the finance person, then COO, chief of staff or
+operations.
+
 ## 1. The whole flow
 
 The work runs in **two separate phases**, each with its own script. Phase 1 decides whether a company is our ICP. Phase 2 only runs on companies that passed, so no time or AI is spent on signals for companies we'd never contact.
@@ -102,11 +137,11 @@ flowchart TD
 | `ai_pages.run` | `if_open` (still empty or Needs check), `if_clue` (only when a rule found a clue), `always`, `off`; optional `requires_page` (e.g. `team`) |
 | `ai_web.run` | `after_pages` (when the page answer found nothing), `if_open` (whenever still open, also when the page answer was rejected), `if_clue` (only when the rules or the page answer saw a hint), `first` (web only), `off`; `when_site_unreached` (`true`: also for sites that couldn't be read) |
 | `provider.run` | `if_open` / `off` |
-| `run_if` | Conditional run between data points, e.g. `{"F1": ["yes"]}`: the paid steps run only when each parent's answer is one of the listed values; the data point waits while a parent still has a question, and is **Not applicable** when a parent ends on another value. Free proof already found is kept. The whole map: [SIGNALS.md, Waterfall per data point](SIGNALS.md#waterfall-per-data-point) |
+| `run_if` (in `config/icps/<pipeline>/roles.json`, not in this file) | Conditional run between data points, e.g. `{"F1": ["yes"]}`: the paid steps run only when each parent's answer is one of the listed values; the data point waits while a parent still has a question, and is **Not applicable** when a parent ends on another value. Free proof already found is kept. The whole map: [SIGNALS.md, Waterfall per data point](SIGNALS.md#waterfall-per-data-point) |
 
-`python -m enrich datapoints` lists all 57; `python -m enrich datapoints --show M3` shows one. The waterfall and review views show each data point's settings and the file to edit. **The default for every data point with an AI question:** if the rules and directories leave it open, AI reads our pages (`ai_pages.run: if_open`); if it is still open after that, AI searches the web (`ai_web.run: if_open`). Sites that couldn't be read get no web search unless `when_site_unreached` is `true`. Change one file to make a data point differ.
+`python -m enrich datapoints` lists all 65 (57 + the services facts S1–S8); `python -m enrich datapoints --show M3` shows one. The waterfall and review views show each data point's settings and the file to edit. **The default for every data point with an AI question:** if the rules and directories leave it open, AI reads our pages (`ai_pages.run: if_open`); if it is still open after that, AI searches the web (`ai_web.run: if_open`). Sites that couldn't be read get no web search unless `when_site_unreached` is `true`. Change one file to make a data point differ.
 
-**Opposites** (`OPPOSITES` in `enrich/checks/datapoints.py`): when one data point is proven Yes, its opposite is No for free (F5 → W1, W3, F7; M4 → W5; F3 → W4; F13 → W10; M3 → W12; E6 → W9), and the opposite waits while the other still has a question.
+**Opposites** (`opposites` in `config/icps/<pipeline>/roles.json`): when one data point is proven Yes, its opposite is No for free (F5 → W1, W3, F7; M4 → W5; F3 → W4; F13 → W10; M3 → W12; E6 → W9), and the opposite waits while the other still has a question.
 
 Prospeo is switched on only for F13 and F14 today. It could cover: based in the US, fintech tools (from its technology data: Stripe, Gusto, Rippling, Deel, Mercury, Brex, Ramp, Carta, Pulley), open roles, public / non-profit, outside the US, funding stage and date, QuickBooks and NetSuite, headcount (company size) and industry. Then, for companies that pass, `people` finds decision-makers (founder or CEO first, then the finance lead), which also answers "Has a finance lead" and "No finance person visible". `python -m enrich waterfall acme.com` shows all five layers for each data point. Provider credits per month are capped by `PROVIDER_MONTHLY_CREDITS`, and responses are cached for 90 days (Prospeo doesn't charge again for those either).
 
@@ -534,7 +569,7 @@ Step 2 never runs for a company that's already a NO, phase 2's AI only runs on c
 
 | Part | Content | Same for every call? |
 | --- | --- | --- |
-| System | Role, ICP summary, ground rules | Yes |
+| System | Role, ground rules (no ICP description: the questions ask for facts, the same for every pipeline) | Yes |
 | Context | Company, today, facts code already proved, page text | Yes, for all prompts of one company, so it's cached after the first call |
 | Instruction | One data point's sections, examples and JSON schema | No, changes per data point |
 
@@ -544,7 +579,7 @@ Passing in the facts code already proved stops the AI from contradicting them.
 
 ## 8. Lead score (phase 2)
 
-**Code:** [enrich/checks/scoring.py](../enrich/checks/scoring.py). **Weights:** [config/scoring.json](../config/scoring.json), editable without touching code.
+**Code:** [enrich/checks/scoring.py](../enrich/checks/scoring.py). **Weights:** [config/scoring.json](../config/icps/product/scoring.json), editable without touching code.
 
 Each signal answered Yes adds points by its weight in profile.yaml. Needs check, Unknown and Not applicable add nothing.
 

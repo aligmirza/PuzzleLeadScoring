@@ -6,12 +6,51 @@ import gzip
 import json
 import shutil
 import sqlite3
+import threading
 import time
 import zlib
 from pathlib import Path
 
 
-RESULT_TABLES = {"icp": "results", "signals": "signal_results"}
+RESULT_TABLES = {"icp": "results", "signals": "signal_results"}  # the product pipeline's tables (the first pipeline)
+
+
+def result_table(phase: str) -> str:
+    """Results are kept per ICP pipeline: product uses the original tables, so existing lists keep working; another
+    pipeline gets its own (results_services, ...). Pages, directories, AI answers and provider data are shared."""
+    from . import icp
+    pipeline = icp.name()
+    return RESULT_TABLES[phase] if pipeline == "product" else f"{RESULT_TABLES[phase]}_{pipeline}"
+
+
+class _Rows(list):
+    """A statement's rows, already fetched."""
+
+    def fetchone(self):
+        return self[0] if self else None
+
+    def fetchall(self):
+        return list(self)
+
+
+class _LockedDB:
+    """The list's one SQLite connection, shared by every worker thread. Each statement runs and fetches all its rows
+    under one lock: without it, threads under load read each other's rows (another company's record, or none)."""
+
+    def __init__(self, path: Path):
+        self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)  # autocommit
+        self._lock = threading.Lock()
+
+    def execute(self, sql: str, params=()) -> _Rows:
+        with self._lock:
+            return _Rows(self._db.execute(sql, params).fetchall())
+
+    def commit(self) -> None:
+        """Every statement commits on its own (autocommit); kept so callers can still call it."""
+
+    def close(self) -> None:
+        with self._lock:
+            self._db.close()
 
 
 class Store:
@@ -19,12 +58,14 @@ class Store:
         self.root = root
         self.pages_dir = root / "raw"
         self.pages_dir.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(root / "cache.sqlite", check_same_thread=False, isolation_level=None)  # autocommit
+        self.db = _LockedDB(root / "cache.sqlite")
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("CREATE TABLE IF NOT EXISTS sites (domain TEXT PRIMARY KEY, record TEXT, crawled_at REAL)")
-        # one results table per phase: phase 1 (ICP check) and phase 2 (signals)
+        # one results table per phase: phase 1 (ICP check) and phase 2 (signals), per ICP pipeline (result_table)
+        self._tables: set[str] = set()
         for table in RESULT_TABLES.values():
             self.db.execute(f"CREATE TABLE IF NOT EXISTS {table} (domain TEXT PRIMARY KEY, result TEXT, updated_at REAL)")
+            self._tables.add(table)
         # AI answers are kept apart from rule results, so re-running the rules never loses them
         self.db.execute("CREATE TABLE IF NOT EXISTS ai_answers (domain TEXT, phase TEXT, prompt_id TEXT, step INTEGER, "
                         "answer TEXT, usage TEXT, created REAL, PRIMARY KEY (domain, phase, prompt_id, step))")
@@ -76,13 +117,20 @@ class Store:
         return [r[0] for r in self.db.execute("SELECT domain FROM sites ORDER BY domain")]
 
     # rule results ------------------------------------------------------
+    def _results(self, phase: str) -> str:
+        table = result_table(phase)
+        if table not in self._tables:
+            self.db.execute(f"CREATE TABLE IF NOT EXISTS {table} (domain TEXT PRIMARY KEY, result TEXT, updated_at REAL)")
+            self._tables.add(table)
+        return table
+
     def save_result(self, domain: str, result: dict, phase: str = "icp") -> None:
         blob = zlib.compress(json.dumps(result).encode(), 6)
-        self.db.execute(f"INSERT OR REPLACE INTO {RESULT_TABLES[phase]} VALUES (?, ?, ?)", (domain, blob, time.time()))
+        self.db.execute(f"INSERT OR REPLACE INTO {self._results(phase)} VALUES (?, ?, ?)", (domain, blob, time.time()))
         self.db.commit()
 
     def get_result(self, domain: str, phase: str = "icp") -> dict | None:
-        row = self.db.execute(f"SELECT result FROM {RESULT_TABLES[phase]} WHERE domain = ?", (domain,)).fetchone()
+        row = self.db.execute(f"SELECT result FROM {self._results(phase)} WHERE domain = ?", (domain,)).fetchone()
         if not row:
             return None
         data = row[0]
@@ -95,11 +143,22 @@ class Store:
         self.db.commit()
 
     def get_ai(self, domain: str, phase: str) -> dict[str, dict[int, dict]]:
-        """{prompt_id: {step: {"answer": ..., "usage": ...}}}"""
+        """{prompt_id: {step: {"answer": ..., "usage": ...}}}. Answers are facts, shared by the ICP pipelines: a
+        question the running pipeline asks in this phase also gets its answers saved under the other phase (asked
+        there by another pipeline, e.g. F17 is phase 2 for product and a phase 1 hard stop for services)."""
         out: dict[str, dict[int, dict]] = {}
-        for pid, step, ans, usage in self.db.execute(
-                "SELECT prompt_id, step, answer, usage FROM ai_answers WHERE domain = ? AND phase = ?", (domain, phase)):
-            out.setdefault(pid, {})[step] = {"answer": json.loads(ans), "usage": json.loads(usage)}
+        other: dict[str, dict[int, dict]] = {}
+        for pid, step, ph, ans, usage in self.db.execute(
+                "SELECT prompt_id, step, phase, answer, usage FROM ai_answers WHERE domain = ?", (domain,)):
+            (out if ph == phase else other).setdefault(pid, {})[step] = {"answer": json.loads(ans), "usage": json.loads(usage)}
+        if other:
+            from ..ai import prompts as P
+            from ..checks.rules import phase_of
+            known = P.load()[1]
+            for pid, steps in other.items():
+                sid = known.get(pid, {}).get("signal_id")
+                if pid not in out and sid and phase_of(sid) == phase:
+                    out[pid] = steps
         return out
 
     def ai_costs(self, since: float = 0) -> dict[str, dict]:

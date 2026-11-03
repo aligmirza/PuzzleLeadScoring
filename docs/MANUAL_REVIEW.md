@@ -124,6 +124,29 @@ an AI step, test list only), `dp_test_record` (approve, reject, correct, partial
 - Opposites built: W1, W3, F7 from F5; W5 from M4; W4 from F3; W10 from F13; W12 from M3; W9 from E6.
 - Left out on purpose: B3 → B4/B5, F5 → W2/W7, F11 → B2 (they would skip or close data points that can still be Yes).
 
+## Services facts review (services pipeline, from 2026-10-28)
+
+Test list `dp_test_services` (copied from `lead_scoring_template`), company `argon-ai.com`. At the user's request the
+LLM checks each result against the page text; the user can still reject or correct any of them.
+
+| ID | Result | Review | Decision |
+|---|---|---|---|
+| S1 | No: legal name Argon AI, Inc. (terms) | Approved (checked by the LLM) | Rules now answer No for free when the legal name ends in Inc., Corp., PBC or LLC; before, it needed an AI question. Also removed "ICP summary" from the answering instructions. |
+| S2 | No: sells its own AI software (about page) | Approved (LLM) | AI page answer; web search is off for S2 by design. |
+| S3 | Unknown: no finance job, nothing about the books | Approved (LLM) | Clean Unknown ends the waterfall (web only on a clue). |
+| S4 | Unknown: open roles are business development and engineering | Approved (LLM) | Unknown, never a No. |
+| S5 | Unknown: no statement about its own books | Approved (LLM) | An AI product alone is not DIY. |
+| S6 | No: "Argon AI Raises $5.5 Million Seed Round" (blog) | Approved (LLM) | Rules now answer No for free from the company's own announced round of seed to Series C (funding words required). |
+| S7 | No: 2 people per the YC directory | Approved (LLM) | Now credited to the source of the count (YC: directories; Prospeo: provider; the list: rules). |
+| S8 | No: same count | Approved (LLM) | Same as S7. |
+
+| S2 (hyperguest.com) | Yes: "The B2B Marketplace for the Travel and Hospitality Industry" (about page) | Approved (LLM) | Free rule; the quote should start at the sentence, not the menu text (cosmetic). |
+| S6 (cibc.com) | Yes: "TSX: CM.TO … NYSE: CM" (investor relations) | Approved (LLM) | Free rule; a public company. |
+| S4 (repool.com) | Unknown: the Fund Accounting director serves its fund-admin clients | Approved (LLM) | Not help with its own books. Found: B4 counts this client-facing role as "hiring a finance lead" (false positive in both pipelines), and Repool's fund accounting service may make it an accounting-services firm (E3). Open for a decision. |
+
+All S1–S8 reviewed for argon-ai.com (8 approved, 3 rule fixes). Most services facts are Unknown here; worth a second
+company where they fire (a marketplace such as hyperguest.com, a public company such as cibc.com).
+
 ## Open decisions and offers (not built yet)
 
 - ~~Opposites~~ **built 2026-10-14** (see Conditional runs; W2 and W7 left out).

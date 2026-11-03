@@ -143,5 +143,20 @@ class WebSourcesAsPlainLinks(unittest.TestCase):
         self.assertEqual((out["signals"]["E1"]["value"], out["signals"]["E1"]["url"]), ("no", "https://law.example/argon"))
 
 
+def setUpModule():  # these tests describe the product pipeline's rules
+    import os
+    global _PIPELINE_BEFORE
+    _PIPELINE_BEFORE = os.environ.get("ICP_PIPELINE")
+    os.environ["ICP_PIPELINE"] = "product"
+
+
+def tearDownModule():
+    import os
+    if _PIPELINE_BEFORE is None:
+        os.environ.pop("ICP_PIPELINE", None)
+    else:
+        os.environ["ICP_PIPELINE"] = _PIPELINE_BEFORE
+
+
 if __name__ == "__main__":
     unittest.main()

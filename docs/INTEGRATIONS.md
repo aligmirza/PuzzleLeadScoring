@@ -272,7 +272,7 @@ estimate → approve a cap → `list_ai(list, "icp", max_cost_usd=<cap>)` → wh
 **In the chat path the model you're chatting with is the only AI** (Claude in Claude Code or Claude Desktop), at no API cost. The tool never calls OpenAI there; `list_ai` is the only way OpenAI is used through MCP:
 
 1. `check_company` (or `enrich_list`) runs the free layers: website rules and directories.
-2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ICP summary, ground rules, confidence scale), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
+2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ground rules, confidence scale; no ICP description, since the questions ask for facts), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
 3. The model answers, quoting its proof, and calls `submit_answers`. Questions come in rounds: a data point that
    depends on another (`run_if`, or an opposite) appears only after that one is answered, and is dropped as Not
    applicable when the answer rules it out. Keep calling `open_questions` until nothing is left; phase 2 also stops
@@ -301,6 +301,12 @@ Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring
 | `improvement_report` | What the pipeline learned from its runs, as proposals with proof; safe setting changes are applied automatically (tests run, reverted if they fail) |
 | `apply_improvement` | Apply a setting proposal after your yes (tests run, reverted if they fail) |
 | `mark_improvement` | Record a proposal's outcome: done (fixed by hand), rejected, applied or failed |
+
+### Choosing the ICP pipeline
+
+Every list or company tool takes `icp`: `"services"` (the default) or `"product"`. Use the same `icp` for every
+call on a list (check, questions, answers, results): results are stored per pipeline. The API takes `?icp=product`
+on any call; without it, services is used.
 
 ### The GTM engineer and the learning loop
 

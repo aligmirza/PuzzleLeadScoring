@@ -2,12 +2,6 @@
   "id": "B11",
   "name": "Complaining about QuickBooks",
   "group": "buying",
-  "run_if": {
-    "F4": [
-      "yes",
-      "unknown"
-    ]
-  },
   "steps": {
     "rules": {
       "on": true

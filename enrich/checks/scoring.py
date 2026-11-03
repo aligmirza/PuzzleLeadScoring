@@ -1,21 +1,21 @@
-"""Lead scoring after phase 2, using the weights in scoring.json (3 for high, 2 for medium, 1 for low)."""
-import json
+"""Lead scoring after phase 2, using the running pipeline's weights (config/icps/<pipeline>/scoring.json: 3 for high,
+2 for medium, 1 for low)."""
 import re
-from functools import lru_cache
-from pathlib import Path
 
-from .rules import SIGNALS
+from .rules import FACTS, SIGNALS
 
-CONFIG = Path(__file__).resolve().parents[2] / "config" / "scoring.json"
+_CHECKED: set[str] = set()
 
 
-@lru_cache(maxsize=1)
 def config() -> dict:
-    cfg = json.loads(CONFIG.read_text())
-    names = {label for _, label in SIGNALS.values()}
-    unknown = [n for n in {**cfg["fit_signals"], **cfg["buying_signals"]} if n not in names]
-    if unknown:
-        raise SystemExit(f"scoring.json names signals that don't exist: {unknown}")
+    from ..core import icp
+    cfg = icp.scoring()
+    if icp.name() not in _CHECKED:
+        names = {label for _, label in FACTS.values()}
+        unknown = [n for n in {**cfg["fit_signals"], **cfg["buying_signals"]} if n not in names]
+        if unknown:
+            raise SystemExit(f"{icp.folder() / 'scoring.json'} names signals that don't exist: {unknown}")
+        _CHECKED.add(icp.name())
     return cfg
 
 

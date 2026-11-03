@@ -1,6 +1,6 @@
 """Version stamps: which rules and which prompt produced an answer.
 
-rules()       changes when the rules, scoring, directory matching, scoring.json or profile.yaml change
+rules()       changes when the rules, scoring, directory matching or the running pipeline's config change
 prompt(pid)   changes when that data point's prompt file, the shared prompt rules or the model change
 
 Saved on every result and AI answer. The shared cache only reuses an AI answer made with the same prompt version.
@@ -9,7 +9,7 @@ import hashlib
 import json
 from functools import lru_cache
 
-from .paths import CONFIG, ROOT
+from .paths import ROOT
 
 
 def _hash(*parts: bytes) -> str:
@@ -19,10 +19,16 @@ def _hash(*parts: bytes) -> str:
     return h.hexdigest()[:10]
 
 
-@lru_cache(maxsize=1)
 def rules() -> str:
+    from . import icp
+    return _rules(icp.name())
+
+
+@lru_cache(maxsize=None)
+def _rules(pipeline: str) -> str:
+    from . import icp
     files = [ROOT / "enrich" / "checks" / "rules.py", ROOT / "enrich" / "checks" / "scoring.py",
-             ROOT / "enrich" / "sources" / "directories.py", CONFIG / "scoring.json", CONFIG / "profile.yaml"]
+             ROOT / "enrich" / "sources" / "directories.py", *icp.files(pipeline)]
     return _hash(*(f.read_bytes() for f in files if f.exists()))
 
 

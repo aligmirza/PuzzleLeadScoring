@@ -24,8 +24,8 @@ from . import service
 
 USAGE = {"model": "attached MCP model", "cost": 0, "web_searches": 0, "via": "mcp"}
 HOW_TO_ANSWER = (
-    "You answer with the SAME prompts the OpenAI step uses, from the project's prompt folder: system_prompt (role, ICP "
-    "summary, ground rules, confidence scale; config/prompts/_shared.json) applies to every question, and each "
+    "You answer with the SAME prompts the OpenAI step uses, from the project's prompt folder: system_prompt (role, ground "
+    "rules, confidence scale; config/prompts/_shared.json) applies to every question, and each "
     "question's instructions come from its own file (prompt_file). Follow them exactly. Use only company_page_text for "
     "answer_from = pages; search the web for answer_from = web. Return each answer as a JSON object with the fields "
     "in answer_fields plus \"id\" and \"answer_from\", then call submit_answers with all of them. "

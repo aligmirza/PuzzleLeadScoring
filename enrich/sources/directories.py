@@ -557,8 +557,8 @@ def _usd(text: str | None) -> float | None:
 
 
 def _late_stage_round() -> float:
-    from ..checks.rules import LATE_STAGE_ROUND_USD
-    return LATE_STAGE_ROUND_USD
+    from ..checks.rules import late_stage_round_usd
+    return late_stage_round_usd()
 
 
 def _yc_batch_date(batch: str) -> date | None:

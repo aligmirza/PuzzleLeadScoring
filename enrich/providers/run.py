@@ -184,10 +184,10 @@ def _people(domain: str, finance_only: bool = False) -> tuple[list[dict], float,
                        "linkedin": p.get("linkedin_url"), "location": ", ".join(x for x in (
                            (p.get("location") or {}).get("city"), (p.get("location") or {}).get("country")) if x)})
 
-    def rank(p):
+    def rank(p):  # the buyers first: founder, owner or CEO; then the finance person; then COO, chief of staff, operations
         t = (p["title"] or "").lower()
-        return (0 if re.search(r"founder|ceo|chief executive", t) else 1 if RE_FIN_PERSON.search(t) else
-                2 if re.search(r"coo|chief operating|operations", t) else 3)
+        return (0 if re.search(r"founder|ceo|chief executive|\bowner\b|\bpresident\b", t) else 1 if RE_FIN_PERSON.search(t) else
+                2 if re.search(r"\bcoo\b|chief operating|chief of staff|operations", t) else 3)
     return sorted(people, key=rank), credits, company
 
 

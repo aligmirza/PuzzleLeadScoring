@@ -30,6 +30,7 @@ Nothing is deleted without asking.
 """
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -41,8 +42,9 @@ from .ai import prompts as prompt_files
 from .pipeline.common import LISTS, ai_prompts, console, human, list_dir, offer_cleanup, plain, rel
 from .core.dashboard import ICON
 from .core.inputs import normalize_domain
-from .checks.rules import GATE_NAMES, SIGNALS, VALUE_NAMES
+from .checks.rules import GATE_NAMES, SIGNALS, VALUE_NAMES, phase_of
 from .core.store import Store
+from .core import icp as pipelines
 
 
 def cmd_icp(args):
@@ -144,6 +146,17 @@ def cmd_rules(args):
         phase1_icp.rerun_rules(folder)
     if args.phase in ("signals", "both"):
         phase2_signals.rerun_rules(folder)
+
+
+def cmd_calibrate(args):
+    from .pipeline import calibrate
+    if args.template:
+        console.print(f"Wrote {calibrate.write_template(Path(args.template))}: fill in Buyer type (help, review, diy) "
+                      "and Outcome (closed_won, open, lost) per domain.")
+        return
+    if not args.list or not args.labels:
+        raise SystemExit("Give a list and --labels (or --template FILE for a blank labels file).")
+    calibrate.run(list_dir(args.list), Path(args.labels), args.apply)
 
 
 def cmd_bench(args):
@@ -424,7 +437,7 @@ def cmd_compare(args):
     from .checks.rules import signal_column
     a, b = list_dir(args.list_a), list_dir(args.list_b)
     def rows(folder):
-        with open(folder / "output" / f"{folder.name}_enriched.csv", newline="") as f:
+        with open(pipelines.enriched_csv(folder), newline="") as f:
             r = list(csv.DictReader(f))
         dcol = next(c for c in r[0] if c.strip().lower() in ("domain", "website", "url", "company domain"))
         return {normalize_domain(x[dcol]): x for x in r}
@@ -552,7 +565,7 @@ def cmd_prompts(args):
             t.add_column(col, overflow="fold")
         stage_names = {"site_text": "website", "job_posts": "job posts", "search_results": "web search", "final": "final output"}
         for pid, p in prompts.items():
-            phase = "1 ICP check" if pid.startswith(("must_haves/", "exclusions/")) else "2 signals"
+            phase = "1 ICP check" if p.get("signal_id") and phase_of(p["signal_id"]) == "icp" else "2 signals"
             web = {"fallback": "if step 1 finds nothing", "primary": "always (web first)", "off": "never"}[p["web_search"]["mode"]]
             t.add_row(f"{pid}.json", p["data_point"], phase, stage_names.get(p["stage"], p["stage"]), web, p["run_when"])
         console.print(t)
@@ -566,7 +579,7 @@ def cmd_prompts(args):
     company, domain, facts, context = "Example Co", "example.com", {}, {"home": "(page text goes here)"}
     if args.domain:
         d = normalize_domain(args.domain) or args.domain
-        phase = "icp" if pid.startswith(("must_haves/", "exclusions/")) else "signals"
+        phase = "icp" if prompts[pid].get("signal_id") and phase_of(prompts[pid]["signal_id"]) == "icp" else "signals"
         folders = [list_dir(args.list)] if args.list else sorted(LISTS.glob("*"), key=lambda f: f.stat().st_mtime, reverse=True)
         r = next((x for f in folders if (f / "cache.sqlite").exists() and (x := Store(f).get_result(d, phase))), None)
         if not r:
@@ -589,8 +602,28 @@ def cmd_prompts(args):
         console.print(msg[part], markup=False, highlight=False)
 
 
+def _pick_pipeline(argv: list[str]) -> list[str]:
+    """--icp services|product anywhere on the command line (default: services). Set for the whole process, so
+    background workers and the MCP / API servers started from here use it too."""
+    out, i = [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--icp" and i + 1 < len(argv):
+            os.environ["ICP_PIPELINE"] = pipelines.check(argv[i + 1])
+            i += 2
+            continue
+        if a.startswith("--icp="):
+            os.environ["ICP_PIPELINE"] = pipelines.check(a.split("=", 1)[1])
+        else:
+            out.append(a)
+        i += 1
+    return out
+
+
 def main(argv: list[str] | None = None):
-    ap = argparse.ArgumentParser(prog="python -m enrich")
+    argv = _pick_pipeline(list(sys.argv[1:] if argv is None else argv))
+    ap = argparse.ArgumentParser(prog="python -m enrich",
+                                 epilog="--icp services|product (anywhere): the ICP pipeline; services is the default")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def speed(p):
@@ -693,6 +726,14 @@ def main(argv: list[str] | None = None):
     p.add_argument("list", help="list name (or its CSV file)")
     p.add_argument("--domain", help="only this company")
     p.set_defaults(fn=cmd_render)
+
+    p = sub.add_parser("calibrate", help="services pipeline: do help-seekers score above DIY buyers? suggests weights "
+                                         "and the cut-off from labelled companies (changes nothing without --apply)")
+    p.add_argument("list", nargs="?", help="list enriched with the services pipeline")
+    p.add_argument("--labels", help="CSV with Domain, Buyer type (help, review, diy) and Outcome (closed_won, open, lost)")
+    p.add_argument("--template", metavar="FILE", help="write a blank labels file to fill in")
+    p.add_argument("--apply", action="store_true", help="write the suggested weights and cut-off (only if the tests pass)")
+    p.set_defaults(fn=cmd_calibrate)
 
     p = sub.add_parser("bench", help="time the free steps on a CSV (fresh list bench_<label>), or compare two runs; free")
     p.add_argument("csv", nargs="?")

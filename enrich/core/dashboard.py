@@ -14,9 +14,15 @@ from rich.text import Text
 
 from ..checks.rules import SIGNALS
 
-EXCLUSION_SHORT = {"E1": "Series C+", "E2": "No website", "E3": "Accounting firm", "E4": "Outside US",
-                   "E5": "Non-profit", "E6": "Holds stock"}
-MUST_SHORT = {"M1": "US", "M2": "Live", "M3": "Fintech", "M4": "Sales"}
+SHORT = {"E1": "Series C+", "E2": "No website", "E3": "Accounting firm", "E4": "Outside US", "E5": "Non-profit",
+         "E6": "Holds stock", "F17": "Several entities", "B8": "New entity", "W6": "Non-USD", "W7": "Manufacturing",
+         "W10": "ERP + finance team", "M1": "US", "M2": "Live", "M3": "Fintech", "M4": "Sales"}
+
+
+def _short(group: str) -> dict[str, str]:
+    """The running pipeline's must-haves or exclusions, with short labels for the dashboard."""
+    from ..checks.rules import SIGNALS
+    return {sid: SHORT.get(sid, n[:18]) for sid, (g, n) in SIGNALS.items() if g == group}
 
 ICON = {"yes": "[green]✓[/]", "no": "[red]✗[/]", "unknown": "[dim]·[/]", "check": "[yellow]?[/]", "na": "[dim]–[/]"}
 VERDICT_STYLE = {"Yes": "green", "Yes (some must-haves unconfirmed)": "cyan", "Needs AI check": "yellow",
@@ -89,8 +95,8 @@ class Dashboard:
         if self.mode == "icp":
             verdicts = "  ".join(f"[{style}]{name} {c[f'verdict_{name}']}[/]" for name, style in VERDICT_STYLE.items())
             musts = "  ".join(f"{name} {ICON['yes']}{c[f'{sid}_yes']} {ICON['check']}{c[f'{sid}_check']} {ICON['no']}{c[f'{sid}_no']}"
-                              for sid, name in MUST_SHORT.items())
-            excl = "  ".join(f"{name} {c[f'{sid}_yes']}/{c[f'{sid}_check']}" for sid, name in EXCLUSION_SHORT.items())
+                              for sid, name in _short("must").items())
+            excl = "  ".join(f"{name} {c[f'{sid}_yes']}/{c[f'{sid}_check']}" for sid, name in _short("exclusion").items())
             g.add_row(Text.from_markup(f"\n[bold]Is it ICP?[/]  {verdicts}"))
             g.add_row(Text.from_markup(f"[bold]Must-haves[/]  {musts}"))
             g.add_row(Text.from_markup(f"[bold]Exclusions[/]  {excl}   [dim](confirmed / needs check)[/]"))
@@ -122,9 +128,9 @@ class Dashboard:
             jobs = str(jobs) if jobs is not None else "[dim]-[/]"
             n_ai = str(len(r["ai"].get("prompts", [])))
             if self.mode == "icp":
-                musts = "  ".join(ICON[s[k]["value"]] for k in MUST_SHORT)
+                musts = "  ".join(ICON[s[k]["value"]] for k in _short("must") if k in s)
                 flags = ", ".join(f"[red]{name}[/]" if s[k]["value"] == "yes" else f"[yellow]{name}?[/]"
-                                  for k, name in EXCLUSION_SHORT.items() if s[k]["value"] in ("yes", "check"))
+                                  for k, name in _short("exclusion").items() if k in s and s[k]["value"] in ("yes", "check"))
                 verdict = r.get("icp_verdict", "")
                 t.add_row(r["domain"], f"[{VERDICT_STYLE.get(verdict, 'white')}]{verdict}[/]", musts,
                           r["entity_type"] if r["entity_type"] != "Unknown" else "[dim]-[/]", jobs, flags, n_ai)

@@ -17,6 +17,7 @@ from rich.table import Table
 from .common import console, rel
 from ..core.inputs import DOMAIN_COLS, normalize_domain
 from ..checks.rules import SIGNALS, signal_column
+from ..core import icp as pipelines
 
 TEMPLATE_SIGNALS = ["M1", "E1", "E3", "E4", "E5", "E6", "F1", "F2", "F3", "F5", "F6"]
 
@@ -37,7 +38,7 @@ def _norm(v: str) -> str:
 
 
 def run(folder: Path, labels: Path | None = None) -> dict:
-    result_path = folder / "output" / f"{folder.name}_enriched.csv"
+    result_path = pipelines.enriched_csv(folder)
     if not result_path.exists():
         raise SystemExit(f"No results yet for '{folder.name}'. Run phase 1 first.")
     cols, results = _read(result_path)

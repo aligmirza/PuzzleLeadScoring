@@ -295,8 +295,23 @@ class ExistingTools(unittest.TestCase):
         self.assertTrue(callable(client_ai.submit_answers) and callable(service.check_one))  # production paths load
         from enrich.pipeline import waterfall
         self.assertEqual(len(waterfall.LAYERS), 5)
-        self.assertEqual(len(SIGNALS), 57)
-        self.assertEqual(len(datapoints.load()), 57)
+        self.assertEqual(len(SIGNALS), 65)  # 57 + the 8 services facts (S1-S8)
+        self.assertEqual(len(datapoints.load()), 65)
+
+
+def setUpModule():  # these tests describe the product pipeline's rules
+    import os
+    global _PIPELINE_BEFORE
+    _PIPELINE_BEFORE = os.environ.get("ICP_PIPELINE")
+    os.environ["ICP_PIPELINE"] = "product"
+
+
+def tearDownModule():
+    import os
+    if _PIPELINE_BEFORE is None:
+        os.environ.pop("ICP_PIPELINE", None)
+    else:
+        os.environ["ICP_PIPELINE"] = _PIPELINE_BEFORE
 
 
 if __name__ == "__main__":
