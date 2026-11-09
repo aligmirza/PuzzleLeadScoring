@@ -111,7 +111,7 @@ def run(target: str, group: str = "must", redo: bool = False, refresh: bool = Fa
         if not icp:
             continue
         ctx = waterfall.context(store, domain, company)
-        in_running = icp.get("icp_verdict") not in ("No", "Unknown: site not reached")
+        in_running = icp.get("icp_verdict") not in ("No", "Unknown: site not reached", "Needs a call: no website")
         # phase 2 only counts for companies still in the running; for a NO company its answers are never used
         sids = [sid for sid, (g, _) in SIGNALS.items() if (sid in only if only else g in groups)
                 and (g in ("must", "exclusion") or in_running)]

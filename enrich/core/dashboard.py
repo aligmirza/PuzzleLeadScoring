@@ -26,7 +26,7 @@ def _short(group: str) -> dict[str, str]:
 
 ICON = {"yes": "[green]✓[/]", "no": "[red]✗[/]", "unknown": "[dim]·[/]", "check": "[yellow]?[/]", "na": "[dim]–[/]"}
 VERDICT_STYLE = {"Yes": "green", "Yes (some must-haves unconfirmed)": "cyan", "Needs AI check": "yellow",
-                 "No": "red", "Unknown: site not reached": "yellow"}
+                 "No": "red", "Unknown: site not reached": "yellow", "Needs a call: no website": "yellow"}
 
 
 class Dashboard:

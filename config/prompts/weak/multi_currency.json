@@ -5,7 +5,7 @@
   "signal_id": "W6",
   "profile_section": "weak_fit_signals",
   "weight": "penalty",
-  "version": 1,
+  "version": 2,
   "stage": "site_text",
   "model": "small",
   "run_when": "Code found prices in several currencies or a currency switcher.",
@@ -20,10 +20,10 @@
   },
   "prompt": {
     "task": "Decide whether the company needs multi-currency or non-USD reporting (a known product gap).",
-    "definition": "This lowers the score but never disqualifies.",
+    "definition": "Puzzle's books run in USD only. In the services ICP this is a hard stop, so it needs proof that the company itself bills, holds money or reports in more than one currency; in the product ICP it lowers the score.",
     "yes_when": [
-      "Operating entities or offices in several countries",
-      "Revenue in several currencies"
+      "Revenue billed in several currencies, or bank accounts in several currencies",
+      "Operating entities that report in another currency (e.g. a UK Ltd alongside the US company)"
     ],
     "no_when": [
       "Only USD"
@@ -32,7 +32,9 @@
       "Unclear"
     ],
     "watch_out_for": [
-      "Showing local-currency prices to visitors doesn't always mean multi-currency books"
+      "Showing local-currency prices to visitors doesn't mean multi-currency books",
+      "A currency switcher or a table of fees in another currency (e.g. 'UK bank transfer 1% (min £1)') is not proof",
+      "One office or team member abroad is not proof: the entity and its books must be named"
     ],
     "where_to_look": [
       "Pricing page",

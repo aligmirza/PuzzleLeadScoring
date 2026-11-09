@@ -6,7 +6,7 @@ Every signal gets one of:
   unknown  nothing found (never counts against the company)
   check    a clue was found but a person or AI must confirm it
 
-Signal IDs match SIGNALS.md.
+Signal IDs match docs/DOCUMENTATION.md, section 6.
 """
 from __future__ import annotations
 
@@ -381,7 +381,11 @@ RE_METRIC = re.compile(
 RE_NOT_OWN_METRIC = re.compile(r"\b(?:market|industry|TAM|addressable|customers? (?:save|saw|see|grew|raised|achieve)|"
                                r"clients? (?:save|saw|see|grew|raised|achieve)|helped \w+ (?:grow|raise)|followers|"
                                r"downloads|subscribers on|views)\b", re.I)
-RE_REMOTE = re.compile(r"remote[- ]first|fully remote|remote[- ]friendly|distributed (?:team|company)|work from anywhere|\bhybrid\b", re.I)
+RE_REMOTE = re.compile(r"remote[- ]first|fully remote|remote[- ]friendly|distributed (?:team|company)|work from anywhere"
+                       r"|\bhybrid[- ](?:work(?:ing|place|force)?|remote|team|role|position|schedule|employees?)\b"
+                       r"|\bremote\s?(?:or|and|/)\s?hybrid\b|\b(?:on-?site|in[- ]office)\s?(?:or|and|/)\s?hybrid\b"
+                       r"|\(hybrid\)|\bhybrid\s*\||\bhybrid\s+[–-]\s+\w|\b(?:location|workplace|work type)\s*:\s*hybrid\b", re.I)
+# 'hybrid' alone, 'hybrid model', 'hybrid setup' usually describe the product (software plus people), not the team
 RE_SHUTDOWN = re.compile(r"\b(?:is|are|will be)\s+(?:shutting down|winding down|sunsetting|closing (?:its|our) doors)"
                          r"|\bshutting down on\b|\bwe(?:'re| are| have| 've)\s+(?:shut down|closed (?:our|the) (?:doors|company))"
                          r"|\bceased operations\b", re.I)
@@ -447,6 +451,8 @@ def decide(signals: dict, site_status: str | None) -> dict:
         verdict = "Needs AI check"
     elif gate == "pass":
         verdict = "Yes"
+    elif signals.get("M2", {}).get("no_website") and not confirmed:
+        verdict = NO_WEBSITE  # nothing about the company was read: sales confirms it before any AI or Prospeo spend
     else:
         verdict = "Yes (some must-haves unconfirmed)"
     return {"gate": gate, "verdict": verdict, "checks": checks, "excluded": excluded, "failed": failed,
@@ -743,7 +749,10 @@ class Extractor:
         elif status != "dead":
             self.s["M2"] = sig(UNKNOWN, note=f"site could not be reached ({err}); retry later")
         else:
-            self.s["M2"] = sig(NO, evidence=f"site did not load: {err}")
+            if _website_optional() and err.startswith("http "):  # the server answers, the site is just gone (CanAm: 404)
+                self.s["M2"] = {**sig(UNKNOWN, note=f"site did not load ({err}); {NO_SITE_NOTE}"), "no_website": True}
+            else:  # the domain doesn't resolve: wrong domain or the business is gone
+                self.s["M2"] = sig(NO, evidence=f"site did not load: {err}")
             self.s["E2"] = sig(CHECK, evidence=f"site did not load: {err}",
                                note="also needs proof of no funding and a new incorporation")
 
@@ -765,11 +774,13 @@ class Extractor:
                     break
             if shutdown:
                 break
-        if parked:
+        if parked:  # a for-sale or parked domain: the company doesn't own it (or is gone), in every pipeline
             self.s["M2"] = sig(NO, evidence=f"parked or for-sale page: {parked.group(0)}", url=home.url)
         elif shutdown:
             self.s["M2"] = sig(NO, evidence=f"the company says it is shutting down: {shutdown}", url=home.url)
             self.facts["shutting_down"] = shutdown
+        elif coming and _website_optional():  # Ridgeline Drilling: a paying customer behind a coming-soon page
+            self.s["M2"] = {**sig(UNKNOWN, note=f"only a coming-soon page; {NO_SITE_NOTE}", url=home.url), "no_website": True}
         elif coming:
             self.s["M2"] = sig(NO, evidence="only a coming-soon page", url=home.url)
         elif self.facts["needs_js"]:
@@ -955,7 +966,14 @@ class Extractor:
         self.facts["play_store"] = bool(re.search(r"play\.google\.com/store/apps/details", self.raw_all))
 
         if p and pricing_has_foreign_and_usd(p.text):
-            self.s["W6"] = sig(YES, evidence="prices shown in USD and other currencies", url=p.url)
+            from ..core import icp
+            if icp.group("W6") == "exclusion":
+                # a hard stop needs proof the books run in several currencies; foreign prices or fees on a pricing page
+                # (a currency switcher, a UK fee table) only suggest it, so the AI decides (Dueflow: a paying customer)
+                self.s["W6"] = sig(CHECK, evidence="prices shown in USD and other currencies", url=p.url,
+                                   note="foreign prices or fees seen; the AI confirms whether the books need several currencies")
+            else:  # only a score-down here: the code's answer is enough
+                self.s["W6"] = sig(YES, evidence="prices shown in USD and other currencies", url=p.url)
         elif re.search(r"\b(?:USD|EUR|GBP)\s?(?:/|\|)\s?(?:USD|EUR|GBP)\b", self.raw_all):
             self.s["W6"] = sig(CHECK, evidence="currency switcher on site")
 
@@ -1389,11 +1407,13 @@ class Extractor:
             proof.append("app store listing")
         if self.facts.get("jobs_count"):
             proof.append(f"{self.facts['jobs_count']} open roles")
+        # a services company behind a coming-soon page is not a pre-launch startup: its website says nothing either way
+        no_site = self.s.get("M2", {}).get("no_website")
         if proof:
             self.s["M4"] = sig(YES, "; ".join(proof))
-        elif self.facts.get("waitlist"):
+        elif self.facts.get("waitlist") and not no_site:
             self.s["M4"] = sig(NO, f"waitlist only: {self.facts.get('waitlist_evidence', '')}")
-        if self.facts.get("waitlist") and not proof:
+        if self.facts.get("waitlist") and not proof and not no_site:
             self.s["W5"] = sig(YES, self.facts.get("waitlist_evidence", ""))
             self.ai.append("weak/pre_revenue")
 
@@ -1677,6 +1697,17 @@ def unscored(seg: str) -> list[str]:
     pts = {**cfg["fit_signals"], **cfg["buying_signals"]}
     by_name = {name: sid for sid, (_, name) in SIGNALS.items()}
     return [by_name[n] for n, w in pts.items() if isinstance(w, dict) and w.get(seg) == "none" and n in by_name]
+
+
+NO_WEBSITE = "Needs a call: no website"  # services verdict: no readable website and no must-have proven
+NO_SITE_NOTE = ("established businesses may not keep a website, so this pipeline doesn't fail them for it: "
+                "confirm the company on the call")
+
+
+def _website_optional() -> bool:
+    """Services: a parked, coming-soon or dead website leaves M2 Unknown instead of failing it (roles.json)."""
+    from ..core import icp
+    return icp.roles().get("website_optional") is True
 
 
 def pricing_has_foreign_and_usd(text: str) -> bool:

@@ -5,7 +5,7 @@
   "signal_id": "F15",
   "profile_section": "strong_fit_signals",
   "weight": "medium",
-  "version": 1,
+  "version": 2,
   "stage": "site_text",
   "model": "small",
   "run_when": "Code found a possible metric that needs confirming.",
@@ -33,7 +33,9 @@
     ],
     "watch_out_for": [
       "Numbers about the market or about customers' results don't count",
-      "Social media follower counts don't count"
+      "Social media follower counts don't count",
+      "Counts of people helped, patients, projects or jobs completed, practices run or years of experience are not revenue, customer or growth numbers",
+      "Vague wording ('thousands of happy clients') without a stated number doesn't count"
     ],
     "where_to_look": [
       "Homepage",

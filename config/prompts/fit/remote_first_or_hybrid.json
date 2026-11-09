@@ -5,7 +5,7 @@
   "signal_id": "F16",
   "profile_section": "strong_fit_signals",
   "weight": "medium",
-  "version": 1,
+  "version": 2,
   "stage": "site_text",
   "model": "small",
   "run_when": "Code found no remote wording and no remote job flags, but a careers or about page exists.",
@@ -32,7 +32,8 @@
     ],
     "watch_out_for": [
       "One remote role at an office-based company is not remote-first",
-      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'"
+      "Job sites mix employers with similar names: a listing counts only if its employer is this company (same company page, domain or location), e.g. 'Argon' is not 'Argon AI'",
+      "'Hybrid' describing the product or service (e.g. 'a hybrid between direct mail and digital') is not about how the team works"
     ],
     "where_to_look": [
       "Careers page",

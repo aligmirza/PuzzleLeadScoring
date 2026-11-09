@@ -5,8 +5,10 @@
     "Decided 2026-11-03: Series C is in; the $500K monthly-expense ceiling is the proxy NetSuite with a finance team (W10), Series D or later (S6) or 100+ people (S7); 50-99 people (S8) only scores down",
     "Books behind (S3), looking for help (S4) and DIY (S5) are rarely public; Unknown stays Unknown",
     "Weights and the Strong-fit cut-off are guesses until calibrated on Alexey's 152 companies (stage 5)",
-    "Decided 2026-11-07 (Alexey): young companies lose no points for being young; AI companies lose no points (Puzzle's MCP lets them do the books with their own agent), so does-its-own-books (S5) is info and routes to Platform + MCP; real estate and legal pass with 'ask how the books are handled'"
+    "Decided 2026-11-07 (Alexey): young companies lose no points for being young; AI companies lose no points (Puzzle's MCP lets them do the books with their own agent), so does-its-own-books (S5) is info and routes to Platform + MCP; real estate and legal pass with 'ask how the books are handled'",
+    "website_optional (2026-11-09): a coming-soon page or a 404 leaves M2 Unknown instead of No, because established local businesses often have no real website (Ridgeline Drilling, CanAm Logistics: paying customers). A domain that doesn't resolve or is for sale stays No. With no website and no must-have proven the verdict is 'Needs a call: no website'."
   ],
+  "website_optional": true,
   "reason_groups": {
     "Too big for services": [
       "S6",

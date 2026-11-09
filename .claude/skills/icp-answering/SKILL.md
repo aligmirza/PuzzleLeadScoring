@@ -41,7 +41,19 @@ prompt the OpenAI step uses: `system_prompt` (from `config/prompts/_shared.json`
   its city.
 - **F8:** prices must be named plans with amounts; "Contact Sales" only is No (the rules usually settle it).
 - **F13 / F14:** need a real team list; leave them to Prospeo (step 5), never guess from the founders shown.
-- **F15:** the company's own ARR, revenue, customer count or growth, not the market's or its customers'.
+- **F15:** the company's own ARR, revenue, customer count or growth, not the market's or its customers'. Counts of
+  people helped, patients, projects or jobs done, practices run or years of experience are not growth numbers.
+- **F16:** "hybrid" must be about how the team works ("hybrid team", "(Hybrid)"), not the product ("a hybrid between
+  direct mail and digital").
+- **W6:** a currency switcher or a foreign fee table on the pricing page is not proof the books run in several
+  currencies; answer Unknown unless the text says the company bills, holds or reports in more than one currency.
+- **M4:** a donation page, membership fee or event ticket is not commercial transaction activity.
+- **Services, no website** (parked, coming-soon or 404): only web questions are possible, and only sources that match
+  this exact company (name plus location or domain) count. Many local businesses share names (Ridgeline, CanAm,
+  Covenant, Baja Roofing).
+- **Domain vs company:** the list's domain sometimes belongs to someone else (a contact's email on a consultant's or
+  parent's domain, a Malaysian legal name on a US site). Answer about the company the pages describe and flag the
+  mismatch in your report.
 
 ## After answering
 

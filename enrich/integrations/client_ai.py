@@ -69,7 +69,7 @@ def _phase(store: Store, domain: str, phase: str) -> str:
     if phase in ("icp", "signals"):
         return phase
     icp = store.get_result(domain, "icp") or {}
-    if icp.get("icp_verdict") in ("No", "Unknown: site not reached"):
+    if icp.get("icp_verdict") in ("No", "Unknown: site not reached", "Needs a call: no website"):
         return "icp"
     open_icp = [p for p in ai_prompts(icp) if p not in store.get_ai(domain, "icp")]
     return "icp" if open_icp or not store.get_result(domain, "signals") else "signals"
@@ -140,14 +140,17 @@ def prompt_for(pid: str, kind: str, company: str, domain: str, facts: dict, resu
     return {**msg, "prompt_file": f"config/prompts/{pid}.json"}
 
 
-def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 12,
+def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 3,
                    all_questions: bool = False) -> dict:
     d = normalize_domain(domain) or domain
     folder, store = _folder_store(list_name)
     phase = _phase(store, d, phase)
     result = store.get_result(d, phase)
     if not result:
-        raise ValueError(f"No {phase} result for {d} in '{list_name}'. Run check_company first.")
+        hint = (" Phase 2 never ran for it (it wasn't ICP YES when the list ran): re-run the free steps for this company "
+                "(check_company with include_signals, or enrich_list again)." if phase == "signals" else
+                " Run check_company first.")
+        raise ValueError(f"No {phase} result for {d} in '{list_name}'.{hint}")
     pending = _pending(store, d, phase, result, all_questions)
     lock = None if all_questions else tier_lock(store, d, phase, result)
     row = _row(folder, d, store)
@@ -172,9 +175,16 @@ def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str
                              if needs_pages else "",
         "questions": questions,
         "next": "Answer these, then call submit_answers(domain, answers=[{id, answer_from, ...answer_fields}], "
-                f"list_name='{folder.name}', phase='{phase}')." if questions else (
+                f"list_name='{folder.name}', phase='{phase}')."
+                + (f" {len(pending) - len(questions)} more are open after these: call open_questions again after submitting."
+                   if len(pending) > len(questions) else "") if questions else (
                     f"Stopped early: {lock['why']}. Nothing left that can change the result (all_questions=true asks "
-                    f"the rest anyway)." if lock else "Nothing left to answer in this phase."),
+                    f"the rest anyway)." if lock else "Nothing left to answer in this phase."
+                    + (" The company is ICP YES: run check_company(domain, include_signals=True) for phase 2, then "
+                       "open_questions(phase='signals')." if phase == "icp" and str(result.get("icp_verdict", "")).startswith("Yes")
+                       and not store.get_result(d, "signals") else
+                       " The company is ICP YES: continue with open_questions(phase='signals')." if phase == "icp"
+                       and str(result.get("icp_verdict", "")).startswith("Yes") else "")),
     }
 
 
@@ -271,7 +281,7 @@ def overview(list_name: str) -> dict:
         for ph in ("icp", "signals"):
             res = store.get_result(domain, ph)
             item[f"open_{ph}"] = len(_pending(store, domain, ph, res)) if res and (
-                ph == "icp" or icp.get("icp_verdict") not in ("No", "Unknown: site not reached")) else 0
+                ph == "icp" or icp.get("icp_verdict") not in ("No", "Unknown: site not reached", "Needs a call: no website")) else 0
         out.append(item)
     out.sort(key=lambda c: (rank.get(c["icp_verdict"], 3), -c["score_now"]))
     todo = [c for c in out if c["open_icp"] + c["open_signals"]]

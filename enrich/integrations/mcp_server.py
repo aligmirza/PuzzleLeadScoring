@@ -46,8 +46,14 @@ mcp = MCPServer(
         "(website rules and directories); then open_questions(domain) lists what is still open, with the page text and "
         "instructions; answer each one yourself (read the page text, or search the web for answer_from = web if you can), "
         "quoting your proof exactly; then submit_answers. Answers pass the same quality checks as any AI answer, and the "
-        "result says which counted. Repeat open_questions until nothing is left; if the company becomes ICP YES, run "
-        "check_company again with include_signals and continue with phase 'signals'. For a whole list: enrich_list, "
+        "result says which counted. Repeat open_questions until it returns none: questions arrive a few at a time (each "
+        "must-have in turn, then the hard stops, then the web step), so one answered batch is never the end. Keep limit "
+        "at 1-3 (the page text is repeated per question). If the company becomes ICP YES (also with must-haves still "
+        "unconfirmed), run check_company again with include_signals and continue with phase 'signals'. Services: a "
+        "parked, coming-soon or dead website leaves the website must-have Unknown, not No (established local "
+        "businesses often have none); only web sources that match the exact company count. Flag a domain that seems "
+        "to belong to another company. After any change to rules, prompts or roles.json the user must reconnect this "
+        "server (/mcp): until then submit_answers re-scores with the old code. For a whole list: enrich_list, "
         "list_status, then questions_overview to see which companies have open questions. Results say ICP YES / NO / "
         "PENDING with the reason, a lead score (high 3, medium 2, low 1 per signal) and the proof for every answer. "
         "TEST MODE (dp_test_* tools, isolated test lists only): one data point at a time. After every dp_test_run (or "
@@ -266,7 +272,7 @@ def list_contacts(list_name: str, domain: str = "", decision_makers_only: bool =
 
 
 @tool()
-def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 12,
+def open_questions(domain: str, list_name: str = service.SINGLE_LIST, phase: str = "auto", limit: int = 3,
                    all_questions: bool = False, icp: str = "") -> dict:
     """The questions the free layers left open for a company, for YOU to answer (not OpenAI): the company's page text,
     each question's instructions and its answer fields, and whether to answer from the pages or the web.
@@ -375,7 +381,7 @@ def improvement_report(auto_apply: bool = True) -> dict:
 @tool()
 def apply_improvement(proposal_id: str) -> dict:
     """Apply a setting proposal from improvement_report after the user approved it: the data point's file is changed,
-    all tests run, and the change is reverted if they fail. Logged in docs/IMPROVEMENTS.md."""
+    all tests run, and the change is reverted if they fail. Logged in the improvements log (docs/DOCUMENTATION.md, last section)."""
     return learning.apply(proposal_id)
 
 

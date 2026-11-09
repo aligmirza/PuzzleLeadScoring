@@ -16,8 +16,9 @@ Pipeline: services (the default). If I wrote `product` in the arguments, pass `i
    is reached, stop and tell me how far it got: running `/enrich-chat` again later continues with what's left.
    After each batch, print one progress line: `answered X of Y companies`. Keep the chat short: only the subagents'
    one-line results.
-4. Call `questions_overview(list_name)` again and report what is still open (only questions the subagents couldn't
-   answer should remain).
+4. Call `questions_overview(list_name)` again. Any company with open questions left (a subagent stopped early, or
+   ICP YES with phase 2 not started): start a new `company-answerer` for it, saying which phase to finish. Then report
+   what is still open (only questions nobody could answer should remain).
 5. Step 5, Prospeo: count the ICP YES companies whose finance check (F13, F14) is still open. Ask me: "Run the Prospeo
    finance check for N companies (at most N credits)?" Only if I say yes, call `check_company(domain, use_prospeo=true)`
    for each of them.
@@ -28,3 +29,10 @@ Pipeline: services (the default). If I wrote `product` in the arguments, pass `i
    fix any crash (tests must pass), and show the other proposals with their proof for my OK.
 
 Never call `list_ai` or anything with OpenAI in this command unless I ask for it.
+
+If you change rules, prompts or roles.json during the run, the MCP server still runs the old code and
+`submit_answers` re-scores with it (a fixed company can flip back to NO). Ask me to reconnect it (`/mcp`), and
+re-score saved results for free with `.venv/bin/python -m enrich rules <list_name> --phase both`.
+
+Before the summary, note companies whose website domain may not be theirs (an email domain on a different company's
+site, a foreign legal name on a US site) and same-name companies the subagents ignored: sales should know.

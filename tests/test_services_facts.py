@@ -106,6 +106,40 @@ class CustomerTypes(unittest.TestCase):
             self.assertEqual(score(s, "SMB")["score"], 0)
 
 
+class TestOnRealDeals(unittest.TestCase):
+    """Fixes from the 26-deal test (Nov 9, 2026): paying customers the rules wrongly failed or scored."""
+
+    def test_no_working_website_is_unknown_for_services(self):
+        soon = {"home": "<p>Coming Soon</p>"}
+        r = run(soon, phase="icp")
+        self.assertEqual(value(r, "M2"), "unknown")  # Ridgeline Drilling
+        self.assertEqual(r["icp_verdict"], "Needs a call: no website")  # nothing proven: not a YES
+        self.assertEqual(value(run(soon, phase="icp", pipeline="product"), "M2"), "no")  # startups still need a site
+        gone = {"record_extra": {"status": "dead", "error": "http 404"}}
+        r = run({}, phase="icp", **gone)
+        self.assertEqual((value(r, "M2"), r["icp_verdict"]), ("unknown", "Needs a call: no website"))  # CanAm Logistics
+        self.assertEqual(value(run({}, phase="icp", pipeline="product", **gone), "M2"), "no")
+
+    def test_a_wrong_or_sold_domain_still_fails(self):
+        no_dns = {"record_extra": {"status": "dead", "error": "domain does not resolve"}}
+        self.assertEqual(run({}, phase="icp", **no_dns)["icp_verdict"], "No")
+        for_sale = {"home": "<p>This domain is for sale. Buy this domain today.</p>"}
+        self.assertEqual(run(for_sale, phase="icp")["icp_verdict"], "No")
+
+    def test_foreign_fees_need_the_ai_only_where_it_is_a_hard_stop(self):
+        fees = {"pricing": "<p>Plans from $49/month. Card 2.2%. UK bank transfer 1% (min £1)</p>"}
+        self.assertEqual(value(run(fees, phase="icp"), "W6"), "check")  # Dueflow: not proof of multi-currency books
+        self.assertEqual(value(run(fees, pipeline="product"), "W6"), "yes")  # a score-down only (phase 2): free
+
+    def test_hybrid_must_be_about_the_team(self):
+        for product in ("A hybrid between direct mail and digital ads.", "Our hybrid model pairs AI with expert bookkeepers.",
+                        "A hybrid setup of software and people.", "Hybrid-cloud backups."):
+            self.assertNotEqual(value(run({"about": f"<p>{product}</p>"}), "F16"), "yes", product)
+        for team in ("We are a hybrid team based in Austin.", "Engineer, Austin (Hybrid)", "Location: Hybrid",
+                     "Remote/hybrid", "Hybrid - Austin, TX", "Hybrid work, 3 days in office"):
+            self.assertEqual(value(run({"careers": f"<p>{team}</p>"}), "F16"), "yes", team)
+
+
 class SizeAndStage(unittest.TestCase):
     def test_headcount_bands(self):
         self.assertEqual([value(run({"home": "<p>x</p>"}, employees="120", phase="icp"), "S7")], ["yes"])

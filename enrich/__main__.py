@@ -502,7 +502,7 @@ def cmd_lists(args):
         verdicts = [(store.get_result(d, "icp") or {}).get("icp_verdict", "") for d in domains]
         t.add_row(folder.name, str(len(domains)),
                   str(sum(v.startswith("Yes") for v in verdicts)), str(verdicts.count("Needs AI check")),
-                  str(verdicts.count("No")), str(verdicts.count("Unknown: site not reached")),
+                  str(verdicts.count("No")), str(verdicts.count("Unknown: site not reached") + verdicts.count("Needs a call: no website")),
                   str(sum(1 for d in domains if store.get_result(d, "signals"))),
                   str(sum(1 for d in domains if store.pages_size(d))), human(store.disk_usage()["total"]), rel(folder) + "/")
     console.print(t)

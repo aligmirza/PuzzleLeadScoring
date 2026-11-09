@@ -38,7 +38,7 @@ class _Covers(dict):
 
 
 COVERS = _Covers()
-OUT_OF_RUNNING = ("No", "Unknown: site not reached")
+OUT_OF_RUNNING = ("No", "Unknown: site not reached", "Needs a call: no website")
 
 
 def _credits_this_month() -> float:

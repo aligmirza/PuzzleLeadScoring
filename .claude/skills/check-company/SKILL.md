@@ -10,8 +10,10 @@ Pipeline: **services** is the default ICP. Use `icp="product"` on every call onl
 1. `check_company(domain, company?, employees?)`: the free steps (size, website rules and code checks, YC, SEC, IRS,
    DNS) for phase 1 and phase 2. Results are cached, so asking again is instant. If it says "still running", call it
    again after a minute.
-2. Answer the open questions with the **icp-answering** skill: `open_questions(domain)` → answer → `submit_answers`.
-   Repeat until nothing is left (phase "auto" moves from phase 1 to phase 2 by itself). Default list: `api_checks`.
+2. Answer the open questions with the **icp-answering** skill: `open_questions(domain, limit=2)` → answer →
+   `submit_answers`. Repeat until it returns 0 open questions: they come a few at a time (must-haves one by one, then
+   hard stops, then web). Phase "auto" moves from phase 1 to phase 2 by itself. Default list: `api_checks`.
+   Keep `limit` small: the page text is repeated per question and big batches overflow the tool output.
 3. If `submit_answers` says **Step 5 is next**, ask: "Run the Prospeo finance check for <domain> (1 credit)?" Only on
    yes: `check_company(domain, use_prospeo=true)`. Never otherwise.
 4. Report briefly:

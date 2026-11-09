@@ -1,5 +1,5 @@
 """Each data point's own waterfall, from config/datapoints/<group>/<name>.json. Edit a file to change how that data
-point is answered; the run schedules everything together for speed (see PIPELINE.md, The waterfall).
+point is answered; the run schedules everything together for speed (see docs/DOCUMENTATION.md, section 4).
 
     steps.rules        {"on": true}     pattern rules on the scraped pages (free)
     steps.directories  {"on": true}     YC, SEC, IRS, Internet Archive (free; only some data points are covered)

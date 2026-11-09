@@ -306,7 +306,7 @@ def run(domain_in: str, company: str = "", employees: str = "", use_ai: bool = F
                 return None
 
     # 7-9. phase 2
-    if result.get("icp_verdict") in ("No", "Unknown: site not reached"):
+    if result.get("icp_verdict") in ("No", "Unknown: site not reached", "Needs a call: no website"):
         tr.step("Phase 2 skipped", f"Phase 2 (signals and score) only runs for companies still in the running. "
                                    f"This one is **{result.get('icp_verdict')}**.")
     else:

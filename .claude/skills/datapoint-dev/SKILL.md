@@ -38,8 +38,8 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
    ```
 5. Show the effect on a real company without spending: `dp_test_run` / `dp_test_record(action="retry")` on
    `dp_test_lead_scoring`, or `.venv/bin/python -m enrich waterfall <domain> --group <group>`.
-6. Update the docs: the data point's row in the "Waterfall per data point" table in `docs/SIGNALS.md` (second table
-   with that ID), and `docs/MANUAL_REVIEW.md` if it came from the review. INTEGRATIONS.md for MCP changes.
+6. Update the docs, all in `docs/DOCUMENTATION.md` (the one documentation file; README.md is only the overview): the data point's row in the "Waterfall per data point"
+   table (section 6), section 10 (Decisions and reviews) if it came from the review, section 7 for MCP changes.
 
 ## Things to know
 
@@ -47,4 +47,11 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
   AI answers whose prompt changed are re-asked on the next AI run (costs money through OpenAI, $0 through MCP).
 - Never call paid services in tests or demos without the user's OK (OpenAI, Prospeo credits).
 - The Mac's DNS sometimes fails: network code uses `PublicDNSFallback` (crawl.py).
-- After changing MCP tools, the user reconnects with `/mcp` (or a new chat) to load them.
+- After changing MCP tools, the user reconnects with `/mcp` (or a new chat) to load them. The same goes for rules,
+  prompts and roles.json: until then the MCP server's `submit_answers` re-scores with the old code (on 2026-11-09 a
+  fixed company flipped back to NO mid-run). Re-score saved lists with the new code from the command line:
+  `.venv/bin/python -m enrich rules <list> --phase both` (free; keeps the AI answers; never `--no-directories`).
+- Pipeline-specific behaviour belongs in `config/icps/<pipeline>/roles.json`, read by the rules through
+  `icp.roles()`; e.g. `website_optional` (services: a parked or dead site leaves M2 Unknown).
+- Test rule changes on real deals, not only on the sample list: `services-deals-all.csv` (HubSpot export, won and
+  lost services deals) showed three rules failing paying customers.

@@ -10,7 +10,8 @@ suggest OpenAI, and never use Prospeo or anything that costs credits.
 
 You get a domain and a list name. Work like this:
 
-1. Call `open_questions(domain, list_name, icp)` with the `icp` you were given ("services" if none). It returns `system_prompt`, `company_page_text`, and questions, each with
+1. Call `open_questions(domain, list_name, icp, limit=2)` with the `icp` you were given ("services" if none). Keep
+   `limit` at 1-3: the page text is repeated per question and a bigger batch overflows the tool output. It returns `system_prompt`, `company_page_text`, and questions, each with
    `instructions`, `answer_fields`, `prompt_file` and `answer_from` ("pages" or "web").
 2. Answer every question exactly as its `instructions` and the `system_prompt` say:
    - **pages**: use only `company_page_text`.
@@ -25,10 +26,15 @@ You get a domain and a list name. Work like this:
    - If you can't answer a question the way it asks (no web access), send
      `{"id", "answer_from", "cannot_answer": "<why>"}`. Never guess.
 3. Call `submit_answers(domain, answers, list_name, icp)` with all answers (each with `id` and `answer_from`).
-4. If its `next` says questions are still open (the web step after pages, or phase 2 signals), go back to step 1.
-   Stop when nothing is left, only `cannot_answer` questions remain, or `next` says "Stopped early" (no answer left
-   can change the company's result: don't ask for more). Ignore any "Step 5 / Prospeo" hint: the main
-   chat asks the user about that.
+4. Go back to step 1 until `open_questions` returns 0 open questions. Questions arrive a few at a time: the
+   must-haves one after another, then the hard stops (e.g. "non-profit" only comes after the payment-tool question),
+   then the web step. Answering one question is never the end.
+   - When phase 1 is done and the company is ICP YES (also "some must-haves unconfirmed"), continue with
+     `phase="signals"`. An Unknown must-have doesn't block phase 2. If `next` says to run `check_company` first
+     (phase 2 never ran), you can't: stop and say "phase 2 needs check_company" in your reply.
+   - Stop only when nothing is left, only `cannot_answer` questions remain, `next` says "Stopped early", or a question
+     you already answered Unknown comes back with no new evidence.
+   - Ignore any "Step 5 / Prospeo" hint: the main chat asks the user about that.
 
 Reply with one line only:
 `<domain> | ICP <YES/NO/PENDING> | score <n> | <tier> | answered <n>, counted <n>, left open <n>`

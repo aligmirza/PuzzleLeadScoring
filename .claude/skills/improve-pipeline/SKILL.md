@@ -23,8 +23,8 @@ crashes. Never lower the proof standard to get more answers (only stated proof c
      data point's waterfall in `config/datapoints/`; the **datapoint-dev** skill has how), run the tests, then
      `mark_improvement(id, "done", "<what changed>")`.
    - No: `mark_improvement(id, "rejected", "<the user's reason>")`. It only comes back if it keeps happening.
-5. Every decision is logged in `docs/IMPROVEMENTS.md`. Record bigger strategy decisions in `docs/MANUAL_REVIEW.md` and
-   the SIGNALS.md waterfall table too.
+5. Every decision is logged in the improvements log (the last section of `docs/DOCUMENTATION.md`). Record bigger strategy decisions
+   in docs/DOCUMENTATION.md section 10 (Decisions and reviews) and the "Waterfall per data point" table (section 6) too.
 
 Also say, in a few lines, what you noticed yourself during the run that the report can't see (suspicious matches,
 companies the rules misread, a data point that seems to need a new source).

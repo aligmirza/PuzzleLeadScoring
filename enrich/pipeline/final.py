@@ -19,6 +19,7 @@ ICP_STATUS = {
     "Needs AI check": ("PENDING", "A possible exclusion or must-have needs the AI check"),
     "No": ("NO", ""),
     "Unknown: site not reached": ("PENDING", "Website could not be reached; retry"),
+    "Needs a call: no website": ("PENDING", "No working website and nothing proven yet: confirm the company on the call"),
 }
 
 
@@ -92,6 +93,9 @@ def services_columns(yes_no: str, icp: dict, s: dict, vertical: str = "") -> dic
         return {"Route": route, "Arrival": "", "Value angle": ""}
     if (icp.get("icp_verdict") or "").startswith("Unknown: site not reached"):
         return {"Route": "Retry: website not reached", "Arrival": "", "Value angle": ""}
+    if icp.get("icp_verdict") == "Needs a call: no website":
+        return {"Route": "Qualify on the call: no website, confirm the business and how the books are handled",
+                "Arrival": "", "Value angle": ""}
     if "S3" in yes:
         route = "Catch-Up, then Full Service"
     elif yes & {"S4", "B9"}:
@@ -167,6 +171,8 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
                     "Score breakdown": sc["breakdown"]})
     elif verdict == "Unknown: site not reached":
         row["Lead tier"] = "Not scored: website not reached (retry)"
+    elif verdict == "Needs a call: no website":
+        row["Lead tier"] = "Not scored: no website (confirm on the call)"
     elif yes_no != "NO":
         row["Lead tier"] = "Scored after phase 2"
     src = sig or icp

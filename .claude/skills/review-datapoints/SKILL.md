@@ -1,11 +1,12 @@
 ---
 name: review-datapoints
-description: Run or resume the user's manual review of the 57 data points with the dp_test MCP tools - one data point at a time, full waterfall shown, wait for the user's verdict, ask before moving on, record decisions in docs/MANUAL_REVIEW.md. Use when the user says resume the review, next data point, approve and next, or tests one data point.
+description: Run or resume the user's manual review of the 57 data points with the dp_test MCP tools - one data point at a time, full waterfall shown, wait for the user's verdict, ask before moving on, record decisions in docs/DOCUMENTATION.md section 10. Use when the user says resume the review, next data point, approve and next, or tests one data point.
 ---
 
 # Manual data point review
 
-Read `docs/MANUAL_REVIEW.md` first: its standing instructions, the decisions so far and where the review stopped.
+Read docs/DOCUMENTATION.md section 10 (Decisions and reviews) first: its standing instructions, the decisions so far and where the
+review stopped.
 Test list: `dp_test_lead_scoring` (isolated copy; production is never touched). Company so far: `argon-ai.com`.
 
 ## One data point
@@ -26,10 +27,10 @@ Order: M1-M4, E1-E6, F1-F21, B1-B14, W1-W12.
 
 - Make it in the code or config (see the **datapoint-dev** skill), run the tests, then `dp_test_record(action="retry")`
   (or `dp_test_run` again) to show the data point after the change.
-- Record the decision: add or update the data point's row in `docs/MANUAL_REVIEW.md` and its row in the
-  "Waterfall per data point" table of `docs/SIGNALS.md` (the second table with that ID, not the quick reference).
+- Record the decision in docs/DOCUMENTATION.md: the data point's row in section 10 (Decisions and reviews) and its row in the
+  "Waterfall per data point" table of section 6 (not the quick reference).
 - Don't commit or push unless asked; then author Muhammad Ali, no Claude co-author line.
 
 ## Stopping
 
-`dp_test_record(action="stop")`, then update the status line and "Still to review" in `docs/MANUAL_REVIEW.md`.
+`dp_test_record(action="stop")`, then update the status line and "Still to review" in docs/DOCUMENTATION.md section 10.

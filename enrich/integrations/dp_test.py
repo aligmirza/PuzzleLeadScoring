@@ -71,8 +71,8 @@ def _sid(data_point: str) -> str:
 
 
 def _description(sid: str) -> str:
-    """The data point's definition from docs/SIGNALS.md (the "Yes when / No when / Exclude when" part)."""
-    path = ROOT / "docs" / "SIGNALS.md"
+    """The data point's definition from docs/DOCUMENTATION.md, section 6 (the "Yes when / No when / Exclude when" part)."""
+    path = ROOT / "docs" / "DOCUMENTATION.md"
     if not path.exists():
         return ""
     text = path.read_text()
