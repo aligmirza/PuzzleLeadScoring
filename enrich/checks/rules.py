@@ -99,6 +99,11 @@ FACTS = {
     "S6": ("exclusion", "Series D or later, or public"),
     "S7": ("exclusion", "100 or more people"),
     "S8": ("weak", "50 to 99 people"),
+    # Alexey's customer types (Nov 2026): subscription businesses, specialty contractors, funded SaaS / AI
+    "S9": ("fit", "Takes payments through several processors"),
+    "S10": ("fit", "Subscription or membership revenue"),
+    "S11": ("fit", "Uses field-service or construction software"),
+    "S12": ("fit", "In business 10 or more years"),
 }
 BASE_GROUP = {sid: g for sid, (g, _) in FACTS.items()}  # folders of the data point and prompt files
 
@@ -252,6 +257,26 @@ TOOL_RULES = {
                                 r"\b(?:bank|banking|banks)\b[^.]{0,40}\bRho\b"},
 }
 # services facts --------------------------------------------------------------------------------------------------
+# S9: payment processors proven in the site's code (sources/payments.py), plus Whop checkout links
+PROCESSORS = ("Stripe", "PayPal", "Braintree", "Square", "Paddle", "Lemon Squeezy", "Adyen", "Authorize.net",
+              "Checkout.com", "Gumroad")
+RE_WHOP = re.compile(r"https?://(?:www\.)?whop\.com/[\w-]+", re.I)
+# S10: subscription billing in the code, or a recurring price / membership on the pricing or home page
+SUBSCRIPTION_BILLING = ("Chargebee", "Recurly", "Paddle", "Lemon Squeezy")
+# a "$X a month" price counts on pricing pages only (a home page's "$17,500 / month in fees" is a calculator)
+RE_RECURRING_PRICE = re.compile(r"\$\s?\d[\d,.]*\s*(?:/|per|a)\s*(?:mo|month|yr|year)\b|\bbilled (?:monthly|annually|yearly)\b", re.I)
+RE_MEMBERSHIP = re.compile(r"\b(?:monthly|annual|yearly) (?:membership|subscription)\b|\bbecome a member\b|"
+                           r"\bsubscribe (?:now|today)\b|\bmembership (?:plans?|tiers?|options?)\b", re.I)
+# S11: field-service and construction software, from widgets and links in the site's code
+FIELD_SOFTWARE = {"ServiceTitan": r"servicetitan\.com", "Jobber": r"getjobber\.com|clienthub\.getjobber|jobber\.com/",
+                  "Housecall Pro": r"housecallpro\.com", "Workiz": r"workiz\.com", "FieldEdge": r"fieldedge\.com",
+                  "JobNimbus": r"jobnimbus\.com", "Buildertrend": r"buildertrend\.(?:com|net)", "Procore": r"procore\.com",
+                  "ServiceM8": r"servicem8\.com", "Service Fusion": r"servicefusion\.com", "AccuLynx": r"acculynx\.com"}
+# S12: the company says how long it has been in business ("since 1998", "over 25 years")
+RE_SINCE_YEAR = re.compile(r"\b(?:since|founded in|established in|established|est\.?|serving [\w\s,]{0,30} since)\s+((?:19|20)\d\d)\b", re.I)
+# the company's own age only: "20 years of experience" is a person's bio, never the company's
+RE_YEARS_IN_BUSINESS = re.compile(r"\b(?:over|more than|for|nearly|almost)?\s*(\d{2})\+?\s+years (?:in business|of (?:service|serving)|"
+                                  r"serving (?:our|the|customers|clients))\b", re.I)
 # S1: the company says what it is (not "if you are a sole proprietor..." about its customers), or its legal name is one
 RE_SOLE_SELF = re.compile(r"\b(?:we are|we're|is|operates as|organized as|registered as)\s+an?\s+(?:[A-Za-z]+\s+){0,3}?"
                           r"(sole proprietorship|general partnership|limited liability partnership|limited partnership)\b", re.I)
@@ -630,6 +655,43 @@ class Extractor:
         p, snip = self.find(RE_DIY_BOOKS, kinds=["home", "about", "blog", "team"])
         if p:
             self.s["S5"] = sig(YES, snip, p.url)
+        self.customer_type_facts()
+
+    def customer_type_facts(self):
+        """S9-S12, signs of Alexey's customer types (free, rules only). Only a Yes is proven: a missed widget or
+        sentence never makes a No."""
+        code = self.payment_code()
+        # S9 several payment processors (complex closes: several payouts to reconcile)
+        procs = [g for g in PROCESSORS if g in code]
+        whop = RE_WHOP.search(self.raw_all)
+        names = procs + (["Whop"] if whop else [])
+        if len(names) >= 2:
+            self.s["S9"] = sig(YES, f"{', '.join(names)} in the site's code", note="more than one payment processor")
+        # S10 subscription or membership revenue (deferred revenue, refunds, monthly closes)
+        billing = [g for g in SUBSCRIPTION_BILLING if g in code]
+        p, snip = self.find(RE_RECURRING_PRICE, kinds=["pricing", "plans", "membership"])
+        if not p:
+            p, snip = self.find(RE_MEMBERSHIP, kinds=["pricing", "plans", "membership", "home"])
+        if billing:
+            self.s["S10"] = sig(YES, f"{billing[0]} subscription billing in the site's code", code[billing[0]]["where"])
+        elif p:
+            self.s["S10"] = sig(YES, snip, p.url)
+        # S11 field-service or construction software (the contractor lane)
+        for name, rx in FIELD_SOFTWARE.items():
+            m = re.search(rx, self.raw_all, re.I)
+            if m:
+                self.s["S11"] = sig(YES, f"{name} in the site's code: {m.group(0)}")
+                break
+        # S12 in business 10 or more years (established operators, often with messy older books)
+        year_now = date.today().year
+        for rx, years in ((RE_SINCE_YEAR, lambda m: year_now - int(m.group(1))),
+                          (RE_YEARS_IN_BUSINESS, lambda m: int(m.group(1)))):
+            p, snip = self.find(rx, kinds=["home", "about", "team", "contact"])
+            if p:
+                n = years(rx.search(p.text))
+                if 10 <= n <= 150:
+                    self.s["S12"] = sig(YES, snip, p.url, note=f"about {n} years")
+                    break
 
     def _headcount(self) -> tuple[int | None, str, str]:
         """(people, proof, method) from: the list's count, a Prospeo headcount already bought, the YC team size."""

@@ -5,7 +5,7 @@
   "signal_id": null,
   "profile_section": "verticals",
   "weight": "n/a",
-  "version": 1,
+  "version": 2,
   "stage": "site_text",
   "model": "small",
   "run_when": "Always, for companies still in the running.",
@@ -57,6 +57,9 @@
             "Marketing & Creative",
             "Education & Learning",
             "Consumer & DTC",
+            "Real Estate & Property",
+            "Legal",
+            "Construction & Field Services",
             "Other"
           ]
         },

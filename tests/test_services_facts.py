@@ -70,6 +70,42 @@ class BooksAndHelp(unittest.TestCase):
         self.assertEqual(value(r, "S5"), "yes")
 
 
+class CustomerTypes(unittest.TestCase):
+    """S9-S12: Alexey's customer types (subscriptions, contractors), proven from code and the company's own words."""
+
+    def test_several_processors(self):
+        r = run({"pricing": '<script src="https://js.stripe.com/v3/"></script>'
+                            '<script src="https://www.paypal.com/sdk/js?client-id=x"></script><p>Plans</p>'})
+        self.assertEqual(value(r, "S9"), "yes")
+        r = run({"pricing": '<script src="https://js.stripe.com/v3/"></script><p>Plans</p>'})
+        self.assertNotEqual(value(r, "S9"), "yes")  # one processor is not several
+
+    def test_subscription_price_or_membership(self):
+        self.assertEqual(value(run({"pricing": "<p>Premium $24.99/month, billed annually</p>"}), "S10"), "yes")
+        self.assertEqual(value(run({"home": "<p>Become a member and get every course.</p>"}), "S10"), "yes")
+        self.assertNotEqual(value(run({"pricing": "<p>Projects from $5,000.</p>"}), "S10"), "yes")
+        self.assertNotEqual(value(run({"home": "<p>Hosts lose $17,500 / month in fees.</p>"}), "S10"), "yes")  # a calculator
+
+    def test_field_service_software(self):
+        r = run({"home": '<p>Drilling contractors.</p><a href="https://clienthub.getjobber.com/booking/abc">Book</a>'})
+        self.assertEqual(value(r, "S11"), "yes")
+
+    def test_years_in_business(self):
+        self.assertEqual(value(run({"about": "<p>Family owned and operated since 1998.</p>"}), "S12"), "yes")
+        self.assertEqual(value(run({"about": "<p>Proudly serving Texas: over 25 years in business.</p>"}), "S12"), "yes")
+        bio = "<p>Ian Ahl, CTO: 20+ years of experience in incident response.</p>"
+        self.assertNotEqual(value(run({"about": bio}), "S12"), "yes")  # a person's career, not the company's age
+        self.assertNotEqual(value(run({"about": "<p>Founded in 2023 in Brooklyn.</p>"}), "S12"), "yes")
+
+    def test_they_score_for_services_only(self):
+        from enrich.checks.scoring import score
+        s = {"S10": {"value": "yes", "evidence": "x"}}
+        with icp.use("services"):
+            self.assertEqual(score(s, "SMB")["score"], 2)
+        with icp.use("product"):
+            self.assertEqual(score(s, "SMB")["score"], 0)
+
+
 class SizeAndStage(unittest.TestCase):
     def test_headcount_bands(self):
         self.assertEqual([value(run({"home": "<p>x</p>"}, employees="120", phase="icp"), "S7")], ["yes"])
@@ -102,8 +138,8 @@ class PipelineRoles(unittest.TestCase):
             self.assertTrue({"S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"} <= zero_point_sids())
             self.assertNotIn("F1", zero_point_sids())
         with icp.use("services"):
-            self.assertEqual((SIGNALS["S2"][0], SIGNALS["S3"][0], SIGNALS["S5"][0], SIGNALS["E1"][0]),
-                             ("exclusion", "buying", "weak", "info"))
+            self.assertEqual((SIGNALS["S2"][0], SIGNALS["S3"][0], SIGNALS["S5"][0], SIGNALS["E1"][0], SIGNALS["S10"][0]),
+                             ("exclusion", "buying", "info", "info", "fit"))  # S5: no points off (Alexey, Nov 2026)
             zero = zero_point_sids()
             self.assertTrue({"E1", "F1", "F10", "F11"} <= zero)  # no paid questions on funding, AI, YC
             self.assertFalse({"S3", "S4", "B9"} & zero)
@@ -129,8 +165,15 @@ class RouteArrivalAngle(unittest.TestCase):
         self.assertEqual(c["Route"], "Full Service")
         self.assertIn("replacement", c["Value angle"])
 
-    def test_diy_goes_to_the_platform(self):
-        self.assertTrue(self.cols(("S5",))["Route"].startswith("Platform only"))
+    def test_diy_goes_to_the_platform_and_mcp(self):
+        self.assertTrue(self.cols(("S5",))["Route"].startswith("Platform + MCP"))
+
+    def test_real_estate_and_legal_ask_how_the_books_are_handled(self):
+        from enrich.pipeline.final import services_columns
+        c = services_columns("YES", {"gate": "pass"}, {}, "Legal")
+        self.assertIn("ask how and by whom the books are handled", c["Route"])
+        c = services_columns("YES", {"gate": "pass"}, {"B9": {"value": "yes"}}, "Legal")
+        self.assertEqual(c["Route"], "Full Service")  # a stronger reason wins
 
     def test_just_raised_is_proactive(self):
         self.assertEqual(self.cols(("B1",))["Arrival"], "Proactive")

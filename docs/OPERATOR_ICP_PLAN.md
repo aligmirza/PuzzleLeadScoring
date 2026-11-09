@@ -191,7 +191,7 @@ Clay, the CSVs, MCP and the API all get the same columns, with the pipeline name
 5. **AI-native founders:** score them down as likely DIY, or keep them neutral?
 6. **Labelled data:** can we get the domains for the 152 coded companies and the closed-won deals, so we can calibrate?
 
-**Answers** (1 and 2 decided; 3–6 proposed, to confirm with Oz and Alexey):
+**Answers** (all decided; 3–5 by Alexey on 2026-11-07, see SIGNALS.md section 5; the 152 companies are shared):
 
 1. **Decided (2026-11-03): in, up to and including Series C.** Series D and later, and public companies, are excluded (S6). E1 is info only.
 2. **Decided (2026-11-03): the proxy as built.** A hard stop only on strong proof (NetSuite with a finance team, Series D or later, or 100+ people); 50–99 people scores down (S8). In the output S6, S7 and W10 are one rule: the exclusion reason reads "Too big for services (<the check>): <proof>" (`reason_groups` in `config/icps/services/roles.json`).

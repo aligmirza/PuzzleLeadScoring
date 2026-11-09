@@ -296,8 +296,8 @@ class ExistingTools(unittest.TestCase):
         self.assertTrue(callable(client_ai.submit_answers) and callable(service.check_one))  # production paths load
         from enrich.pipeline import waterfall
         self.assertEqual(len(waterfall.LAYERS), 5)
-        self.assertEqual(len(SIGNALS), 65)  # 57 + the 8 services facts (S1-S8)
-        self.assertEqual(len(datapoints.load()), 65)
+        self.assertEqual(len(SIGNALS), 69)  # 57 + the 12 services facts (S1-S12)
+        self.assertEqual(len(datapoints.load()), 69)
 
 
 def setUpModule():  # these tests describe the product pipeline's rules

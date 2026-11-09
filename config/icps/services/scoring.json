@@ -55,10 +55,14 @@
     "Serves one local area": "none",
     "Sells hours of labour, not a product": "none",
     "Physical or single-location business": "none",
-    "LLC or sole owner, no venture funding": "none"
+    "LLC or sole owner, no venture funding": "none",
+    "Takes payments through several processors": "medium",
+    "Subscription or membership revenue": "medium",
+    "Uses field-service or construction software": "medium",
+    "In business 10 or more years": "low"
   },
   "buying_signals": {
-    "Raised money in the last 6 months": "low",
+    "Raised money in the last 6 months": "high",
     "New investor or accelerator": "none",
     "Hiring for several roles": "low",
     "Hiring a finance lead": "medium",

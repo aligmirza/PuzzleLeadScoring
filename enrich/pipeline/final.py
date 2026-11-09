@@ -78,7 +78,10 @@ def reasoning(icp: dict, sig: dict | None, row: dict, sc: dict | None) -> str:
     return "\n".join(lines)
 
 
-def services_columns(yes_no: str, icp: dict, s: dict) -> dict:
+ASK_HOW_BOOKS = ("Real Estate & Property", "Legal")  # their books can differ (per property, client trust accounts)
+
+
+def services_columns(yes_no: str, icp: dict, s: dict, vertical: str = "") -> dict:
     """Route, arrival and value angle for the services pipeline, from proven facts only (the ICP page's routing
     table). Route says what to offer; arrival says why now; value angle is the opening line for outreach."""
     yes = {sid for sid, v in s.items() if v.get("value") == "yes"}
@@ -94,7 +97,9 @@ def services_columns(yes_no: str, icp: dict, s: dict) -> dict:
     elif yes & {"S4", "B9"}:
         route = "Full Service"
     elif "S5" in yes:
-        route = "Platform only (does its own books): check back at a trigger"
+        route = "Platform + MCP (does its own books, can use its own agent)"
+    elif vertical in ASK_HOW_BOOKS:
+        route = f"Qualify on the call ({vertical}): ask how and by whom the books are handled"
     else:
         route = "Qualify on the call: Full Service or Expert Review"
     reactive = yes & {"S3", "B9", "B10", "B14"}  # the books broke, a provider failed, a deadline or an audit
@@ -109,7 +114,11 @@ def services_columns(yes_no: str, icp: dict, s: dict) -> dict:
     elif yes & {"B13", "B1"}:
         angle = "Investor-ready numbers, with a person accountable for them"
     elif "S5" in yes:
-        angle = "Who is accountable when the numbers don't reconcile? A person checks the work"
+        angle = "Keep doing it your way with your own agent through Puzzle's MCP, with a person to check the work"
+    elif "S10" in yes or "S9" in yes:
+        angle = "Clean monthly closes across processors, subscriptions, refunds and deferred revenue"
+    elif "S11" in yes:
+        angle = "Clean up the QuickBooks file, then dependable monthly books alongside your field software"
     else:
         angle = "Current, dependable books without owning the work; you see every step"
     return {"Route": route, "Arrival": arrival, "Value angle": angle}
@@ -193,7 +202,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
                     "Contacts found": len(contacts)})
     from ..core import icp as pipelines
     if pipelines.name() == "services":
-        row.update(services_columns(yes_no, icp, s_all))
+        row.update(services_columns(yes_no, icp, s_all, (sig or {}).get("vertical", "")))
     row["Reasoning"] = reasoning(icp, sig, row, sc)
     row["Funding stage"] = funding_line(icp, sig).removeprefix("Funding stage: ")
     return row

@@ -4,7 +4,8 @@
   "provisional": [
     "Decided 2026-11-03: Series C is in; the $500K monthly-expense ceiling is the proxy NetSuite with a finance team (W10), Series D or later (S6) or 100+ people (S7); 50-99 people (S8) only scores down",
     "Books behind (S3), looking for help (S4) and DIY (S5) are rarely public; Unknown stays Unknown",
-    "Weights and the Strong-fit cut-off are guesses until calibrated on Alexey's 152 companies (stage 5)"
+    "Weights and the Strong-fit cut-off are guesses until calibrated on Alexey's 152 companies (stage 5)",
+    "Decided 2026-11-07 (Alexey): young companies lose no points for being young; AI companies lose no points (Puzzle's MCP lets them do the books with their own agent), so does-its-own-books (S5) is info and routes to Platform + MCP; real estate and legal pass with 'ask how the books are handled'"
   ],
   "reason_groups": {
     "Too big for services": [
@@ -75,10 +76,14 @@
     "S2": "exclusion",
     "S3": "buying",
     "S4": "buying",
-    "S5": "weak",
+    "S5": "info",
     "S6": "exclusion",
     "S7": "exclusion",
-    "S8": "weak"
+    "S8": "weak",
+    "S9": "fit",
+    "S10": "fit",
+    "S11": "fit",
+    "S12": "fit"
   },
   "run_if": {
     "M2": {

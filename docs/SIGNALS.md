@@ -109,10 +109,14 @@ Each signal below lists:
 | S2 | Marketplace | Services hard stop | | Code, AI read | |
 | S3 | Books behind or messy | Services buying | High | Code (job posts), Search on a clue | |
 | S4 | Looking for bookkeeping help | Services buying | High | Code (job posts), Search on a clue | |
-| S5 | Does its own books (DIY) | Services weak | | Code, AI read, Search on a clue | |
+| S5 | Does its own books (DIY) | Services info (routes to Platform + MCP) | | Code | |
 | S6 | Series D or later, or public | Services hard stop | | Code (from E1's proof), AI read, Search | |
 | S7 | 100 or more people | Services hard stop | | List count, Prospeo, YC | |
 | S8 | 50 to 99 people | Services weak | | List count, Prospeo, YC | |
+| S9 | Takes payments through several processors | Services fit | Medium | Code (payment scan, Whop links) | |
+| S10 | Subscription or membership revenue | Services fit | Medium | Code (billing tools, pricing page) | |
+| S11 | Uses field-service or construction software | Services fit | Medium | Code (widgets and links) | |
+| S12 | In business 10 or more years | Services fit | Low | Code (the company's own words) | |
 
 ---
 
@@ -635,7 +639,7 @@ Digital goods, print-on-demand or dropshipping.
 
 ---
 
-## 5. Services facts (S1–S8)
+## 5. Services facts (S1–S12)
 
 Added for the services ICP (October 2026). In the services pipeline they decide the verdict or the score: S1, S2,
 S6 and S7 are hard stops, S3 and S4 score up (high), S5 and S8 score down. In the product pipeline they are
@@ -653,6 +657,25 @@ services, where S6 (Series D or later) replaces it, since founders up to Series 
 - **S6 Series D or later, or public:** from what E1's proof names; its own AI question otherwise.
 - **S7 100 or more people** and **S8 50 to 99 people:** from the list's employee count (lower band on a range),
   a Prospeo headcount already bought, or the YC team size. No AI question.
+
+**Alexey's answers and customer types (November 2026).** Young companies lose no points for being young, and AI
+companies lose none either: with Puzzle's MCP they can do the books with their own agent. So S5 is info in services
+(shown, routes to "Platform + MCP", no points off) and a raise in the last 6 months (B1) scores high (budget for
+help). Real estate and legal companies pass; Route tells sales to ask how and by whom the books are handled (the
+Vertical field has Real Estate & Property, Legal and Construction & Field Services). S9–S12 are free code rules, Yes
+only (a missed widget never makes a No); fit in services, info in product:
+
+- **S9 Several payment processors:** two or more of Stripe, PayPal, Braintree, Square, Paddle, Lemon Squeezy and
+  others in the site's code, or a Whop checkout link (subscription and online education businesses).
+- **S10 Subscription or membership revenue:** Chargebee, Recurly, Paddle or Lemon Squeezy billing in the code, a
+  recurring price on a pricing or plans page, or membership wording ("become a member"). A "$X / month" figure on
+  a home page doesn't count: it is often a savings calculator.
+- **S11 Field-service or construction software:** ServiceTitan, Jobber, Housecall Pro, Workiz, Procore,
+  Buildertrend and similar booking widgets or links (specialty contractors).
+- **S12 In business 10 or more years:** the company's own words ("since 1998", "25 years in business"). A person's
+  "20 years of experience" is a bio, never the company's age.
+
+Not covered yet: equipment financing and revenue of $1M–$10M (rarely public).
 
 ## Waterfall per data point
 
@@ -855,6 +878,10 @@ verification records, SPF senders, email provider).
 | S6 | Series D or later, or public | Rules + derived from E1 | - | if open | if open | n/a | services: after M1–M4 | Yes when E1's proof names Series D or later, an IPO or a ticker; No when it names Series C, the stage is earlier, or the company announces its own round of seed to Series C (reviewed on argon-ai.com). |
 | S7 | 100 or more people | Rules (size sources) | - | off | off | n/a | services: after M1–M4 | The $500K monthly-expense proxy: the list's count (lower band), a Prospeo headcount already bought, or the YC team size; credited to that source (rules, provider, directories). |
 | S8 | 50 to 99 people | Rules (size sources) | - | off | off | n/a | - | Same sources as S7; scores down in services. |
+| S9 | Takes payments through several processors | Rules | - | off | off | n/a | - | Two or more processors in the site's code, or a Whop link. Yes only. |
+| S10 | Subscription or membership revenue | Rules | - | off | off | n/a | - | Subscription billing in the code, a recurring price on a pricing page, or membership wording. Yes only. |
+| S11 | Uses field-service or construction software | Rules | - | off | off | n/a | - | A field-service or construction tool's widget or link in the site's code. Yes only. |
+| S12 | In business 10 or more years | Rules | - | off | off | n/a | - | The company's own "since 1998" or "25 years in business"; never a person's experience. Yes only. |
 
 ## Build status
 
