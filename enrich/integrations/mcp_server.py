@@ -381,7 +381,7 @@ def improvement_report(auto_apply: bool = True) -> dict:
 @tool()
 def apply_improvement(proposal_id: str) -> dict:
     """Apply a setting proposal from improvement_report after the user approved it: the data point's file is changed,
-    all tests run, and the change is reverted if they fail. Logged in the improvements log (docs/DOCUMENTATION.md, last section)."""
+    all tests run, and the change is reverted if they fail. Logged in docs/IMPROVEMENTS.md."""
     return learning.apply(proposal_id)
 
 

@@ -142,7 +142,7 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
     if yes_no == "YES" and late and icp.get("signals", {}).get("E1", {}).get("value") != "yes":
         # phase 2 found a late round that phase 1 didn't: don't keep a YES that may be an exclusion
         yes_no, status = "PENDING", ("Phase 2 found a Series C or later round; confirm with the phase 1 AI check "
-                                     "(ai_check.py <list> --phase icp)")
+                                     "(scripts/ai_check.py <list> --phase icp)")
     # size, from proof: the list's count, a Prospeo headcount, the YC team size (all worked out by the rules), then
     # the AI's estimate, then the profile default (SMB).
     seg, seg_basis = segment(employees)

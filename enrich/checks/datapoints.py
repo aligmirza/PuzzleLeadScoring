@@ -25,7 +25,7 @@ from ..core.paths import CONFIG
 from .rules import FACTS, SIGNALS
 
 DIR = CONFIG / "datapoints"
-ALL_LAYERS = False  # test mode (ai_check.py --all-layers): every data point gets every AI layer, to compare layers
+ALL_LAYERS = False  # test mode (scripts/ai_check.py --all-layers): every data point gets every AI layer, to compare layers
 GROUP_DIRS = {"must": "must_haves", "exclusion": "exclusions", "fit": "fit", "buying": "buying", "weak": "weak"}
 
 # what each layer can answer at all (code support); a setting outside these has no effect

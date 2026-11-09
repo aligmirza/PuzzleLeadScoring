@@ -25,8 +25,8 @@ python3 -m venv .venv
 .venv/bin/python -m enrich settings --openai-key sk-...   # keys live in .env, never committed
 
 # first test run on the 14-company sample
-.venv/bin/python icp_check.py examples/sample_leads.csv
-.venv/bin/python signals_check.py sample_leads
+.venv/bin/python scripts/icp_check.py examples/sample_leads.csv
+.venv/bin/python scripts/signals_check.py sample_leads
 .venv/bin/python -m unittest discover -s tests
 ```
 
@@ -52,7 +52,7 @@ Results land in `lists/<list>/output/`; the main file is `<list>_enriched.csv`.
 | [6. Data point reference](docs/DOCUMENTATION.md#6-data-point-reference) | All 69 data points (57 + services facts S1–S12) and the waterfall per data point |
 | [7. Integrations](docs/DOCUMENTATION.md#7-integrations) | API, Clay, MCP server, Claude Code skills, list viewer |
 | [8. Testing](docs/DOCUMENTATION.md#8-testing) | Smoke test, trace, waterfall, manual review, accuracy, regression checklist |
-| [9. Hand-off to Puzzle](docs/DOCUMENTATION.md#9-hand-off-to-puzzle) | Who uses what, everyday use, costs and safety |
-| [10. Decisions and reviews](docs/DOCUMENTATION.md#10-decisions-and-reviews) | Manual review, decisions per data point, build plan, the 26-deal test |
-| [11. Status and open items](docs/DOCUMENTATION.md#11-status-and-open-items) | Status and roadmap, before go-live, open decisions |
-| [12. Improvements log](docs/DOCUMENTATION.md#12-improvements-log) | What the pipeline changed about itself |
+| [9. Decisions and reviews](docs/DOCUMENTATION.md#9-decisions-and-reviews) | Manual review, decisions per data point, build plan, the 26-deal test |
+| [Hand-off guide](docs/HANDOFF.md) | For the Puzzle team: who uses what, setup, everyday use, costs, changing the model |
+| [Status and open items](docs/STATUS.md) | What is done, before go-live, open decisions |
+| [Improvements log](docs/IMPROVEMENTS.md) | What the pipeline changed about itself |

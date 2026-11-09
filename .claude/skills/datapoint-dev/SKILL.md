@@ -39,7 +39,7 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
 5. Show the effect on a real company without spending: `dp_test_run` / `dp_test_record(action="retry")` on
    `dp_test_lead_scoring`, or `.venv/bin/python -m enrich waterfall <domain> --group <group>`.
 6. Update the docs, all in `docs/DOCUMENTATION.md` (the one documentation file; README.md is only the overview): the data point's row in the "Waterfall per data point"
-   table (section 6), section 10 (Decisions and reviews) if it came from the review, section 7 for MCP changes.
+   table (section 6), section 9 (Decisions and reviews) if it came from the review, section 7 for MCP changes.
 
 ## Things to know
 

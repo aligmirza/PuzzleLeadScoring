@@ -12,10 +12,9 @@ This tool checks a list of companies against Puzzle's ideal customer profile, sc
 | [6. Data point reference](#6-data-point-reference) | How each of the 69 data points (57 + the services facts S1–S12) is checked, the waterfall per data point, how they depend on each other |
 | [7. Integrations](#7-integrations) | The API, Clay, the MCP server, Claude Code skills, the list viewer |
 | [8. Testing](#8-testing) | Smoke test, AI run, trace, waterfall, manual review, accuracy, regression checklist, connection tests |
-| [9. Hand-off to Puzzle](#9-hand-off-to-puzzle) | Who uses what, everyday use, costs and safety |
-| [10. Decisions and reviews](#10-decisions-and-reviews) | The manual review, decisions per data point, the services build plan, the 26-deal test |
-| [11. Status and open items](#11-status-and-open-items) | Status and roadmap, before go-live, open decisions |
-| [12. Improvements log](#12-improvements-log) | What the pipeline changed about itself from what it learned |
+| [9. Decisions and reviews](#9-decisions-and-reviews) | The manual review, decisions per data point, the services build plan, the 26-deal test |
+
+Also separate: [HANDOFF.md](HANDOFF.md) (the guide for the Puzzle team), [STATUS.md](STATUS.md) (status, before go-live, open decisions) and [IMPROVEMENTS.md](IMPROVEMENTS.md) (the improvements log).
 
 ---
 
@@ -27,8 +26,8 @@ You give it company domains. It reads each company's website and free public rec
 
 ```mermaid
 flowchart LR
-    L["Your list<br/>leads.csv"] --> P1["Phase 1: Is it our ICP?<br/>icp_check.py<br/>must-haves and exclusions"]
-    P1 -->|"ICP companies"| P2["Phase 2: Signals + lead score<br/>signals_check.py"]
+    L["Your list<br/>leads.csv"] --> P1["Phase 1: Is it our ICP?<br/>scripts/icp_check.py<br/>must-haves and exclusions"]
+    P1 -->|"ICP companies"| P2["Phase 2: Signals + lead score<br/>scripts/signals_check.py"]
     P1 --> R["leads_enriched.csv<br/>every row kept + ICP YES/NO<br/>+ score + findings"]
     P2 --> R
 
@@ -117,7 +116,7 @@ Most of the team only needs Clay. The other two are for ops and engineering.
 | Ops or GTM lead | Ask Claude in plain English: "check acme.com", "score this list" | The repo and Claude Code or Claude Desktop on their computer |
 | Engineer | Command line or API for big lists, schedules, or the CRM | The repo on a server or laptop |
 
-Everyday use of each: [section 9](#9-hand-off-to-puzzle).
+Everyday use of each: [section 9](HANDOFF.md).
 
 ---
 
@@ -135,8 +134,8 @@ An engineer needs about an hour. Use Puzzle's own accounts and keys; keys live o
 2. Add the keys with `python -m enrich settings`: OpenAI (AI step for big lists), Prospeo (company data and contacts) and the Clay webhook URLs (see [Keys and settings](#keys-and-settings)).
 3. Run the 14-company test list to check it works, then the automated tests:
    ```bash
-   .venv/bin/python icp_check.py examples/sample_leads.csv
-   .venv/bin/python signals_check.py sample_leads
+   .venv/bin/python scripts/icp_check.py examples/sample_leads.csv
+   .venv/bin/python scripts/signals_check.py sample_leads
    .venv/bin/python -m unittest discover -s tests
    ```
 4. For the team: start the API on a small always-on server: `python -m enrich serve --host 0.0.0.0`, with HTTPS in front. It needs disk space for saved pages, and Chrome for sites that only load with JavaScript (or the `--no-browser` option).
@@ -206,9 +205,9 @@ The model lives in config files, not code, so a change is usually one line. Afte
 
 ```
 README.md             start here (high level)
-icp_check.py          runs phase 1
-signals_check.py      runs phase 2
-ai_check.py           runs the AI step for either phase
+scripts/icp_check.py          runs phase 1
+scripts/signals_check.py      runs phase 2
+scripts/ai_check.py           runs the AI step for either phase
 .mcp.json             registers the MCP server for Claude Code
 .claude/              Claude Code skills, the /enrich-chat command and the company-answerer subagent
 .env                  your keys, set once (not in git)
@@ -289,17 +288,17 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.json
 
 ```bash
 # PHASE 1: is it our ICP? Must-haves and exclusions, for every company
-.venv/bin/python icp_check.py leads.csv                 # same as: python -m enrich icp leads.csv
+.venv/bin/python scripts/icp_check.py leads.csv                 # same as: python -m enrich icp leads.csv
 
 # AI for phase 1: settles PENDING companies (asks before spending; needs OPENAI_API_KEY)
-.venv/bin/python ai_check.py leads --phase icp          # same as: python -m enrich ai leads --phase icp
+.venv/bin/python scripts/ai_check.py leads --phase icp          # same as: python -m enrich ai leads --phase icp
 
 # PHASE 2: fit, buying and weak signals + lead score, only for companies phase 1 passed
-.venv/bin/python signals_check.py leads                 # same as: python -m enrich signals leads
-.venv/bin/python signals_check.py leads --only-yes      # skip companies still waiting on an AI check
+.venv/bin/python scripts/signals_check.py leads                 # same as: python -m enrich signals leads
+.venv/bin/python scripts/signals_check.py leads --only-yes      # skip companies still waiting on an AI check
 
 # AI for phase 2: AI-only signals, industry, company size (asks before spending)
-.venv/bin/python ai_check.py leads --phase signals
+.venv/bin/python scripts/ai_check.py leads --phase signals
 
 # phases 1 and 2 without AI, one after the other
 .venv/bin/python -m enrich run leads.csv
@@ -340,7 +339,7 @@ AI options:
 | See every run of a list: when, counts, AI cost | `python -m enrich runs leads` |
 | AI cost and companies checked this month, per list, and the budget left | `python -m enrich usage` |
 | The shared company cache: size, add existing lists, delete old entries (asks first) | `python -m enrich cache`, `cache --import`, `cache --clean-older 90` |
-| Compare AI modes on the same companies | `python -m enrich copy leads leads_cheap`, run `ai_check.py leads_cheap --mode cheap`, then `python -m enrich compare leads leads_cheap` |
+| Compare AI modes on the same companies | `python -m enrich copy leads leads_cheap`, run `scripts/ai_check.py leads_cheap --mode cheap`, then `python -m enrich compare leads leads_cheap` |
 | List the AI prompts | `python -m enrich prompts` |
 | See the exact AI message for a company | `python -m enrich prompts --show fit/venture_backed_stage --domain resend.com` (add `--step 2` for the web search step) |
 | See the free directories, or look up one company in YC, SEC and IRS | `python -m enrich directories` / `python -m enrich directories acme.com --legal-name "Acme, Inc."` |
@@ -378,7 +377,7 @@ Results land in `lists/leads/output/`. The main file is **`leads_enriched.csv`**
 
 Every step from your CSV to the scored list: what starts each step, what it decides, and what it hands to the next one.
 
-**Reading the diagrams:** dashed boxes are the AI steps, which run separately with `ai_check.py` (OpenAI); everything else runs in the phase scripts. Green = ICP YES, red = ICP NO, amber = PENDING. Diagrams use Mermaid; they render on GitHub and in VS Code with a Mermaid preview extension.
+**Reading the diagrams:** dashed boxes are the AI steps, which run separately with `scripts/ai_check.py` (OpenAI); everything else runs in the phase scripts. Green = ICP YES, red = ICP NO, amber = PENDING. Diagrams use Mermaid; they render on GitHub and in VS Code with a Mermaid preview extension.
 
 ### 4.1 The whole flow
 
@@ -386,7 +385,7 @@ The work runs in **two separate phases**, each with its own script. Phase 1 deci
 
 ```mermaid
 flowchart TD
-    subgraph P1["Phase 1: Is it our ICP? (icp_check.py leads.csv)"]
+    subgraph P1["Phase 1: Is it our ICP? (scripts/icp_check.py leads.csv)"]
     A1["Read the list<br/>leads.csv"]
     A2["Download only the pages must-haves and exclusions need<br/>home, about, pricing, careers, privacy, terms, legal, contact,<br/>security, investor relations, donate, shipping + open jobs"]
     A3["Must-have and exclusion rules<br/>(free)"]
@@ -397,7 +396,7 @@ flowchart TD
         A1 --> A2 --> A3 --> A3b --> A4 --> A5 --> A6
     end
 
-    subgraph P2["Phase 2: Signals (signals_check.py leads)"]
+    subgraph P2["Phase 2: Signals (scripts/signals_check.py leads)"]
     B1["Download the extra pages signals need<br/>team, blog, engineering blog, integrations,<br/>customers, locations, menu<br/>starting from phase 1's saved homepage"]
     B2["Fit, buying and weak signal rules<br/>(free)"]
     B2b["Free directories: YC, SEC<br/>funding, Delaware, YC backing, team size<br/>(free, saved from phase 1)"]
@@ -503,8 +502,8 @@ Before these changes the CPU work ran on the event loop and blocked it for half 
 
 | When this happens | It triggers |
 | --- | --- |
-| You run phase 1 (`icp_check.py leads.csv`) | Steps 4.5 to 4.12 for the whole list |
-| You run phase 2 (`signals_check.py leads`) | Steps 4.6 to 4.12 for companies phase 1 passed |
+| You run phase 1 (`scripts/icp_check.py leads.csv`) | Steps 4.5 to 4.12 for the whole list |
+| You run phase 2 (`scripts/signals_check.py leads`) | Steps 4.6 to 4.12 for companies phase 1 passed |
 | The list folder doesn't exist yet | A new folder `lists/leads/` and a copy of your CSV |
 | A company was already downloaded in this list | Downloading is skipped; the saved pages are reused |
 | You add `--refresh` | Downloading runs again, even for cached companies |
@@ -756,8 +755,8 @@ Must-haves are asked one after another (M1, then M2, M3, M4), then the exclusion
 The AI step runs separately, after each phase, so you can see the cost first:
 
 ```bash
-.venv/bin/python ai_check.py leads --phase icp       # after phase 1 (key from .env)
-.venv/bin/python ai_check.py leads --phase signals   # after phase 2
+.venv/bin/python scripts/ai_check.py leads --phase icp       # after phase 1 (key from .env)
+.venv/bin/python scripts/ai_check.py leads --phase signals   # after phase 2
 ```
 
 **Two modes** (`--mode`, default in `config/prompts/_shared.json`):
@@ -767,7 +766,7 @@ The AI step runs separately, after each phase, so you can see the cost first:
 | `accurate` (default) | One call per data point | One call per data point | 35 calls |
 | `cheap` | Up to 5 data points of the company per call; page text sent once | Up to 5 web questions share one call and its searches | 8 calls |
 
-Both modes use the same prompt files, rules and answer formats, and each data point still gets its own saved answer, so every check in this section applies to both. A grouped call's cost is split evenly across its data points. The estimate before a run shows both modes. To check the cheap mode on your own companies: `python -m enrich copy leads leads_cheap`, `ai_check.py leads_cheap --mode cheap` (both phases), then `python -m enrich compare leads leads_cheap` lists every answer that differs.
+Both modes use the same prompt files, rules and answer formats, and each data point still gets its own saved answer, so every check in this section applies to both. A grouped call's cost is split evenly across its data points. The estimate before a run shows both modes. To check the cheap mode on your own companies: `python -m enrich copy leads leads_cheap`, `scripts/ai_check.py leads_cheap --mode cheap` (both phases), then `python -m enrich compare leads leads_cheap` lists every answer that differs.
 
 Phase 2 also asks the signals only web search can answer (recent funding, new investor, QuickBooks complaints...): 9 web searches per ICP company, about $0.10 to $0.30. `--no-search-signals` skips them; those buying signals then stay empty.
 
@@ -1272,7 +1271,7 @@ To check the weights against real results, label companies Puzzle already knows 
 
 ### The services (operator) decisions
 
-Source of truth for the services ICP: the updated Notion ICP page (Oct 22–23, 2026) and Alexey's thread. This was written as a plan before the build ([build stages](#105-build-plan-for-the-services-pipeline)); it maps that ICP onto the lead scoring model.
+Source of truth for the services ICP: the updated Notion ICP page (Oct 22–23, 2026) and Alexey's thread. This was written as a plan before the build ([build stages](#95-build-plan-for-the-services-pipeline)); it maps that ICP onto the lead scoring model.
 
 The change is more than a re-weighting. The founder (product) model rewards a funded early-stage startup. The operator ICP rewards an **operator who wants the bookkeeping done for them**, so several signals flip direction.
 
@@ -2060,7 +2059,7 @@ Not covered yet: equipment financing and revenue of $1M–$10M (rarely public).
 
 ### 6.9 Waterfall per data point
 
-Each data point runs its own waterfall, cheapest first, and stops at the first step that proves it (Yes or No). The settings below are the files in `config/datapoints/` (change a file to change a step; the settings are explained in [The waterfall per data point](#42-the-waterfall-per-data-point)); the notes are the strategies decided in the MCP review of each data point ([section 10](#10-decisions-and-reviews)).
+Each data point runs its own waterfall, cheapest first, and stops at the first step that proves it (Yes or No). The settings below are the files in `config/datapoints/` (change a file to change a step; the settings are explained in [The waterfall per data point](#42-the-waterfall-per-data-point)); the notes are the strategies decided in the MCP review of each data point ([section 10](#9-decisions-and-reviews)).
 
 **Rules for every data point.** The [standing instructions](#standing-instructions) apply to all of them: only stated proof, the confidence scale, steps 3 and 4 when steps 1 and 2 leave a data point open, Claude answering through MCP and OpenAI for big lists, Prospeo only for the finance-person check, size first. On top of these:
 
@@ -2496,7 +2495,7 @@ Every run feeds a learning log (`learning/events.jsonl`, not in git, each event 
 | Questions the chat model couldn't answer, 3+ times | A free rule or directory for it, or `list_ai` | **You** |
 | Your corrections in test mode | Find and change the rule, prompt or setting behind the wrong answer | **You** |
 
-Must-haves and exclusions are never changed automatically. A rejected proposal only comes back if it keeps happening. Every decision is logged in the [Improvements log](#12-improvements-log). `LEARNING_AUTO_APPLY=0` in `.env` makes everything wait for you. `/enrich-chat`, `check-company` and `bulk-enrich` end with the `improve-pipeline` skill.
+Must-haves and exclusions are never changed automatically. A rejected proposal only comes back if it keeps happening. Every decision is logged in the [Improvements log](IMPROVEMENTS.md). `LEARNING_AUTO_APPLY=0` in `.env` makes everything wait for you. `/enrich-chat`, `check-company` and `bulk-enrich` end with the `improve-pipeline` skill.
 
 ### List viewer
 
@@ -2544,7 +2543,7 @@ Commands below assume you are in the project folder with the virtual environment
 | Level | What you check | Command | Cost |
 |---|---|---|---|
 | 1. Smoke test | Everything runs; the test list gets its known answers | `python -m enrich run examples/accuracy_test.csv --list accuracy_test` | Free |
-| 2. AI run | AI settles the open questions within budget | `python ai_check.py accuracy_test --phase icp` | About $0.05 per 10 companies |
+| 2. AI run | AI settles the open questions within budget | `python scripts/ai_check.py accuracy_test --phase icp` | About $0.05 per 10 companies |
 | 3. One company in depth | Every step for one company | `python -m enrich trace linear.app` | Free (`--ai` asks first) |
 | 4. One data point in depth | Each data point through all 5 layers | `python -m enrich waterfall linear.app --group all` | Free (`--ai`, `--providers` ask first) |
 | 5. Manual review | You mark every data point right or wrong, one data point (`--only M1`) or one company at a time | `python -m enrich review accuracy_test --only M1` | Free |
@@ -2608,9 +2607,9 @@ python -m enrich evaluate accuracy_test --labels examples/accuracy_test.csv
 ### 8.5 AI run
 
 ```bash
-python ai_check.py accuracy_test --phase icp
+python scripts/ai_check.py accuracy_test --phase icp
 python -m enrich signals accuracy_test --keep all
-python ai_check.py accuracy_test --phase signals
+python scripts/ai_check.py accuracy_test --phase signals
 python -m enrich evaluate accuracy_test --labels examples/accuracy_test.csv
 python -m enrich usage
 ```
@@ -2663,13 +2662,13 @@ Each data point shows the 5 layers of [the waterfall](#42-the-waterfall-per-data
 | doesn't cover this | This layer can't answer this data point |
 | not run (--ai) / not run (--providers) | That layer wasn't run for this company |
 
-Each panel also shows that data point's settings and its file (`config/datapoints/...`). To change how a data point is answered, edit its file, then re-run that company: `python -m enrich rules <list>` is free; new AI questions need `ai_check.py` (asks first). A layer you switched off shows as "off in its file".
+Each panel also shows that data point's settings and its file (`config/datapoints/...`). To change how a data point is answered, edit its file, then re-run that company: `python -m enrich rules <list>` is free; new AI questions need `scripts/ai_check.py` (asks first). A layer you switched off shows as "off in its file".
 
 **A good waterfall:** the deciding layer is the cheapest that could know; later layers say "not needed"; a data point still empty after every layer is genuinely not findable.
 
 ### 8.8 Manual review: you check every data point
 
-There are two ways to review in the terminal: **one data point at a time across every company** (best for judging a data point's waterfall), or **one company at a time** (best for judging a company as a whole). A third, through MCP, is the live review the 57 data points went through ([section 10](#10-decisions-and-reviews)).
+There are two ways to review in the terminal: **one data point at a time across every company** (best for judging a data point's waterfall), or **one company at a time** (best for judging a company as a whole). A third, through MCP, is the live review the 57 data points went through ([section 10](#9-decisions-and-reviews)).
 
 #### Step by step, one data point at a time
 
@@ -2726,7 +2725,7 @@ python -m enrich rules accuracy_test
 python -m enrich review accuracy_test --only M3 --redo
 ```
 
-Edit its file (for example set `ai_pages.run` to `if_open`), re-apply for free, and check it again. If the change adds AI questions, run `python ai_check.py accuracy_test --phase icp` (or `--phase signals` for fit, buying and weak data points); it shows the cost and asks first. The settings are explained in [The waterfall per data point](#42-the-waterfall-per-data-point) and by `python -m enrich datapoints`.
+Edit its file (for example set `ai_pages.run` to `if_open`), re-apply for free, and check it again. If the change adds AI questions, run `python scripts/ai_check.py accuracy_test --phase icp` (or `--phase signals` for fit, buying and weak data points); it shows the cost and asks first. The settings are explained in [The waterfall per data point](#42-the-waterfall-per-data-point) and by `python -m enrich datapoints`.
 
 **What makes an answer wrong:**
 
@@ -2799,7 +2798,7 @@ Run after changing a rule, a prompt, `scoring.json` or `profile.yaml`:
 2. `python -m enrich evaluate accuracy_test --labels examples/accuracy_test.csv`: same or better, and still 0 good companies wrongly NO
 3. `python -m enrich evaluate accuracy_test --labels lists/accuracy_test/output/labels.csv`: your review still agrees
 4. `python -m enrich trace linear.app --no-pause`: still NO, with the Series C proof
-5. For a prompt change: answers made with the old prompt are re-asked automatically (version stamps); run `python ai_check.py accuracy_test --phase icp` and evaluate again
+5. For a prompt change: answers made with the old prompt are re-asked automatically (version stamps); run `python scripts/ai_check.py accuracy_test --phase icp` and evaluate again
 
 #### Calibrate the services pipeline: `calibrate`
 
@@ -2824,7 +2823,7 @@ The services weights and the Strong-fit cut-off are guesses until they are check
 
 ```bash
 python -m enrich copy accuracy_test accuracy_test_b
-python ai_check.py accuracy_test_b --phase icp --mode cheap
+python scripts/ai_check.py accuracy_test_b --phase icp --mode cheap
 python -m enrich compare accuracy_test accuracy_test_b
 ```
 
@@ -2855,42 +2854,13 @@ Send (or tell Claude): the domain, the data point, what we said, what is right, 
 
 ---
 
-## 9. Hand-off to Puzzle
+## 9. Decisions and reviews
 
-Hand-off guide, November 9, 2026. The tool scores companies against Puzzle's ICP and tells sales how to approach each one.
-
-### 9.1 Who uses what
-
-Puzzle's sales team uses it mainly through Clay; one engineer sets it up once (about an hour, [section 2](#2-setup)). Ops and GTM leads use Claude; engineers use the command line or the API. The table is in [Three ways to use it](#three-ways-to-use-it).
-
-### 9.2 Everyday use
-
-**In Clay (sales team).** In any Clay table, add an **HTTP API** column that calls `/v1/check` on the team's server and map the answer into columns: ICP, Reason, Lead score, Lead tier, Route, Value angle ([steps](#clay-http-api-column-flow-1)). Alternatively, an engineer scores a whole list and pushes it into a Clay table through a webhook. Decision-makers found through Prospeo go into a second Clay table.
-
-**In Claude Code or Claude Desktop (ops).** Connect the MCP server once ([steps](#mcp-server-claude-code-claude-desktop)), then ask in plain English, for example "check acme.com", "score leads.csv", "find decision-makers at the ICP companies", "push the results to Clay". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI.
-
-**Command line or API (engineers).** For big lists or a weekly batch: `python -m enrich run leads.csv`, then `python -m enrich ai` (shows the cost and asks first), then `python -m enrich push leads`. Every call is documented in [openapi.json](openapi.json) for the CRM or other tools.
-
-**Changing the model:** usually one line in a config file ([Changing the model](#changing-the-model)).
-
-### 9.3 Costs and safety
-
-- Website reading, rules and public records are free and run first.
-- OpenAI runs only on request, after a cost estimate, and stops at a cost cap ($5 by default for the API).
-- Prospeo credits are spent only with an approved limit; the first call always shows the most it could use.
-- Nothing can be deleted through the API, and every API call needs the key. Keep the key and the server address private.
-
-Before go-live: [the checklist](#112-before-go-live).
-
----
-
-## 10. Decisions and reviews
-
-### 10.1 Manual review of the data points
+### 9.1 Manual review of the data points
 
 A data point by data point review of the waterfall, run through MCP (Claude Code) in test mode on **argon-ai.com** from `examples/Lead-Scoring-(Template)-Default-view-export-1791793022697.csv`. Each data point was run alone, its full waterfall shown, and approved, corrected or changed before moving on. How to run or resume it: [One data point at a time through MCP](#one-data-point-at-a-time-through-mcp-live-review).
 
-**Status (2026-10-14): complete. All 57 data points reviewed on argon-ai.com: 56 approved, 1 partially correct (E2), 29 retries after fixes.** (Before it was completed, F21, then buying signals B1 to B14 and weak signals W1 to W12 were left: 27 of 57.) Next: the open offers ([section 11](#113-open-decisions-and-questions)), then a second company to confirm the fixes.
+**Status (2026-10-14): complete. All 57 data points reviewed on argon-ai.com: 56 approved, 1 partially correct (E2), 29 retries after fixes.** (Before it was completed, F21, then buying signals B1 to B14 and weak signals W1 to W12 were left: 27 of 57.) Next: the open offers ([section 11](STATUS.md#3-open-decisions-and-questions)), then a second company to confirm the fixes.
 
 | | |
 |---|---|
@@ -2913,7 +2883,7 @@ These apply to every data point, in the review and in every run.
 7. **Rules over AI where the words are in our data:** when the pages, code and DNS already show (or don't show) a tool name, no AI step (F19, F20).
 8. **Save contacts** found by Prospeo in a separate CSV with company details.
 
-### 10.2 Decisions per data point
+### 9.2 Decisions per data point
 
 | ID | Result for Argon AI | Review | What was decided or changed |
 |---|---|---|---|
@@ -2982,7 +2952,7 @@ These apply to every data point, in the review and in every run.
 
 **Conditional runs and opposites** were built during the review (2026-10-14); the full list, and the links left out on purpose, are in [Waterfall per data point](#69-waterfall-per-data-point).
 
-### 10.3 Services facts review
+### 9.3 Services facts review
 
 From 2026-10-28, on test list `dp_test_services` (copied from `lead_scoring_template`), company `argon-ai.com`. At the user's request the LLM checks each result against the page text; the user can still reject or correct any of them.
 
@@ -3007,7 +2977,7 @@ All S1–S8 reviewed for argon-ai.com (8 approved, 3 rule fixes). Most services 
 
 S9–S12 have not been through the manual review.
 
-### 10.4 Earlier plan for the two pipelines
+### 9.4 Earlier plan for the two pipelines
 
 Before the stages below, the build was planned as:
 
@@ -3019,7 +2989,7 @@ Before the stages below, the build was planned as:
 6. **Per-pipeline views:** review (test mode and the waterfall table get an `--icp` option), the workflow page (one view per pipeline), the learning log (each event tagged with its pipeline).
 7. **Calibrate the services pipeline** on Alexey's 152 companies and the closed-won deals. The product pipeline keeps its calibration.
 
-### 10.5 Build plan for the services pipeline
+### 9.5 Build plan for the services pipeline
 
 Five stages. Each one ends with a check that has to pass before the next starts, and each can be pushed on its own. Rule throughout: the product pipeline must keep giving the same answers.
 
@@ -3051,7 +3021,7 @@ Before, each data point's group was fixed in the code (`SIGNALS` in `enrich/chec
 
 #### Stage 3: the new services facts
 
-**Status: built (2026-10-28); the manual review of S1–S8 is done ([10.3](#103-services-facts-review)).** S1–S8 are in the rules, with AI questions for S1–S6 and waterfall files. They are info in product and count in services; E1 is info in services (S6, Series D or later, replaces it). Rho counts as a fintech tool (M3). No pipeline asks AI questions about data points worth 0 points in it (services: funding, AI, YC and the like). Checked: on identical data, product gives exactly the same answers as the code before stage 1; services: 56 ICP YES, with marketplaces (2), 100+ people (1) and the earlier hard stops excluding, and Series C companies now passing. Tests: `tests/test_services_facts.py`. Known limit found: E1's existing "publicly traded" proof sometimes comes from a founder's bio or a public customer, and S6 inherits it (to fix through the learning loop).
+**Status: built (2026-10-28); the manual review of S1–S8 is done ([10.3](#93-services-facts-review)).** S1–S8 are in the rules, with AI questions for S1–S6 and waterfall files. They are info in product and count in services; E1 is info in services (S6, Series D or later, replaces it). Rho counts as a fintech tool (M3). No pipeline asks AI questions about data points worth 0 points in it (services: funding, AI, YC and the like). Checked: on identical data, product gives exactly the same answers as the code before stage 1; services: 56 ICP YES, with marketplaces (2), 100+ people (1) and the earlier hard stops excluding, and Series C companies now passing. Tests: `tests/test_services_facts.py`. Known limit found: E1's existing "publicly traded" proof sometimes comes from a founder's bio or a public customer, and S6 inherits it (to fix through the learning loop).
 
 | New fact | Found by (free first) | Then AI |
 |---|---|---|
@@ -3100,7 +3070,7 @@ Each new fact gets a waterfall file, a prompt, rules, tests, and a row in the da
 | The $500K proxy blocks a lean company by mistake | Hard stop only on strong proof; 50–100 people only scores down |
 | Old lists have product results only | They stay readable; running services on them reuses the cached downloads and fact answers |
 
-### 10.6 First test on 26 real deals (2026-11-09)
+### 9.6 First test on 26 real deals (2026-11-09)
 
 26 companies picked from the HubSpot export `services-deals-all.csv` (931 rows, 81 companies): 17 won (incl. quote accepted), 6 lost, 3 interested. Full waterfall, AI answered in chat, no Prospeo. List: `services_test`.
 
@@ -3110,7 +3080,7 @@ Each new fact gets a waterfall file, a prompt, rules, tests, and a row in the da
 | Lost (6) | 5 YES, 0 NO, 1 PENDING | 5 YES, 1 NO |
 | Average score of YES, won vs lost | 1.9 vs 3.2 | 1.8 vs 3.2 |
 
-The test found and fixed three rules that rejected paying customers, plus one prompt (188 tests; each is in the [Improvements log](#12-improvements-log)):
+The test found and fixed three rules that rejected paying customers, plus one prompt (188 tests; each is in the [Improvements log](IMPROVEMENTS.md)):
 - **M2 in services** (`website_optional: true` in roles.json): a coming-soon page or a 404 is Unknown, not No. Ridgeline Drilling (coming-soon page) and CanAm Logistics (404) are paying customers. With nothing proven the verdict is "Needs a call: no website" (PENDING, sales confirms it on the call; no AI or Prospeo spend). A domain that doesn't resolve or is for sale still fails.
 - **W6 in services:** USD plus foreign prices or fees on a pricing page is Needs check, not Yes; the AI decides with an updated prompt (Dueflow shows a UK fee table). Product keeps the free Yes.
 - **F16:** "hybrid" counts only next to work words ("hybrid team", "(Hybrid)"), not "a hybrid between direct mail".
@@ -3121,158 +3091,3 @@ The model now passes 15 of 17 won deals, but its score does not yet rank won dea
 - **Verse** (won) is excluded as e-commerce holding physical stock: ask Alexey whether that hard stop is right.
 - **Entity mismatches:** the contact's email domain is not always the company's (Eng Hua: a Malaysian firm on a US domain; 32 Ivory Lane Dental on dental-architects.com). Several names are shared with other companies.
 - The Sense Lab's domain no longer resolves; All Seasons Wild Bird Store timed out.
-
----
-
-## 11. Status and open items
-
-### 11.1 Status and roadmap
-
-**Built and tested** (on a 14-company sample, a 10-company accuracy test, the 100-company lead list and the 26-deal test):
-
-| Part | Status |
-|---|---|
-| Read any CSV, clean domains, keep every row | Done |
-| Phase 1 and phase 2 as separate scripts | Done |
-| Downloading pages, job feeds, robots.txt, public DNS check, slim saving | Done |
-| Rules for all 4 must-haves, 6 exclusions and 47 signals (21 fit, 14 buying, 12 weak) | Done. Yes / No only when confirmed; guesses stay empty or Needs check |
-| Two ICP pipelines (services default, product) with the services facts S1–S12, Route, Arrival and Value angle | Done (build stages 1–4); services weights provisional until calibrated |
-| Buying signals from free sources: Form D in the last 6 months, new YC batch, LLC-to-Inc. (SEC former names, old footers in the Internet Archive), pricing launched since last year (Internet Archive) | Done; the rest of the buying signals come from web search |
-| Real-browser fallback (your Google Chrome) for JavaScript-only sites and short bot checks | Done; Khan Academy went from 209 to 8,682 characters of text. Hard Cloudflare blocks still fail |
-| Reasoning column ending with the profile's "Funding stage: <value> (<basis>)" line | Done (built by code, no AI cost) |
-| `evaluate` (accuracy against labels) and `runs` (run log with AI cost) | Done; the 10-company test scores 9 of 9 decided, 0 good companies wrongly NO |
-| Built to scale on one machine (see [Architecture](#414-architecture)): one company cache for all lists, rate limits shared across processes, version stamps, API jobs that survive restarts, monthly AI budget, configurable data folder | Done; tested with two lists sharing pages and answers, two processes sharing a limit, and a server restarted twice mid-list |
-| Final list with ICP YES / NO / PENDING, lead score, tier and segment | Done |
-| Free directories: YC (by domain), SEC EDGAR (public, Form D funding, Delaware, address), IRS non-profit list, with match-strength rules | Done; on the test list it caught HubSpot as public and confirmed Puzzle's Delaware status and funding |
-| 62 AI prompt files with a web search step | Written |
-| AI step with OpenAI (gpt-4o-mini): our data first, web search only if needed, cost estimate and confirmation, answers kept when rules re-run, a quote required for every Yes / No | Done; $0.11 for the 10-company test |
-| Two AI modes: `accurate` (default) and `cheap` (grouped calls), with `copy` and `compare` to check one against the other | Built; tested with a stand-in for OpenAI (8 calls instead of 35 for one company) |
-| Live dashboards, `explain`, `lists`, `rules`, `clean`, ask before deleting | Done |
-| Version control | Done: private GitHub repo `PuzzleLeadScoring` |
-| API: one company, whole lists, AI with cost estimate and a hard cost limit, per-company proof, rules re-run, evaluate, run log, directory lookup, data point list, Clay push and pull, completion callback | Built and tested locally (17 endpoints) |
-| MCP server for Claude Code / Desktop | Built and tested with an MCP client; needs your one-time approval |
-| Clay: pull tables, push to a webhook, per-row HTTP column | Pull tested on your workspace; push tested against a stand-in webhook; per-row needs a public address |
-| Manual review of all 57 data points and S1–S8 | Done ([section 10](#10-decisions-and-reviews)) |
-| Calibration tooling (`calibrate`) | Done; waiting for the labels |
-
-**Build status by signal group:**
-
-| Signals | Answered by code today | Waiting on |
-|---|---|---|
-| All 4 must-haves, all 6 exclusions | Yes, with "Needs check" where unsure; directories add public companies (SEC, YC), non-profits (IRS, YC), US address (SEC, YC) | AI step to settle the "Needs check" ones |
-| Fit: Stripe, Delaware C-Corp, paid pricing, open roles, growth numbers, remote, early adopter, payroll and banking tools, YC | Yes; directories add funding (SEC Form D, YC), Delaware (SEC) and YC backing | |
-| Fit: startup selling nationally, B2B SaaS, local services, AI core, finance person, several companies | Clues only | AI step |
-| Buying: several roles, finance hire, ops hire, bookkeeper, audit, tax deadline | Yes, from job posts and the calendar | |
-| Buying: raised in last 6 months, new investor, LLC to C-Corp, incorporated recently, launched pricing | Yes, from Form D, the YC batch, SEC former names and Internet Archive snapshots | Web search (phase 2 AI) when the free sources find nothing |
-| Buying: new subsidiary, QuickBooks complaints, board member | Web search only (phase 2 AI) | |
-| Weak: local area, physical business, LLC with no funding, pre-revenue, multi-currency, manufacturing, Shopify without stock, NetSuite | Yes or clues | AI step for the clue-only ones |
-| Weak: invoicing-heavy, accountant picks tools, no fintech tools | AI step (accountant: web search; no fintech tools: a spreadsheet clue in job posts, confirmed by AI) | |
-
-**Data sources and what comes next:**
-
-| Source | What it gives | Status |
-| --- | --- | --- |
-| Company website, read by code | Most must-haves, exclusions and signals (see [section 6](#6-data-point-reference)) | Built |
-| Job board feeds | Open roles, job descriptions | Built |
-| AI reading our saved pages | Judgment calls: business type, industry, AI core, confirming "Needs check" | Built (OpenAI gpt-4o-mini); first real run pending |
-| Free directories | YC directory, SEC EDGAR (public company, Form D funding, Delaware, address), IRS non-profit list | Built |
-| AI web search | Step 2 for data points our pages can't answer | Built (OpenAI web search tool); model support to confirm on the first run |
-| Paid data (Clay, Crunchbase, OpenCorporates) | Headcount, funding, entities, only for companies still missing them | Optional |
-
-```mermaid
-flowchart TD
-    S5["AI step (built)<br/>step 1 on our data, then web search where needed;<br/>settles PENDING verdicts"]
-    S5b["Free directories (built)<br/>YC directory, SEC EDGAR,<br/>IRS non-profit list"]
-    S5c["Group prompts per call<br/>several data points in one AI call<br/>to cut cost"]
-    S6["Write the outputs (built)<br/>final list with ICP YES / NO, score, vertical;<br/>later also reasoning and outreach message"]
-
-    S5 --> S5b --> S5c --> S6
-
-    classDef plan stroke-dasharray: 6 4
-    classDef key stroke:#2d55c8,stroke-width:2px
-    class S5,S5b,S6 key
-    class S5c plan
-```
-
-| When this lands | Effect on the final list |
-| --- | --- |
-| Free directories (built) | Public companies caught (HubSpot); funding and Delaware status confirmed (Puzzle); fewer AI calls |
-| First real AI run | PENDING becomes YES or NO; the highest-weighted signals start counting, so scores rise for real startups; industry filled in |
-| Grouped prompts | Same answers at roughly a third of the AI cost |
-| Web search | Buying signals such as recent funding start counting |
-| Reasoning and outreach message | Two new text columns per ICP company |
-
-**Next, in order of impact:**
-
-1. **Labelled list from Puzzle:** about 50 current customers and 50 lost or "not a fit" deals (for services: Alexey's 152 coded companies and the closed-won deals). Run them and `evaluate` / `calibrate`, to measure accuracy and set the Strong fit cut-off from data instead of the current 12.
-2. **Pilot on 500 real rows** to measure speed, block rate and cost.
-3. **Check the cheap mode** on the labelled list with `copy` + `compare` + `evaluate`, then decide whether it can be the default. OpenAI's half-price Batch API could come after that.
-
-**Then:**
-
-4. **Follow investor and careers subdomains** such as `ir.hubspot.com`.
-5. **More directories:** Techstars and other accelerator portfolios.
-6. **A server** for the API, so Clay can call it row by row.
-7. Optional: Clay (already connected) for headcount and funding on PENDING companies; monthly re-checks of old lists; a shared page for the team to browse results.
-
-### 11.2 Before go-live
-
-The [26-deal test](#106-first-test-on-26-real-deals-2026-11-09) found and fixed three rules that rejected paying customers. The model now passes 15 of 17 won deals, but its score does not yet rank won deals above lost ones.
-
-- [x] Test a contractor such as Ridgeline Drilling: a missing or parked website no longer fails a services company
-- [ ] Fix the ranking: lower the startup weights and add HubSpot data (service bought, deal stage) as signals
-- [ ] Run Alexey's 152 companies and compare the scores with his judgement (`calibrate`)
-- [ ] Decide the size limit: today 100 or more people excludes a company, which could cut out Brilliant-size customers
-- [ ] Decide whether e-commerce holding physical stock is really out (Verse, a won deal, is excluded by it)
-- [ ] Fix known wrong answers: some companies marked publicly traded by mistake, fund administrators caught by the wrong rule, one site that redirects to another company
-- [ ] Add a Dockerfile and an automatic test run so the server deploys in one step
-- [ ] Agree who owns the model (weights and rules) and who maintains the code
-
-### 11.3 Open decisions and questions
-
-| Question | Status |
-|---|---|
-| AI provider and models | OpenAI gpt-4o-mini for both steps (`providers.openai` in `config/prompts/_shared.json`). Claude settings are kept there as an alternative but not wired up (through MCP, the chat model answers instead) |
-| OpenAI API key | Saved once in `.env` (git-ignored) |
-| One AI call per data point, or grouped | Both: `accurate` (one call per data point, the default) and `cheap` (grouped, `--mode cheap`). Cheap stays opt-in until `compare` shows its answers hold up |
-| Large rounds | A confirmed single round of $100M+ or a $1B+ valuation counts as "Series C or later" (`late_stage_proof` in config/icps/product/scoring.json) |
-| Undecided companies | PENDING until the AI check or a retry settles them |
-| Weak fit points | -2 each (in the pipeline's scoring.json) |
-| Strong fit cut-off | 12 for now; to be set after the labelled check |
-| Real lead list | A sample of 50 to 100 rows would help tune the rules |
-| Old test folders | `data/`, `out/` and `lists/sample_leads/` are out of date; waiting on your OK to delete them |
-| Services weights | Startup weights rank lost deals above won ones; lowering them and adding HubSpot signals needs the user's and Alexey's OK ([Improvements log](#12-improvements-log)) |
-| B4 and E3 for fund administrators | B4 counts a client-facing accounting role as "hiring a finance lead" (false positive in both pipelines), and a fund administrator like Repool may be an accounting-services firm (E3) |
-
-**Offers from the manual review (not built yet):**
-
-- **W9:** No store platform in the code → W9 No at step 1.
-- **B4/B5:** job board read and no finance / ops title → No at step 1 (B4: rules-only No when the job board was read and no title is a finance role).
-- **B12:** skip "launched pricing" when the company publishes no pricing.
-- **B1/B2:** one shared funding search.
-- **YC safeguards (F11):** require a second agreeing fact for a strong YC match; count AI web answers about YC only when the listing's website is the company's domain; note near-name YC companies as "not a match".
-- **F16:** a free rule when all job posts say "In person" / on-site.
-- **E5:** treat "Inc." as a clue, decide by the IRS register / SEC Form D.
-- **Other tool data points (F2, F4, F9):** rules only, like F19 and F20, if wanted.
-- **F12, B3:** the job-board link as the source.
-- **Prospeo company lookup** is untested live (only the people search is).
-- **Prospeo funding totals are unreliable** (counted Argon AI's $5.5M seed three times as $16.5M): drop or mark the column.
-- Job boards not built: JazzHR, Jobvite, Stardex.
-- S6 inherits E1's "publicly traded" proof that sometimes comes from a founder's bio or a public customer (to fix through the learning loop).
-
-Built since they were offered (2026-10-14): opposites (W2 and W7 left out), job boards (13 boards + careers-page roles; 4 → 13 test companies with jobs; glavel.com and repool.com now show finance hires for B4), re-fetching nearly empty pages with the real browser (`render`), and web search only on a clue for rarely public data points (F17, F19-style cost savers).
-
----
-
-## 12. Improvements log
-
-What the pipeline changed about itself, from what it learned while scoring leads (`enrich/core/learning.py`, MCP `improvement_report`). Safe changes (crash fixes, web search switched to on-clue for a phase 2 data point that almost never finds anything) are made automatically and reported; prompt, rule and workflow changes only after approval. Newest last.
-
-| Date | Proposal | Status | What and why |
-|---|---|---|---|
-| 2026-11-09 | M2: no working website is Unknown in services | applied (approved) | Ridgeline Drilling (coming-soon page) and CanAm Logistics (404), both paying customers, were failed on M2. `website_optional` in the services roles.json. |
-| 2026-11-09 | W6: foreign prices on a pricing page need the AI | applied (approved) | Dueflow, a paying customer, was excluded for a UK fee table ("min £1"). Now Needs check; the AI answered Unknown. |
-| 2026-11-09 | F16: 'hybrid' only next to work words | applied (approved) | Maverick Marketing got 'remote or hybrid' from "a hybrid between direct mail". |
-| 2026-11-09 | F15 prompt: counts of people, projects or years are not growth | applied (approved) | Yes was given for "helped thousands of people", "over 20 dental practices", "4,200+ roofs". |
-| 2026-11-09 | Services weights favour startups over won deals | proposed | 26-deal test: average score 1.8 for won vs 3.2 for lost. Lower startup weights; add HubSpot service type and deal stage as signals. Needs the user's and Alexey's OK. |
-| 2026-11-09 | Code review of the fixes | applied (approved) | A dead domain or a for-sale page passed as YES: only a coming-soon page or a 404 is Unknown now, and with nothing proven the verdict is 'Needs a call: no website' (PENDING). 'hybrid model' still matched: tightened. The W6 change hit product too: now only where W6 is a hard stop. W6 prompt updated (v2). website_optional is a boolean. |
