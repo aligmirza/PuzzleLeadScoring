@@ -85,7 +85,7 @@ There are three ways to use the model:
    4. Map the answer into columns: ICP, Reason, Outreach priority, Route, Value angle, Lead score, Lead tier.
    5. Start with a rate limit of about 5 requests per 10 seconds. A new company takes 5 to 35 seconds; repeats are instant.
 
-   An engineer can also score a whole list and push it into a Clay table through a webhook. Decision-makers found through Prospeo go into a second Clay table.
+   Whole lists: an engineer can also score a whole list and push it into a Clay table through a webhook. Decision-makers found through Prospeo go into a second Clay table.
 * Command line or API (engineers): For big lists or a weekly batch, run `python -m enrich run leads.csv`, then `python -m enrich ai` (shows the cost and asks first), then `python -m enrich push leads`. Every API call is documented in [openapi.json](openapi.json) for the CRM or other tools.
 
 ## Changing the Model
