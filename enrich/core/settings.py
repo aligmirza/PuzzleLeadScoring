@@ -16,6 +16,8 @@ EXAMPLE_FILE = ROOT / ".env.example"
 ENV_KEYS = [
     ("This project", "PUZZLE_API_KEY", "Key callers (Clay, teammates, tools) send to our API as the x-api-key header",
      "Created automatically by `python -m enrich settings`", True),
+    ("This project", "MCP_CONNECTOR_PASSWORD", "Password people enter once to connect Claude to the hosted MCP connector",
+     "Created automatically by `python -m enrich mcp --http`", True),
     ("AI", "OPENAI_API_KEY", "AI step (gpt-4o-mini): answers prompts and runs the web search step",
      "platform.openai.com > API keys", True),
     ("AI", "ANTHROPIC_API_KEY", "Alternative AI provider (Claude); set provider to anthropic in config/prompts/_shared.json",
@@ -109,6 +111,15 @@ def api_key(create: bool = True, rotate: bool = False) -> str | None:
         key = "pls_" + secrets.token_urlsafe(32)
         set_env("PUZZLE_API_KEY", key)
     return key
+
+
+def connector_password(create: bool = True) -> str | None:
+    """The hosted MCP connector's sign-in password. Created once and saved to .env."""
+    pw = os.environ.get("MCP_CONNECTOR_PASSWORD")
+    if not pw and create:
+        pw = secrets.token_urlsafe(18)
+        set_env("MCP_CONNECTOR_PASSWORD", pw)
+    return pw
 
 
 load_env()

@@ -29,7 +29,7 @@ Order: M1-M4, E1-E6, F1-F21, B1-B14, W1-W12.
   (or `dp_test_run` again) to show the data point after the change.
 - Record the decision in docs/DOCUMENTATION.md: the data point's row in section 9 (Decisions and reviews) and its row in the
   "Waterfall per data point" table of section 6 (not the quick reference).
-- Don't commit or push unless asked; then author Muhammad Ali, no Claude co-author line.
+- Don't commit or push unless asked.
 
 ## Stopping
 

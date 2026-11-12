@@ -1,0 +1,155 @@
+{
+  "manifest_version": "0.3",
+  "name": "puzzle-lead-scoring",
+  "display_name": "Puzzle Lead Scoring",
+  "version": "1.0.0",
+  "description": "Check companies against Puzzle's ideal customer profile, score them and set the outreach order.",
+  "long_description": "Runs the Puzzle lead scoring pipeline from your copy of the PuzzleLeadScoring repository. Ask in plain English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. Prospeo credits are spent only after you approve a limit. Needs the repository set up once (docs/HANDOFF.md, Setup).",
+  "author": {
+    "name": "Puzzle"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aligmirza/PuzzleLeadScoring"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "server/main.py",
+    "mcp_config": {
+      "command": "${user_config.project_dir}/.venv/bin/python",
+      "args": [
+        "${__dirname}/server/main.py"
+      ],
+      "env": {
+        "PUZZLE_PROJECT_DIR": "${user_config.project_dir}",
+        "PYTHONUTF8": "1"
+      },
+      "platform_overrides": {
+        "win32": {
+          "command": "${user_config.project_dir}\\.venv\\Scripts\\python.exe"
+        }
+      }
+    }
+  },
+  "user_config": {
+    "project_dir": {
+      "type": "directory",
+      "title": "PuzzleLeadScoring folder",
+      "description": "The folder you cloned the repository into (it holds enrich/, config/ and .venv/).",
+      "required": true
+    }
+  },
+  "tools": [
+    {
+      "name": "check_company",
+      "description": "Check one company against the ICP: the free waterfall steps (size, website rules and code checks, YC, SEC,"
+    },
+    {
+      "name": "check_companies",
+      "description": "Check several companies at once (up to 25): their free waterfall steps run at the same time, so 10 companies"
+    },
+    {
+      "name": "enrich_list",
+      "description": "Start enriching a CSV file of companies (needs a Domain or Website column) with the free waterfall steps."
+    },
+    {
+      "name": "list_status",
+      "description": "Progress and summary of a list: state, current step, ICP YES / NO / PENDING counts, Strong fit count."
+    },
+    {
+      "name": "list_results",
+      "description": "Rows of a finished list with ICP, lead score, tier and signals found. only_icp=True returns ICP = YES only."
+    },
+    {
+      "name": "explain_company",
+      "description": "Every answer for one company with its proof (quote and page link), for phase 1 and phase 2."
+    },
+    {
+      "name": "clay_tables",
+      "description": "Tables in the signed-in Clay workspace (id, name, workbook)."
+    },
+    {
+      "name": "pull_clay_table",
+      "description": "Read a Clay table (id like t_abc123) and enrich it as a new list in the background."
+    },
+    {
+      "name": "push_list_to_clay",
+      "description": "Send a finished list's rows to a Clay table webhook (one row per request). Default webhook comes from settings."
+    },
+    {
+      "name": "push_contacts_to_clay",
+      "description": "Send a list's Prospeo contacts (one row per person, with the company's ICP, score and tier) to a Clay contacts"
+    },
+    {
+      "name": "prospeo_status",
+      "description": "Prospeo: is the key set, plan, credits left, credits our lists used this month, and the monthly cap. Free."
+    },
+    {
+      "name": "prospeo_companies",
+      "description": "Prospeo company data (size, funding, location, team) for a list's companies whose data points Prospeo covers"
+    },
+    {
+      "name": "find_contacts",
+      "description": "Decision-makers at a list's ICP YES companies from Prospeo (founder, CEO, owner first, then finance, then COO /"
+    },
+    {
+      "name": "list_contacts",
+      "description": "The contacts Prospeo found for a list (name, title, LinkedIn, email if revealed, with the company's ICP, score"
+    },
+    {
+      "name": "open_questions",
+      "description": "The questions the free layers left open for a company, for YOU to answer (not OpenAI): the company's page text,"
+    },
+    {
+      "name": "submit_answers",
+      "description": "Save your answers to open_questions. Each answer: {\"id\": <question id>, \"answer_from\": \"pages\" or \"web\", plus the"
+    },
+    {
+      "name": "list_ai",
+      "description": "BIG LISTS ONLY (more than about 100 companies): the AI steps (pages, then web) for a whole list with the OpenAI"
+    },
+    {
+      "name": "questions_overview",
+      "description": "For a whole list: open questions per company (phase 1 and phase 2) and work_order: the companies to answer,"
+    },
+    {
+      "name": "dp_test_setup",
+      "description": "TEST MODE. Copy a finished list into an isolated test list (name must start with dp_test), without AI answers."
+    },
+    {
+      "name": "dp_test_run",
+      "description": "TEST MODE. Run ONE data point (ID like E1 or its name) for ONE company through its own waterfall and return"
+    },
+    {
+      "name": "dp_test_answer",
+      "description": "TEST MODE. Save YOUR answer for the stage dp_test_run says is next (answer_from 'pages' or 'web', plus the"
+    },
+    {
+      "name": "dp_test_record",
+      "description": "TEST MODE. The user's review of the data point under test; call it only with the action THE USER chose."
+    },
+    {
+      "name": "dp_test_summary",
+      "description": "TEST MODE. Progress across the pipeline's data points (tested, reviewed, approved, rejected, corrected, needing"
+    },
+    {
+      "name": "improvement_report",
+      "description": "What the pipeline learned from its runs: crashes, answers the quality checks rejected, web searches that keep"
+    },
+    {
+      "name": "apply_improvement",
+      "description": "Apply a setting proposal from improvement_report after the user approved it: the data point's file is changed,"
+    },
+    {
+      "name": "mark_improvement",
+      "description": "Record what happened to a proposal: done (fixed by editing code, a prompt or a rule; say what changed),"
+    }
+  ],
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ]
+  }
+}

@@ -78,7 +78,7 @@ def cmd_serve(args):
 
 def cmd_mcp(args):
     from .integrations.mcp_server import main as mcp_main
-    mcp_main()
+    mcp_main(http=args.http, host=args.host, port=args.port, public_url=args.public_url)
 
 
 def cmd_settings(args):
@@ -684,7 +684,12 @@ def main(argv: list[str] | None = None):
     p.add_argument("--port", type=int, default=8787)
     p.set_defaults(fn=cmd_serve)
 
-    p = sub.add_parser("mcp", help="run the MCP server (stdio) for Claude Code / Claude Desktop")
+    p = sub.add_parser("mcp", help="run the MCP server: stdio for Claude Code / Claude Desktop, or --http for the "
+                                   "hosted claude.ai connector (with sign-in)")
+    p.add_argument("--http", action="store_true", help="serve over HTTP for claude.ai Settings > Connectors")
+    p.add_argument("--host", default="127.0.0.1", help="address to listen on (0.0.0.0 on a server)")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--public-url", default="", help="the HTTPS address people reach it at, e.g. https://mcp.puzzle.io")
     p.set_defaults(fn=cmd_mcp)
 
     p = sub.add_parser("settings", help="show the API key and set keys once (saved in .env)")

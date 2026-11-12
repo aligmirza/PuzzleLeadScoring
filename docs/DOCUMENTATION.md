@@ -2389,6 +2389,14 @@ The table needs a column the pipeline recognises as the domain (Domain, Website,
 
 ### MCP server (Claude Code, Claude Desktop)
 
+#### One-click connectors
+
+**Hosted connector (claude.ai, the whole team):** `python -m enrich mcp --http --host 0.0.0.0 --port 8765 --public-url https://<connector address>` serves the same tools over HTTP (streamable HTTP) with sign-in. Put HTTPS in front (the public URL must be HTTPS). People add `https://<connector address>/mcp` in claude.ai under Settings > Connectors > Add custom connector; Claude registers itself, opens the server's `/login` page, and the person enters the connector password once (`MCP_CONNECTOR_PASSWORD` in `.env`, created on the first run). Tokens last a day and refresh for 30 days; they are kept in `cache/mcp_oauth.json`. Without a token no tool runs (the tools can spend Prospeo credits and push to Clay). To sign everyone out, delete that file and change the password. `/health` answers `ok` for uptime checks. Code: `enrich/integrations/mcp_oauth.py`; tests: `tests/test_mcp_connector.py`.
+
+**Desktop extension (Claude Desktop, one computer):** `connectors/puzzle-lead-scoring.mcpb`. Double-click it; Claude Desktop installs it and asks for the project folder, then runs the server with that folder's `.venv` (macOS, Linux and Windows). Rebuild it after adding or renaming a tool: `.venv/bin/python scripts/build_mcpb.py` (the tool list comes from the server itself).
+
+**Which one needs the code:** the MCP server uses the whole pipeline (crawler, rules, directories, scoring, config, saved lists, `.env` keys), so it always runs where the repository is. Hosted connector: the code is only on the server; users add the URL and sign in, nothing is installed. Desktop extension and Claude Code: a set-up copy of the repository on that computer (the `.mcpb` is only a launcher that points at it). Bundling Python and every package into the `.mcpb` is possible but makes it hundreds of MB (the browser alone) and each user would still need keys, so the hosted connector is the way for people who don't run the code.
+
 #### Connect Claude Code (one time)
 
 **Option A, automatic (recommended):** register the server for this project in your own Claude Code config. It then connects by itself every time you open Claude Code in this folder (terminal or VS Code), with no approval prompt:
@@ -2678,7 +2686,7 @@ There are two ways to review in the terminal: **one data point at a time across 
 #### Step by step, one data point at a time
 
 ```bash
-cd /Users/ali/Desktop/BtB/puzzle/ICP
+cd /path/to/PuzzleLeadScoring
 source .venv/bin/activate
 python -m enrich datapoints
 python -m enrich datapoints --show M1

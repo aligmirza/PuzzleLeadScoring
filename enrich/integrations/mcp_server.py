@@ -393,8 +393,26 @@ def mark_improvement(proposal_id: str, status: str, note: str = "") -> dict:
     return learning.mark(proposal_id, status, note)
 
 
-def main():
-    mcp.run("stdio")
+def main(http: bool = False, host: str = "127.0.0.1", port: int = 8765, public_url: str = ""):
+    """stdio for Claude Code and Claude Desktop (local); http for the hosted connector (claude.ai custom connector),
+    with sign-in (mcp_oauth.py)."""
+    if not http:
+        mcp.run("stdio")
+        return
+    from urllib.parse import urlparse
+    from mcp.server.transport_security import TransportSecuritySettings
+    from . import mcp_oauth
+    from ..core import settings
+    from ..core.paths import CACHE
+    public_url = (public_url or f"http://{host}:{port}").rstrip("/")
+    mcp_oauth.enable(mcp, public_url, settings.connector_password(), CACHE / "mcp_oauth.json")
+    common.console.print(f"Hosted MCP connector at {public_url}/mcp  (claude.ai: Settings > Connectors > Add custom "
+                         f"connector). Sign-in password: MCP_CONNECTOR_PASSWORD in .env")
+    netloc = urlparse(public_url).netloc
+    mcp.run("streamable-http", host=host, port=port, transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[netloc, f"{host}:{port}", f"localhost:{port}", f"127.0.0.1:{port}"],
+        allowed_origins=[public_url, "https://claude.ai", "https://www.claude.ai"]))
 
 
 if __name__ == "__main__":

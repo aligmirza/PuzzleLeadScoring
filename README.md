@@ -30,6 +30,8 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests
 ```
 
+One-click Claude connectors: `connectors/puzzle-lead-scoring.mcpb` for Claude Desktop, and `python -m enrich mcp --http` for a hosted claude.ai connector ([docs/HANDOFF.md](docs/HANDOFF.md)).
+
 Works on macOS, Linux and Windows (Python 3.10 or later; tested on 3.14). On Windows, use `py -m venv .venv` and `.venv\Scripts\python` in place of `.venv/bin/python` (PowerShell or Command Prompt); everything else is the same.
 
 Results land in `lists/<list>/output/`; the main file is `<list>_enriched.csv`.
@@ -55,4 +57,4 @@ Results land in `lists/<list>/output/`; the main file is `<list>_enriched.csv`.
 | [7. Integrations](docs/DOCUMENTATION.md#7-integrations) | API, Clay, MCP server, Claude Code skills, list viewer |
 | [8. Testing](docs/DOCUMENTATION.md#8-testing) | Smoke test, trace, waterfall, manual review, accuracy, regression checklist |
 | [9. Decisions and reviews](docs/DOCUMENTATION.md#9-decisions-and-reviews) | Manual review, decisions per data point, build plan, the 26-deal test |
-| [Hand-off guide](docs/HANDOFF.md) | For the Puzzle team: who uses what, setup, everyday use, costs, changing the model |
+| [Hand-off guide](docs/HANDOFF.md) | For Puzzle: a summary for leadership, how to use it with Claude, then setup, everyday use, costs and changing the model |

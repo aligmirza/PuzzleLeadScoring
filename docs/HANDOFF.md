@@ -1,92 +1,92 @@
-# Puzzle Lead Scoring: Hand-off Guide
+# Lead Scoring Model
 
-November 13, 2026
+## Summary
+Puzzle now has an automated way to decide which companies to contact in cold outreach, and in what order. Every lead is checked against Puzzle's ideal customer profile before the sales team spends time on it.
+* Less wasted sales time: Leads Puzzle cannot serve are removed before outreach.
+* A clear call order: The strongest leads are contacted first.
+* Better first conversations: Each lead comes with the right offer and an opening line.
+* Answers the team can trust: Every conclusion is backed by proof; nothing is guessed.
+* Proven on real leads: Tested on 82 real Puzzle leads from HubSpot, including won deals. Nearly 9 in 10 were approved for outreach, and every won customer with a working website passed.
+* Low cost: Paid sources are used only with approval, and a company is checked in seconds.
+* Owned by Puzzle: The model and all of its code are Puzzle's, in one GitHub repository: [github.com/aligmirza/PuzzleLeadScoring](https://github.com/aligmirza/PuzzleLeadScoring). Once it is transferred to Puzzle's GitHub, this link redirects to the new location.
 
-Written for the Puzzle team: the sales and GTM people who use the scores, and the engineer who sets the tool up.
+Good to know:
+* The ranking is a guide, not a forecast: it decides who is called first, not who is called.
+* Leads without a working website are skipped by design.
 
-This tool checks a list of companies against Puzzle's ideal customer profile, scores the ones that fit, and tells sales how to approach each one. Puzzle's sales team uses it mainly through Clay; one engineer sets it up once.
+## How to Use It
+Anyone can score leads by asking Claude, in two steps:
+1. Connect Claude to the model. Add the Puzzle Lead Scoring connector in claude.ai under Settings > Connectors, once. This needs no code on your computer: the model runs on Puzzle's server. If the shared connector is not set up yet, clone the repository and set it up (Setup, steps 1 to 3), then double-click `connectors/puzzle-lead-scoring.mcpb` to install it in Claude Desktop, or open Claude Code in the project folder.
+2. Ask Claude to score. For example "score leads.csv", "check acme.com" or "push the results to Clay". Claude returns who to contact, in what order, the offer to lead with and the proof.
+Scores can also appear directly in Clay, and the model can later be built into HubSpot (see Everyday Use).
 
-## What it does
+The rest of this document is for the team that runs the model.
 
-You give it company domains. It reads each company's website and free public records (YC, SEC, IRS, DNS), then uses AI only for what is still unknown. Every answer comes with a short quote and the page it came from. If something can't be found, it stays Unknown: a company is never marked down for missing information.
+## Process
+There are two models:
+* Services (the default): operators who want their bookkeeping done for them.
+* Product: early-stage startups for the platform.
 
-The default model is **services**: operators who want their bookkeeping done for them. A second model, **product**, scores early-stage startups for the platform.
+Each company goes through the same steps, from the free sources to the paid ones:
+* Website and public records: The company's website, job posts and free public records (YC, SEC, IRS, DNS) are read first, at no cost.
+* AI: Used only for what is still unknown. Through Claude (MCP) it costs nothing; from the command line it uses OpenAI, after a cost estimate and only with approval.
+* Bot checks: If a website shows a bot check (CAPTCHA), the model does not try to get past it. It answers the key questions from other public sources on the web instead.
+* Prospeo: Used only for the finance-person check and for contacts, with an approved credit limit.
+* Proof: Every answer carries a short quote and the page it came from. Anything not found stays Unknown and never counts against a company.
 
-Each company gets:
+How a lead is decided:
+   * Hard stops: The lead is rejected when there is proof that it is outside the US, an accounting firm, a sole proprietorship or partnership, keeps its books in another currency, is a manufacturer, or is too big (Series D or later, 100+ people, or NetSuite with a finance team).
+   * No working website: A 404, a coming-soon or parked page, or a dead domain means the lead is skipped.
+   * Pre-launch: A startup with a real website and a waitlist passes, and is contacted last.
+   * Score: Every approved lead gets points for fit and buying signals, minus 2 for each weak signal (for example holding stock, a marketplace, several US companies, a new subsidiary or a non-profit, which are checked on the call).
+   * Outreach priority: A (score 6 or more) is contacted first, then B (3 to 5), then C (under 3, and all pre-launch leads).
 
-| Column | Example |
-| --- | --- |
-| ICP | YES, NO or PENDING (still being checked) |
-| Outreach priority | A, B or C: the order to contact the approved leads in |
-| Reason | All 4 must-haves confirmed, no exclusion found |
-| Lead score and tier | 7, Weak fit (Strong fit, Good fit, Weak fit) |
-| Route | Qualify on the call: Full Service or Expert Review; Platform + MCP; Partner referral |
-| Value angle | Clean monthly closes across processors, subscriptions, refunds and deferred revenue |
-| Proof | The quote and link behind every answer |
+What sales receives for each company:
+   * ICP: YES (contact), NO (skip) or PENDING (still being checked).
+   * Outreach priority: A, B or C.
+   * Reason: one line, for example "All 4 must-haves confirmed, no exclusion found".
+   * Route: the offer to lead with, for example Full Service, Expert Review, Platform + MCP or a partner referral.
+   * Value angle: the opening line, for example "Clean monthly closes across processors, subscriptions, refunds and deferred revenue".
+   * Lead score and tier, and the proof behind every answer.
 
-## Three ways to use it
+## Setup
+An engineer needs about an hour, with Puzzle's own accounts and keys. Keys live only in the `.env` file, which is never committed. It runs on macOS, Linux and Windows.
+1. Install. Clone the repo (`git clone https://github.com/aligmirza/PuzzleLeadScoring.git`), then run `python3 -m venv .venv` and `.venv/bin/pip install -r requirements.txt`. On Windows use `py -m venv .venv` and `.venv\Scripts\pip`, and `.venv\Scripts\python` wherever these steps say `.venv/bin/python`.
+2. Add the keys. Run `python -m enrich settings` to add OpenAI (AI step for big lists), Prospeo (company data and contacts) and the Clay webhook URLs.
+3. Check it works. Run the 14-company test list from the README, then `.venv/bin/python -m unittest discover -s tests`.
+4. Start the API. Run `python -m enrich serve --host 0.0.0.0` on a small always-on server, with HTTPS in front. It needs disk space for saved pages, and Chrome for sites that only load with JavaScript (or the `--no-browser` option).
+5. Share the key. Show it with `python -m enrich settings --show-key` and give it only to the people setting up Clay.
 
-Most of the team only needs Clay. The other two are for ops and engineering.
+## Everyday Use
+There are three ways to use the model:
+* Claude (anyone): Connect it once, then ask in plain English, for example "check acme.com", "score leads.csv", "find decision-makers at the ICP companies" or "push the results to Clay". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. There are two one-click ways to connect:
+   * Hosted connector (whole team, no install): Once the server runs (Setup, step 4), start the connector next to it with `python -m enrich mcp --http --host 0.0.0.0 --public-url https://<connector address>`, with HTTPS in front. Each person adds `https://<connector address>/mcp` in claude.ai under Settings > Connectors > Add custom connector, and enters the connector password once (MCP_CONNECTOR_PASSWORD in the server's `.env`). It then works in Claude on the web, desktop and phone.
+   * Desktop extension (one computer): Double-click `connectors/puzzle-lead-scoring.mcpb` and Claude Desktop installs it on macOS or Windows, asking once for the project folder. The repository must be set up on that computer (Setup, steps 1 to 3). Claude Code connects by itself when opened in the project folder ([steps](DOCUMENTATION.md#mcp-server-claude-code-claude-desktop)).
+   * Which one needs the code: The model runs as one piece (website reading, rules, public records, scoring, settings, saved lists and the Prospeo and Clay keys), so the connector always runs where the code is. With the hosted connector the code lives only on the server, and everyone else just adds the address and enters the password; nothing is installed on their computers. The desktop extension and Claude Code run from a copy of the repository on that computer, set up with its own keys (Setup, steps 1 to 3). For the sales team and leadership, the hosted connector is the one to use.
+* Clay (sales and GTM team): Scores appear as columns in Clay tables. In any table, add an HTTP API column:
+   1. Method `POST`, endpoint `https://<server address>/v1/check`.
+   2. Header `x-api-key` set to the API key.
+   3. Body: `{"domain": "<Domain column>", "company": "<Company column>", "employees": "<Employees column>"}`.
+   4. Map the answer into columns: ICP, Reason, Outreach priority, Route, Value angle, Lead score, Lead tier.
+   5. Start with a rate limit of about 5 requests per 10 seconds. A new company takes 5 to 35 seconds; repeats are instant.
+   An engineer can also score a whole list and push it into a Clay table through a webhook. Decision-makers found through Prospeo go into a second Clay table.
+* Command line or API (engineers): For big lists or a weekly batch, run `python -m enrich run leads.csv`, then `python -m enrich ai` (shows the cost and asks first), then `python -m enrich push leads`. Every API call is documented in [openapi.json](openapi.json) for the CRM or other tools.
 
-| Who | How | What they need |
-| --- | --- | --- |
-| Sales and GTM team | Scores appear as columns in Clay tables | The API running on a server (set up once) |
-| Ops or GTM lead | Ask Claude in plain English: "check acme.com", "score this list" | The repo and Claude Code or Claude Desktop on their computer |
-| Engineer | Command line or API for big lists, schedules, or the CRM | The repo on a server or laptop |
+## Changing the Model
+The model lives in config files, not code, so most changes are one line. After a change, `python -m enrich rules <list> --phase both` re-scores saved lists for free.
+* Points per signal and the A/B priority cut-offs: `config/icps/services/scoring.json`.
+* Must-haves, hard stops and weak signals: `config/icps/services/roles.json`.
+* Customer types and the profile text: `config/icps/services/profile.yaml`.
+* How each data point is found: `config/datapoints/`.
+To check the weights against real results, label companies Puzzle already knows are good or bad fits and run `python -m enrich calibrate`. It suggests weights and changes nothing until you add `--apply`. Every change the pipeline makes to itself is logged in `learning/improvements.md`.
 
-## Set up once
+## Costs and Safety
+The model spends money only when asked:
+* Free steps: Website reading, rules and public records always run first.
+* OpenAI: Runs only on request, after a cost estimate, and stops at a cost cap ($5 by default for the API).
+* Prospeo: Credits are spent only with an approved limit; the first call shows the most it could use.
+* Access: Nothing can be deleted through the API, and every call needs the key. Keep the key and the server address private.
 
-An engineer needs about an hour. Use Puzzle's own accounts and keys; keys live only in the `.env` file, which is never committed.
-
-1. Clone the repo and install: `python3 -m venv .venv`, then `.venv/bin/pip install -r requirements.txt`. It runs on macOS, Linux and Windows; on Windows use `py -m venv .venv` and `.venv\Scripts\pip` / `.venv\Scripts\python` instead.
-2. Add the keys with `python -m enrich settings`: OpenAI (AI step for big lists), Prospeo (company data and contacts) and the Clay webhook URLs.
-3. Run the 14-company test list from the README to check it works, then `.venv/bin/python -m unittest discover -s tests`.
-4. Start the API on a small always-on server: `python -m enrich serve --host 0.0.0.0`, with HTTPS in front. It needs disk space for saved pages, and Chrome for sites that only load with JavaScript (or the `--no-browser` option).
-5. Show the API key with `python -m enrich settings --show-key` and give it only to people setting up Clay.
-
-## Everyday use
-
-**In Clay (sales team).** In any Clay table, add an **HTTP API** column:
-
-1. Method `POST`, endpoint `https://<server address>/v1/check`.
-2. Header `x-api-key` = the API key.
-3. Body: `{"domain": "<Domain column>", "company": "<Company column>", "employees": "<Employees column>"}`.
-4. Map the answer into columns: ICP, Reason, Lead score, Lead tier, Outreach priority, Route, Value angle.
-5. Start with a rate limit of about 5 requests per 10 seconds. A new company takes 5 to 35 seconds; repeats are instant.
-
-Alternatively, an engineer scores a whole list and pushes it into a Clay table through a webhook. Decision-makers found through Prospeo go into a second Clay table.
-
-**In Claude Code or Claude Desktop (ops).** Connect the MCP server once ([steps](DOCUMENTATION.md#mcp-server-claude-code-claude-desktop)), then ask in plain English, for example "check acme.com", "score leads.csv", "find decision-makers at the ICP companies", "push the results to Clay". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI.
-
-**Command line or API (engineers).** For big lists or a weekly batch: `python -m enrich run leads.csv`, then `python -m enrich ai` (shows the cost and asks first), then `python -m enrich push leads`. Every call is documented in [openapi.json](openapi.json) for the CRM or other tools.
-
-## Changing the model
-
-The model lives in config files, not code, so a change is usually one line. After a change, `python -m enrich rules <list> --phase both` re-scores saved lists in seconds for free.
-
-| To change | File |
-| --- | --- |
-| Points per signal (high 3, medium 2, low 1) | config/icps/services/scoring.json |
-| Must-haves, hard stops and which signals count | config/icps/services/roles.json |
-| Customer types and the profile text | config/icps/services/profile.yaml |
-| How one data point is found | config/datapoints/ |
-
-To check the weights against real results, label companies Puzzle already knows are good or bad fits and run `python -m enrich calibrate`. It suggests weights and changes nothing until you add `--apply`.
-
-## Costs and safety
-
-- Website reading, rules and public records are free and run first.
-- OpenAI runs only on request, after a cost estimate, and stops at a cost cap ($5 by default for the API).
-- Prospeo credits are spent only with an approved limit; the first call always shows the most it could use.
-- Nothing can be deleted through the API, and every API call needs the key. Keep the key and the server address private.
-
-## Results on real leads
-
-The model is a cold-outreach filter: contact every lead it approves, in the order of the Outreach priority column (A, then B, then C). On 82 real Puzzle leads (November 13, 2026) it approves 72 for outreach (A 9, B 22, C 41) and rejects 8: one South African company and seven with no working website (leads without a website are skipped on purpose). Two stay pending: one server that doesn't answer and one site behind a bot check with nothing about it on the web.
-
-## Where to read more
-
-| Doc | Covers |
-| --- | --- |
-| [README.md](../README.md) | The short overview |
-| [DOCUMENTATION.md](DOCUMENTATION.md) | Everything else: setup, commands, how the pipeline works, the ICP models, every data point, integrations, testing, decisions |
+## Further Reading
+* [README.md](../README.md): the short overview.
+* [DOCUMENTATION.md](DOCUMENTATION.md): everything else, including commands, how the pipeline works, the ICP models, every data point, integrations, testing and decisions.
