@@ -4,12 +4,12 @@
   "provisional": [
     "Decided 2026-11-03: Series C is in; the $500K monthly-expense ceiling is the proxy NetSuite with a finance team (W10), Series D or later (S6) or 100+ people (S7); 50-99 people (S8) only scores down",
     "Books behind (S3), looking for help (S4) and DIY (S5) are rarely public; Unknown stays Unknown",
-    "Weights and the Strong-fit cut-off are guesses until calibrated on Alexey's 152 companies (stage 5)",
+    "Weights and the Strong-fit cut-off (decided 2026-11-13, no input from Puzzle): kept as set; for cold outreach the score only orders the approved leads (Outreach priority A/B/C). They can be calibrated later with labelled companies (python -m enrich calibrate)",
     "Decided 2026-11-07 (Alexey): young companies lose no points for being young; AI companies lose no points (Puzzle's MCP lets them do the books with their own agent), so does-its-own-books (S5) is info and routes to Platform + MCP; real estate and legal pass with 'ask how the books are handled'",
-    "website_optional (2026-11-09): a coming-soon page or a 404 leaves M2 Unknown instead of No, because established local businesses often have no real website (Ridgeline Drilling, CanAm Logistics: paying customers). A domain that doesn't resolve or is for sale stays No. With no website and no must-have proven the verdict is 'Needs a call: no website'.",
-    "Cold outreach (2026-11-12): the model should only reject what Puzzle can't serve. Pre-launch companies (a waitlist or coming-soon page, no sales yet) are not failed on M2/M4: they pass as 'Yes (pre-launch)', lose 2 points (W5) and are contacted last; 11 of 82 real leads were pre-launch and several bought. Holding stock (E6), marketplace (S2), running several US companies (F17), a new subsidiary (B8) and non-profit (E5) are weak signals (-2, check on the call) instead of hard stops until Alexey says Puzzle can't serve them. Hard stops left: outside the US, accounting firm, sole proprietorship, multi-currency, manufacturing, too big."
+    "website_optional (2026-11-09, turned off 2026-11-13): no working website (a 404, a coming-soon or parked page, a dead domain) is a hard No on M2: cold outreach skips leads without a website. A pre-launch company with a real site and a waitlist still passes (Yes (pre-launch)), and so does a site that was blocked or timed out (retry).",
+    "Cold outreach (2026-11-12): the model should only reject what Puzzle can't serve. Pre-launch companies (a waitlist or coming-soon page, no sales yet) are not failed on M2/M4: they pass as 'Yes (pre-launch)', lose 2 points (W5) and are contacted last; 11 of 82 real leads were pre-launch and several bought. Holding stock (E6), marketplace (S2), running several US companies (F17), a new subsidiary (B8) and non-profit (E5) are weak signals (-2, check on the call) instead of hard stops: final (decided 2026-11-13 on the 82 real leads; Verse, SEYA, Wealthie, BoxHero, Phoenix Bikes and the church were real leads, several won). Hard stops left: outside the US, accounting firm, sole proprietorship, multi-currency, manufacturing, too big."
   ],
-  "website_optional": true,
+  "website_optional": false,
   "reason_groups": {
     "Too big for services": [
       "S6",

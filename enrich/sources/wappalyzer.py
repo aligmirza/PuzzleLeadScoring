@@ -41,7 +41,7 @@ def update(force: bool = False) -> int:
         texts = _run(_download())
         (DIR / "technologies").mkdir(parents=True, exist_ok=True)
         for name, text in texts.items():
-            (DIR / name).write_text(text)
+            (DIR / name).write_text(text, encoding="utf-8")
     global _db
     _db = None
     return len(_load()["techs"])
@@ -150,10 +150,10 @@ def _load() -> dict:
                 update()
             except Exception:  # noqa: BLE001  no network: work with what's cached, or nothing
                 pass
-        cats = json.loads((DIR / "categories.json").read_text()) if (DIR / "categories.json").exists() else {}
+        cats = json.loads((DIR / "categories.json").read_text(encoding="utf-8")) if (DIR / "categories.json").exists() else {}
         techs: dict[str, dict] = {}
         for f in sorted((DIR / "technologies").glob("*.json")) if (DIR / "technologies").exists() else []:
-            techs.update(json.loads(f.read_text()))
+            techs.update(json.loads(f.read_text(encoding="utf-8")))
         _db = {"cats": {k: v.get("name", k) for k, v in cats.items()}, "techs": techs, "compiled": {}}
         return _db
 

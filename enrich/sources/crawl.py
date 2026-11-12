@@ -343,19 +343,25 @@ class Crawler:
             return None, f"{type(e).__name__}: {str(e)[:120]}"
 
     async def _public_dns(self, domain: str) -> str:
-        """Ask public DNS (Google, then Cloudflare) over HTTPS. Returns exists, nxdomain or unknown."""
-        for url in (f"https://dns.google/resolve?name={domain}&type=A",
-                    f"https://cloudflare-dns.com/dns-query?name={domain}&type=A"):
-            try:
-                r = await self.client.get(url, headers={"Accept": "application/dns-json"}, timeout=8)
-                data = r.json()
-            except Exception:  # noqa: BLE001
-                continue
-            if data.get("Status") == 0 and data.get("Answer"):
-                return "exists"
-            if data.get("Status") == 3:
-                return "nxdomain"
-        return "unknown"
+        """Ask public DNS (Google, then Cloudflare) over HTTPS. Returns exists, nxdomain, no_address (the domain is
+        registered but neither it nor www has a web address: no website) or unknown."""
+        empty = []
+        for name in (domain, f"www.{domain}"):
+            for url in (f"https://dns.google/resolve?name={name}&type=A",
+                        f"https://cloudflare-dns.com/dns-query?name={name}&type=A"):
+                try:
+                    r = await self.client.get(url, headers={"Accept": "application/dns-json"}, timeout=8)
+                    data = r.json()
+                except Exception:  # noqa: BLE001
+                    continue
+                if data.get("Status") == 0 and data.get("Answer"):
+                    return "exists"
+                if data.get("Status") == 3 and name == domain:
+                    return "nxdomain"
+                if data.get("Status") in (0, 3):
+                    empty.append(name)
+                    break
+        return "no_address" if set(empty) == {domain, f"www.{domain}"} else "unknown"
 
     async def _robots(self, base: str) -> tuple[RobotFileParser | None, list[str]]:
         f, _ = await self.fetch(urljoin(base, "/robots.txt"))
@@ -473,6 +479,9 @@ class Crawler:
                 public = await self._public_dns(domain)
                 if public == "exists":
                     err = "local DNS couldn't find this domain but public DNS can (network DNS problem); retry later"
+                elif public == "no_address":
+                    err = "domain does not resolve"  # registered, but no web address for it or www: no website
+                    record["dns_note"] = "registered, but public DNS has no web address for it or www"
                 elif public == "unknown":
                     err = "domain did not resolve and public DNS couldn't confirm; retry later"
             if err == "blocked by bot protection":

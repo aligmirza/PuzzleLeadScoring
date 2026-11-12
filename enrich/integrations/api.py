@@ -343,8 +343,8 @@ def contacts(name: str, format: Literal["json", "csv"] = "json"):
         raise HTTPException(404, str(e))
     path = prun.write_contacts(folder, Store(folder))
     if format == "csv":
-        return PlainTextResponse(path.read_text(), media_type="text/csv")
-    with open(path, newline="") as f:
+        return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/csv")
+    with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     return {"list": folder.name, "count": len(rows), "contacts": rows}
 

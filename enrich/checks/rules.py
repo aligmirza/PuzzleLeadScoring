@@ -442,7 +442,8 @@ def decide(signals: dict, site_status: str | None) -> dict:
     failed = [sid for sid in no if sid not in prelaunch]
     confirmed = [sid for sid in musts if val(sid) == YES]
     checks = [sid for sid, (g, _) in SIGNALS.items() if g in ("must", "exclusion") and val(sid) == CHECK]
-    if site_status in ("blocked", "unreachable", "error"):
+    if site_status in ("unreachable", "error") or (
+            site_status == "blocked" and not (checks or excluded or no or confirmed)):  # bot check, web found nothing
         gate = "not reached (retry)"
     elif excluded:
         gate = "excluded"
@@ -788,7 +789,9 @@ class Extractor:
         parked = re.search(r"this domain (?:is|may be) for sale|buy this domain|domain (?:is )?parked|sedoparking|hugedomains|"
                            r"afternic|dan\.com|parkingcrew|bodis\.com|domain has expired|\b[\w-]+\.[a-z]{2,6} is for sale\b|godaddy\.com/forsale",
                            home.html + " " + (self.record.get("final_url") or ""), re.I)
-        coming = len(text) < 600 and re.search(r"coming soon|launching soon|under construction", text, re.I)
+        # a placeholder: short, or few distinct words once a builder repeats the name and adds a cookie banner
+        coming = re.search(r"coming soon|launching soon|under construction", text, re.I) and (
+            len(text) < 600 or len(set(re.findall(r"[a-z]{2,}", text.lower()))) < 90)
         self.facts["text_chars"] = len(text)
         self.facts["needs_js"] = len(text) < 250 and len(home.html) > 2000
         shutdown = None
@@ -807,8 +810,8 @@ class Extractor:
             self.facts["shutting_down"] = shutdown
         elif coming and _website_optional():  # Ridgeline Drilling: a paying customer behind a coming-soon page
             self.s["M2"] = {**sig(UNKNOWN, note=f"only a coming-soon page; {NO_SITE_NOTE}", url=home.url), "no_website": True}
-        elif coming:
-            self.s["M2"] = sig(NO, evidence="only a coming-soon page", url=home.url)
+        elif coming:  # no website yet: a hard No (not a pre-launch pass), the lead isn't contacted
+            self.s["M2"] = {**sig(NO, evidence="only a coming-soon page", url=home.url), "hard": True}
         elif self.facts["needs_js"]:
             self.s["M2"] = sig(UNKNOWN, note="page content needs JavaScript; retry with a real browser", url=home.url)
         elif len(self.pages) >= 3 or len(text) > 1500:
@@ -1475,6 +1478,10 @@ class Extractor:
         if self.phase == "icp":
             # phase 1 reports only must-haves and exclusions
             self.s = {sid: v for sid, v in self.s.items() if SIGNALS[sid][0] in ("must", "exclusion")}
+        if self.record.get("status") == "blocked":  # bot check: the web step answers what the pages would have
+            from . import datapoints as _dpb
+            for sid in _dpb.unreached_questions_sids(self.s):
+                self.s[sid] = sig(CHECK, note="the site shows a bot check: answered from the web instead")
         d = decide(self.s, self.record.get("status"))
         gate, verdict, checks, excluded, confirmed = d["gate"], d["verdict"], d["checks"], d["excluded"], d["confirmed"]
 
@@ -1482,7 +1489,7 @@ class Extractor:
         ai_prompts = self._ai_prompts() if live and (gate not in ("excluded", "failed must-have") or _dp.ALL_LAYERS) else []
         if not live and self.phase == "icp":  # site not read: web-only questions for data points set to search anyway
             from . import datapoints
-            ai_prompts = datapoints.unreached_questions(self.s)
+            ai_prompts = datapoints.unreached_questions(self.s, blocked=self.record.get("status") == "blocked")
         ai_context = self._ai_context(ai_prompts) if ai_prompts else {}
         tokens = cached = output = 0
         if ai_prompts:
@@ -1734,7 +1741,7 @@ NO_SITE_NOTE = ("established businesses may not keep a website, so this pipeline
 
 
 def _website_optional() -> bool:
-    """Services: a parked, coming-soon or dead website leaves M2 Unknown instead of failing it (roles.json)."""
+    """roles.json website_optional: a coming-soon page or a 404 leaves M2 Unknown instead of failing it (off in both pipelines since 2026-11-13)."""
     from ..core import icp
     return icp.roles().get("website_optional") is True
 

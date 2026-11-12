@@ -90,7 +90,7 @@ def write_defaults(overwrite: bool = False) -> int:
         if p.exists() and not overwrite:
             continue
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(cfg, indent=2) + "\n")
+        p.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
         n += 1
     load.cache_clear()
     return n
@@ -102,7 +102,7 @@ def load() -> dict[str, dict]:
     out = defaults()
     if DIR.exists():
         for p in DIR.rglob("*.json"):
-            cfg = json.loads(p.read_text())
+            cfg = json.loads(p.read_text(encoding="utf-8"))
             if cfg.get("id") in out:
                 base = out[cfg["id"]]
                 for layer, settings in (cfg.get("steps") or {}).items():
@@ -165,6 +165,7 @@ def waiting(result: dict, done: dict) -> list[tuple[str, str]]:
     a page answer first; the web where the page answer left it open. done = Store.get_ai(domain, phase)."""
     from ..pipeline.common import ai_prompts
     site_ok = (result.get("crawl") or {}).get("status") == "live"
+    blocked = (result.get("crawl") or {}).get("status") == "blocked"
     out = []
     for pid in ai_prompts(result):
         steps = done.get(pid, {})
@@ -176,7 +177,7 @@ def waiting(result: dict, done: dict) -> list[tuple[str, str]]:
             out.append((pid, "pages" if site_ok and ask_pages(pid, result) else "web"))
         elif 2 not in steps and is_open and web_after(
                 pid, (steps.get(1) or {}).get("answer"), True, site_ok,
-                clue=bool(sid) and result["signals"].get(sid, {}).get("value") == "check"):
+                clue=bool(sid) and result["signals"].get(sid, {}).get("value") == "check", blocked=blocked):
             out.append((pid, "web"))
     return [(p, k) for p, k in out if k == "pages" or step(sid_for_prompt(p) or "", "ai_web").get("run", "after_pages") != "off"]
 
@@ -226,9 +227,11 @@ def still_open(sid: str | None, result: dict) -> bool:
     return sid == "F1" and not (result.get("funding_stage") or "").endswith("(confirmed)")
 
 
-def web_after(pid: str, page_answer: dict | None, still_open: bool, site_ok: bool = True, clue: bool = False) -> bool:
+def web_after(pid: str, page_answer: dict | None, still_open: bool, site_ok: bool = True, clue: bool = False,
+              blocked: bool = False) -> bool:
     """Should the web search run after the page answer (or instead of it)? clue: the rules flagged the data point
-    (Needs check)."""
+    (Needs check). blocked: the site shows a bot check (CAPTCHA), so its must-haves and hard stops fall back to the
+    web step instead of waiting for a retry (we never try to get past the check)."""
     sid = sid_for_prompt(pid)
     if not sid:
         from ..ai import prompts as P
@@ -238,7 +241,7 @@ def web_after(pid: str, page_answer: dict | None, still_open: bool, site_ok: boo
     if ALL_LAYERS:
         return run != "off"
     if not site_ok:
-        return run != "off" and web.get("when_site_unreached", False)
+        return run != "off" and (web.get("when_site_unreached", False) or (blocked and gating(sid)))
     if run == "first":
         return True
     if run == "if_open":
@@ -287,11 +290,25 @@ def questions(signals: dict, page, open_values=("unknown", "check")) -> list[str
     return out
 
 
-def unreached_questions(signals: dict) -> list[str]:
-    """For a site that couldn't be read: web-only questions for data points set to search anyway."""
+def gating(sid: str | None) -> bool:
+    """A must-have or a hard stop in the current pipeline (it decides ICP YES / NO)."""
+    from .rules import SIGNALS
+    return bool(sid) and SIGNALS.get(sid, ("",))[0] in ("must", "exclusion")
+
+
+def unreached_questions_sids(signals: dict) -> list[str]:
+    """The must-haves and hard stops a bot-checked site sends to the web step (still open)."""
+    return [sid for sid, cfg in load().items() if sid in signals and gating(sid) and cfg["steps"]["ai_pages"].get("prompt")
+            and cfg["steps"]["ai_web"].get("run") != "off" and signals[sid]["value"] == "unknown"]
+
+
+def unreached_questions(signals: dict, blocked: bool = False) -> list[str]:
+    """For a site that couldn't be read: web-only questions for data points set to search anyway, and for a site
+    behind a bot check (blocked) every must-have and hard stop the web step can answer."""
     return [cfg["steps"]["ai_pages"]["prompt"] for sid, cfg in load().items()
             if sid in signals and cfg["steps"]["ai_pages"].get("prompt")
-            and (cfg["steps"]["ai_web"].get("when_site_unreached") or ALL_LAYERS) and cfg["steps"]["ai_web"].get("run") != "off"
+            and (cfg["steps"]["ai_web"].get("when_site_unreached") or ALL_LAYERS or (blocked and gating(sid)))
+            and cfg["steps"]["ai_web"].get("run") != "off"
             and (signals[sid]["value"] in ("unknown", "check") or ALL_LAYERS)]
 
 

@@ -65,7 +65,7 @@ def run(csv_path: Path, label: str, workers: int = 50, limit: int = 0) -> dict:
            "loop_blocked_s": round(lag["total"], 1), "loop_blocked_worst_s": round(lag["worst"], 2),
            "stages": timing.summary(), "answers": answers}
     _out(label).parent.mkdir(parents=True, exist_ok=True)
-    _out(label).write_text(json.dumps(out, indent=1))
+    _out(label).write_text(json.dumps(out, indent=1), encoding="utf-8")
     show(out)
     return out
 
@@ -81,7 +81,7 @@ def show(b: dict) -> None:
 
 
 def compare(a_label: str, b_label: str) -> dict:
-    a, b = (json.loads(_out(x).read_text()) for x in (a_label, b_label))
+    a, b = (json.loads(_out(x).read_text(encoding="utf-8")) for x in (a_label, b_label))
     show(a)
     show(b)
     console.print(f"\nWall time: {a['wall_s']} s → {b['wall_s']} s ([bold]{a['wall_s'] / max(b['wall_s'], 0.1):.1f}× faster[/])")

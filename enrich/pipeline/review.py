@@ -37,12 +37,12 @@ ANSWERS = {"y": "Yes", "yes": "Yes", "n": "No", "no": "No", "u": "", "": ""}
 def _load(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
 def _save(path: Path, rows: list[dict]) -> None:
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)
@@ -62,7 +62,7 @@ def _labels(review: list[dict], path: Path) -> None:
             name = r["Data point"].split(": ", 1)[-1]
             row[f"Expected: {name}"] = answer if answer in ("Yes", "No") else ""
     cols = list(dict.fromkeys(k for row in by.values() for k in row))
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         w.writerows(by.values())

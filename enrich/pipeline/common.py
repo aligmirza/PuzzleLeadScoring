@@ -179,11 +179,11 @@ def write_outputs(results: list[dict], rows: list[dict], out: Path, names: dict[
     from ..core import icp
     paths = {k: out / (Path(v).stem + icp.label() + Path(v).suffix) for k, v in names.items()}  # per pipeline
     fields = list(dict.fromkeys(k for row in rows for k in row))
-    with open(paths["csv"], "w", newline="") as f:
+    with open(paths["csv"], "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         w.writerows(rows)
-    with open(paths["evidence"], "w") as f, open(paths["ai_queue"], "w") as q:
+    with open(paths["evidence"], "w", encoding="utf-8") as f, open(paths["ai_queue"], "w", encoding="utf-8") as q:
         for r in results:
             f.write(json.dumps({k: v for k, v in r.items() if k != "ai_context"}) + "\n")
             if r.get("ai", {}).get("needed"):

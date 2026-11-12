@@ -437,7 +437,7 @@ def cmd_compare(args):
     from .checks.rules import signal_column
     a, b = list_dir(args.list_a), list_dir(args.list_b)
     def rows(folder):
-        with open(pipelines.enriched_csv(folder), newline="") as f:
+        with open(pipelines.enriched_csv(folder), newline="", encoding="utf-8") as f:
             r = list(csv.DictReader(f))
         dcol = next(c for c in r[0] if c.strip().lower() in ("domain", "website", "url", "company domain"))
         return {normalize_domain(x[dcol]): x for x in r}

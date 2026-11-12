@@ -48,7 +48,7 @@ prompt the OpenAI step uses: `system_prompt` (from `config/prompts/_shared.json`
 - **W6:** a currency switcher or a foreign fee table on the pricing page is not proof the books run in several
   currencies; answer Unknown unless the text says the company bills, holds or reports in more than one currency.
 - **M4:** a donation page, membership fee or event ticket is not commercial transaction activity.
-- **Services, no website** (parked, coming-soon or 404): only web questions are possible, and only sources that match
+- **A company's own name** (also for web questions): only sources that match
   this exact company (name plus location or domain) count. Many local businesses share names (Ridgeline, CanAm,
   Covenant, Baja Roofing).
 - **Domain vs company:** the list's domain sometimes belongs to someone else (a contact's email on a consultant's or

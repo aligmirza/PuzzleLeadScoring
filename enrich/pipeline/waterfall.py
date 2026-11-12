@@ -113,7 +113,7 @@ def run(domain: str, company: str = "", group: str = "must", use_ai: bool = Fals
         console.print("[bold]Contacts (Prospeo)[/]")
         console.print(people)
     out = folder / "output" / f"waterfall_{domain.replace('.', '_')}.md"
-    out.write_text("\n".join(md + [f"ICP verdict: **{icp.get('icp_verdict')}**", ""]))
+    out.write_text("\n".join(md + [f"ICP verdict: **{icp.get('icp_verdict')}**", ""]), encoding="utf-8")
     console.print(f"[green]Waterfall saved:[/] {rel(out)}")
 
 

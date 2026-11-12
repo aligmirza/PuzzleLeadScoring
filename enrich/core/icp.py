@@ -68,7 +68,7 @@ def folder(pipeline: str | None = None) -> Path:
 
 @lru_cache(maxsize=None)
 def _roles(pipeline: str) -> dict:
-    return json.loads((DIR / pipeline / "roles.json").read_text())
+    return json.loads((DIR / pipeline / "roles.json").read_text(encoding="utf-8"))
 
 
 def roles() -> dict:
@@ -99,7 +99,7 @@ def reason_label(sid: str) -> str | None:
 
 @lru_cache(maxsize=None)
 def _scoring(pipeline: str) -> dict:
-    return json.loads((DIR / pipeline / "scoring.json").read_text())
+    return json.loads((DIR / pipeline / "scoring.json").read_text(encoding="utf-8"))
 
 
 def scoring() -> dict:

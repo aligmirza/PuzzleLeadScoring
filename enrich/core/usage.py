@@ -12,7 +12,7 @@ from .paths import LISTS
 
 def _entries(month: str):
     for path in LISTS.glob("*/runs.jsonl"):
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             try:
                 e = json.loads(line)
             except ValueError:

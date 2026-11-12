@@ -101,6 +101,6 @@ def final_rows(folder: Path, only_icp: bool = False) -> list[dict]:
     path = pipelines.enriched_csv(folder)
     if not path.exists():
         raise RuntimeError(f"No results yet for list '{folder.name}'.")
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     return [r for r in rows if r.get("ICP") == "YES"] if only_icp else rows

@@ -1,6 +1,6 @@
 # Puzzle Lead Scoring: Hand-off Guide
 
-November 9, 2026
+November 13, 2026
 
 Written for the Puzzle team: the sales and GTM people who use the scores, and the engineer who sets the tool up.
 
@@ -17,6 +17,7 @@ Each company gets:
 | Column | Example |
 | --- | --- |
 | ICP | YES, NO or PENDING (still being checked) |
+| Outreach priority | A, B or C: the order to contact the approved leads in |
 | Reason | All 4 must-haves confirmed, no exclusion found |
 | Lead score and tier | 7, Weak fit (Strong fit, Good fit, Weak fit) |
 | Route | Qualify on the call: Full Service or Expert Review; Platform + MCP; Partner referral |
@@ -37,7 +38,7 @@ Most of the team only needs Clay. The other two are for ops and engineering.
 
 An engineer needs about an hour. Use Puzzle's own accounts and keys; keys live only in the `.env` file, which is never committed.
 
-1. Clone the repo and install: `python3 -m venv .venv`, then `.venv/bin/pip install -r requirements.txt`.
+1. Clone the repo and install: `python3 -m venv .venv`, then `.venv/bin/pip install -r requirements.txt`. It runs on macOS, Linux and Windows; on Windows use `py -m venv .venv` and `.venv\Scripts\pip` / `.venv\Scripts\python` instead.
 2. Add the keys with `python -m enrich settings`: OpenAI (AI step for big lists), Prospeo (company data and contacts) and the Clay webhook URLs.
 3. Run the 14-company test list from the README to check it works, then `.venv/bin/python -m unittest discover -s tests`.
 4. Start the API on a small always-on server: `python -m enrich serve --host 0.0.0.0`, with HTTPS in front. It needs disk space for saved pages, and Chrome for sites that only load with JavaScript (or the `--no-browser` option).
@@ -50,7 +51,7 @@ An engineer needs about an hour. Use Puzzle's own accounts and keys; keys live o
 1. Method `POST`, endpoint `https://<server address>/v1/check`.
 2. Header `x-api-key` = the API key.
 3. Body: `{"domain": "<Domain column>", "company": "<Company column>", "employees": "<Employees column>"}`.
-4. Map the answer into columns: ICP, Reason, Lead score, Lead tier, Route, Value angle.
+4. Map the answer into columns: ICP, Reason, Lead score, Lead tier, Outreach priority, Route, Value angle.
 5. Start with a rate limit of about 5 requests per 10 seconds. A new company takes 5 to 35 seconds; repeats are instant.
 
 Alternatively, an engineer scores a whole list and pushes it into a Clay table through a webhook. Decision-makers found through Prospeo go into a second Clay table.
@@ -81,7 +82,7 @@ To check the weights against real results, label companies Puzzle already knows 
 
 ## Before go-live
 
-A first test on 26 real Puzzle deals (November 9, 2026) found and fixed three rules that rejected paying customers. The model now passes 15 of 17 won deals, but its score does not yet rank won deals above lost ones. The checklist and every open decision are in [STATUS.md](STATUS.md).
+The model is a cold-outreach filter: contact every lead it approves, in the order of the Outreach priority column (A, then B, then C). On 82 real Puzzle leads (November 13, 2026) it approves 72 for outreach (A 9, B 22, C 41) and rejects 8: one South African company and seven with no working website (leads without a website are skipped on purpose). Two stay pending: one server that doesn't answer and one site behind a bot check with nothing about it on the web. The checklist is in [STATUS.md](STATUS.md).
 
 ## Where to read more
 

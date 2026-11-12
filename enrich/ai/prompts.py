@@ -28,13 +28,13 @@ SECTION_TITLES = {
 @lru_cache(maxsize=1)
 def load() -> tuple[dict, dict]:
     """Return (shared, prompts by id). Raises with a clear message if a file is broken."""
-    shared = json.loads((PROMPTS_DIR / "_shared.json").read_text())
+    shared = json.loads((PROMPTS_DIR / "_shared.json").read_text(encoding="utf-8"))
     prompts = {}
     for path in sorted(PROMPTS_DIR.rglob("*.json")):
         if path.name in ("_shared.json", "index.json"):
             continue
         try:
-            p = json.loads(path.read_text())
+            p = json.loads(path.read_text(encoding="utf-8"))
         except ValueError as e:
             raise SystemExit(f"Prompt file {path} is not valid JSON: {e}")
         missing = [k for k in REQUIRED if k not in p] + [f"prompt.{k}" for k in REQUIRED_SECTIONS if k not in p.get("prompt", {})]

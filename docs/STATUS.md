@@ -10,7 +10,7 @@
 | Phase 1 and phase 2 as separate scripts | Done |
 | Downloading pages, job feeds, robots.txt, public DNS check, slim saving | Done |
 | Rules for all 4 must-haves, 6 exclusions and 47 signals (21 fit, 14 buying, 12 weak) | Done. Yes / No only when confirmed; guesses stay empty or Needs check |
-| Two ICP pipelines (services default, product) with the services facts S1–S12, Route, Arrival and Value angle | Done (build stages 1–4); services weights provisional until calibrated |
+| Two ICP pipelines (services default, product) with the services facts S1–S12, Route, Arrival and Value angle | Done (build stages 1–4); weights set, the score orders outreach (A/B/C) |
 | Buying signals from free sources: Form D in the last 6 months, new YC batch, LLC-to-Inc. (SEC former names, old footers in the Internet Archive), pricing launched since last year (Internet Archive) | Done; the rest of the buying signals come from web search |
 | Real-browser fallback (your Google Chrome) for JavaScript-only sites and short bot checks | Done; Khan Academy went from 209 to 8,682 characters of text. Hard Cloudflare blocks still fail |
 | Reasoning column ending with the profile's "Funding stage: <value> (<basis>)" line | Done (built by code, no AI cost) |
@@ -27,7 +27,7 @@
 | MCP server for Claude Code / Desktop | Built and tested with an MCP client; needs your one-time approval |
 | Clay: pull tables, push to a webhook, per-row HTTP column | Pull tested on your workspace; push tested against a stand-in webhook; per-row needs a public address |
 | Manual review of all 57 data points and S1–S8 | Done ([section 10](DOCUMENTATION.md#9-decisions-and-reviews)) |
-| Calibration tooling (`calibrate`) | Done; waiting for the labels |
+| Calibration tooling (`calibrate`) | Done; optional, for when labelled companies exist |
 
 **Build status by signal group:**
 
@@ -78,7 +78,7 @@ flowchart TD
 
 **Next, in order of impact:**
 
-1. **Labelled list from Puzzle:** about 50 current customers and 50 lost or "not a fit" deals (for services: Alexey's 152 coded companies and the closed-won deals). Run them and `evaluate` / `calibrate`, to measure accuracy and set the Strong fit cut-off from data instead of the current 12.
+1. **Run Puzzle's next lead list** through Clay or the command line; the 82-deal list is finished (72 YES, 8 NO, 2 PENDING).
 2. **Pilot on 500 real rows** to measure speed, block rate and cost.
 3. **Check the cheap mode** on the labelled list with `copy` + `compare` + `evaluate`, then decide whether it can be the default. OpenAI's half-price Batch API could come after that.
 
@@ -93,14 +93,15 @@ flowchart TD
 
 The [26-deal test](DOCUMENTATION.md#96-first-test-on-26-real-deals-2026-11-09) found and fixed three rules that rejected paying customers. The model now passes 15 of 17 won deals, but its score does not yet rank won deals above lost ones.
 
-- [x] Test a contractor such as Ridgeline Drilling: a missing or parked website no longer fails a services company
-- [ ] Fix the ranking: lower the startup weights and add HubSpot data (service bought, deal stage) as signals
-- [ ] Run Alexey's 152 companies and compare the scores with his judgement (`calibrate`)
-- [ ] Decide the size limit: today 100 or more people excludes a company, which could cut out Brilliant-size customers
-- [ ] Decide whether e-commerce holding physical stock is really out (Verse, a won deal, is excluded by it)
+- [x] No working website (404, coming-soon, parked, dead domain) is a NO: cold outreach skips these leads (2026-11-13)
+- [x] Cold outreach (2026-11-13): the model only rejects what Puzzle can't serve, tested on the 82 real leads ([details](DOCUMENTATION.md#97-cold-outreach-test-on-82-real-leads-2026-11-13))
+- [x] Ranking: the score is the outreach order (A, B, C), not a won/lost prediction; weights kept
+- [x] Size limit: 100 or more people, Series D or later, or NetSuite with a finance team stays a hard stop
+- [x] Stock, marketplace, several US companies, a new subsidiary and non-profit are weak signals (-2, check on the call), not hard stops
+- [x] Pre-launch companies pass as "Yes (pre-launch)" and are contacted last
 - [ ] Fix known wrong answers: some companies marked publicly traded by mistake, fund administrators caught by the wrong rule, one site that redirects to another company
 - [ ] Add a Dockerfile and an automatic test run so the server deploys in one step
-- [ ] Agree who owns the model (weights and rules) and who maintains the code
+- [ ] Hand-off: Puzzle owns the model (weights and rules) and the code ([HANDOFF.md](HANDOFF.md))
 
 ## 3. Open decisions and questions
 
@@ -112,10 +113,10 @@ The [26-deal test](DOCUMENTATION.md#96-first-test-on-26-real-deals-2026-11-09) f
 | Large rounds | A confirmed single round of $100M+ or a $1B+ valuation counts as "Series C or later" (`late_stage_proof` in config/icps/product/scoring.json) |
 | Undecided companies | PENDING until the AI check or a retry settles them |
 | Weak fit points | -2 each (in the pipeline's scoring.json) |
-| Strong fit cut-off | 12 for now; to be set after the labelled check |
-| Real lead list | A sample of 50 to 100 rows would help tune the rules |
+| Strong fit cut-off | 12; for cold outreach the Outreach priority column (A at 6+, B at 3+, else C) is what sales uses |
+| Real lead list | Done: 82 real leads from HubSpot (2026-11-13) |
 | Old test folders | `data/`, `out/` and `lists/sample_leads/` are out of date; waiting on your OK to delete them |
-| Services weights | Startup weights rank lost deals above won ones; lowering them and adding HubSpot signals needs the user's and Alexey's OK ([Improvements log](IMPROVEMENTS.md)) |
+| Services weights | Kept (2026-11-13): the goal is recall on cold outreach, not predicting won vs lost; the score only orders the approved leads ([Improvements log](IMPROVEMENTS.md)) |
 | B4 and E3 for fund administrators | B4 counts a client-facing accounting role as "hiring a finance lead" (false positive in both pipelines), and a fund administrator like Repool may be an accounting-services firm (E3) |
 
 **Offers from the manual review (not built yet):**

@@ -138,6 +138,7 @@ An engineer needs about an hour. Use Puzzle's own accounts and keys; keys live o
    .venv/bin/python scripts/signals_check.py sample_leads
    .venv/bin/python -m unittest discover -s tests
    ```
+   **Windows** (PowerShell or Command Prompt): the same steps with `py -m venv .venv` and `.venv\Scripts\python` (and `.venv\Scripts\pip`) in place of `.venv/bin/python`. All files are read and written as UTF-8 on every system (a test checks it). Install Google Chrome for sites that need JavaScript, or run `.venv\Scripts\python -m playwright install chromium`.
 4. For the team: start the API on a small always-on server: `python -m enrich serve --host 0.0.0.0`, with HTTPS in front. It needs disk space for saved pages, and Chrome for sites that only load with JavaScript (or the `--no-browser` option).
 5. Show the API key with `python -m enrich settings --show-key` and give it only to people setting up Clay.
 
@@ -744,7 +745,7 @@ flowchart TD
 
 Must-haves are asked one after another (M1, then M2, M3, M4), then the exclusions, so a proven No stops the paid questions after it; the data points left open then show **Not applicable**.
 
-"Unknown" never makes a company a NO; only proof does. A company still unconfirmed on some must-haves is a YES, as profile.yaml requires. In services, a company with no website and no must-have proven is "Needs a call: no website" (PENDING, no AI or Prospeo spend).
+"Unknown" never makes a company a NO; only proof does. A company still unconfirmed on some must-haves is a YES, as profile.yaml requires. With `website_optional: true` in roles.json (off in both pipelines since 2026-11-13), a company with no website and no must-have proven would be "Needs a call: no website" (PENDING).
 
 ### 4.9 AI: one prompt per data point, in two steps
 
@@ -1112,7 +1113,7 @@ Every signal has one role in the services pipeline. The role decides what the si
 
 | Role | What it means | Effect |
 |---|---|---|
-| **Must-have** | Something every customer needs. All 4 must be proven. In services, a parked, coming-soon or dead website leaves M2 Unknown, not No: established local businesses often don't keep one. | All 4 proven: ICP YES (if no hard stop). One proven No: ICP NO. Not proven yet: PENDING. |
+| **Must-have** | Something every customer needs. All 4 must be proven. No working website (parked, coming-soon, 404, dead) is a No in both pipelines: cold outreach skips leads without a website. | All 4 proven: ICP YES (if no hard stop). One proven No: ICP NO. Not proven yet: PENDING. |
 | **Hard stop** | Something that makes the company a poor fit for the services offer. | Proven Yes: ICP NO, with the reason. Unknown never stops a company. |
 | **Fit signal** | The company looks like a good customer. | Adds points: +3 (high), +2 (medium) or +1 (low). |
 | **Buying signal** | Something suggests they need help now (timing). | Adds points: +3, +2 or +1. |
@@ -1125,9 +1126,11 @@ How it adds up:
 - Fit, buying and weak signals are scored only for companies that are ICP YES.
 - Lead score = points from fit and buying signals, minus 2 for each weak signal. 12 or more is a Strong fit.
 - "Too big for services" is one hard stop with three triggers: Series D or later (S6), 100 or more people (S7), or already on NetSuite with a finance team (W10). In the output they are one rule: the exclusion reason reads "Too big for services (<the check>): <proof>" (`reason_groups` in `config/icps/services/roles.json`).
-- The services hard stops on top of E3–E6: several entities (F17), a new subsidiary (B8), non-USD books (W6), manufacturing (W7), NetSuite with a finance team (W10), and the services facts: sole proprietorship or partnership (S1), marketplace (S2), Series D or later (S6, replacing E1: Series C is in), 100+ people (S7). E2 (no activity) and 50–99 people (S8) score down instead of blocking. Books behind (S3) and looking for help (S4) score high.
+- The services hard stops: accounting firm (E3), outside the US (E4), non-USD books (W6), manufacturing (W7), sole proprietorship or partnership (S1), and "too big" (S6, S7, W10). Holding stock (E6), non-profit (E5), marketplace (S2), several US companies (F17) and a new subsidiary (B8) are weak signals (-2, check on the call): the cold-outreach decision of 2026-11-13 ([9.7](#97-cold-outreach-test-on-82-real-leads-2026-11-13)).
+- Pre-launch companies (a waitlist or coming-soon page) don't fail M2 or M4 (`soft_musts` in roles.json): they pass as "Yes (pre-launch)", get outreach priority C and the route "Pre-launch: Expert Review or Platform + MCP". A parked, for-sale, shut-down or non-resolving domain is still a hard No.
+- **Outreach priority** (scoring.json `outreach_priority`): A at a lead score of 6 or more, B at 3 or more, else C; pre-launch and no-website leads are C. It is the order to contact approved leads in.
 - The services weights score the situation, not the startup profile: a failed bookkeeper, a tax deadline, investor updates and an audit are high; funding, AI and YC count 0.
-- Weights and the Strong-fit cut-off are provisional until calibrated on Alexey's 152 companies ([stage 5](#stage-5-calibrate-document-and-launch)). The open items are listed under `provisional` in `config/icps/services/roles.json`.
+- Weights and the Strong-fit cut-off are kept as set (2026-11-13). They can be recalibrated with `calibrate` when labelled companies exist. The decisions are listed under `provisional` in `config/icps/services/roles.json`.
 
 ### Services signals by category
 
@@ -1510,7 +1513,7 @@ Each signal below lists:
 #### M2. Live website with a real product or service
 
 - **Yes when:** the site loads, has several real pages and describes something people can buy or use.
-- **No when:** the domain doesn't load, is parked, is listed for sale, shows only a "coming soon" page, or the company says on its own site that it's shutting down. In services (`website_optional: true` in roles.json), a coming-soon page or a 404 is Unknown, not No; a domain that doesn't resolve or is for sale stays No in every pipeline.
+- **No when:** the domain doesn't load, is parked, is listed for sale, shows only a "coming soon" page, or the company says on its own site that it's shutting down. The same in services since 2026-11-13 (`website_optional: false`): cold outreach skips leads without a website. A waitlist on a real site is not "no website": that is pre-launch (M4), which passes in services.
 - **How we check:**
   1. **Code:** does the domain resolve and load? We check for known parked-page and for-sale templates (GoDaddy, Sedo, HugeDomains and similar), count the pages and measure how much real text there is.
   2. **AI read:** "Does this site describe a real product or service a customer can buy or use?"
@@ -2003,7 +2006,7 @@ Digital goods, print-on-demand or dropshipping.
 
 ### 6.8 Services facts (S1–S12)
 
-Added for the services ICP (October 2026; S9–S12 in November 2026). In the services pipeline they decide the verdict or the score: S1, S2, S6 and S7 are hard stops, S3 and S4 score up (high), S9–S12 are fit signals, S8 scores down, S5 is info (routes to Platform + MCP). In the product pipeline they are **info**: found by the free steps and shown, never scored and never asked about. E1 (Series C or later) is info in services, where S6 (Series D or later) replaces it, since founders up to Series C are in. Their roles and points: [section 5](#services-signals-by-category).
+Added for the services ICP (October 2026; S9–S12 in November 2026). In the services pipeline they decide the verdict or the score: S1, S6 and S7 are hard stops, S2 is a weak signal (since 2026-11-13), S3 and S4 score up (high), S9–S12 are fit signals, S8 scores down, S5 is info (routes to Platform + MCP). In the product pipeline they are **info**: found by the free steps and shown, never scored and never asked about. E1 (Series C or later) is info in services, where S6 (Series D or later) replaces it, since founders up to Series C are in. Their roles and points: [section 5](#services-signals-by-category).
 
 #### S1. Sole proprietorship or partnership
 
@@ -2396,15 +2399,17 @@ claude mcp add puzzle-lead-scoring --scope local -e PYTHONPATH="$PWD" -- "$PWD/.
 claude mcp list
 ```
 
+On Windows (PowerShell): `claude mcp add puzzle-lead-scoring --scope local -e PYTHONPATH="$PWD" -- "$PWD\.venv\Scripts\python.exe" -m enrich mcp`.
+
 `claude mcp list` should show `puzzle-lead-scoring ... ✔ Connected`. In a chat, `/mcp` shows it too; after code changes (and after any change to rules, prompts or roles.json), reconnect it there (or restart Claude Code) so the new code loads: until then `submit_answers` re-scores with the old code.
 
-**Option B, shared with the team:** the repo's `.mcp.json` registers the same server for anyone who opens the project, and `.claude/settings.json` pre-approves it. Claude Code applies project settings only once the folder is trusted: run `claude` in the folder once and accept the trust prompt (or approve **puzzle-lead-scoring** in `/mcp`). If you also did option A, `claude mcp list` notes the server is defined in two places; that's harmless (yours wins).
+**Option B, shared with the team (macOS and Linux):** the repo's `.mcp.json` registers the same server for anyone who opens the project, and `.claude/settings.json` pre-approves it. Claude Code applies project settings only once the folder is trusted: run `claude` in the folder once and accept the trust prompt (or approve **puzzle-lead-scoring** in `/mcp`). If you also did option A, `claude mcp list` notes the server is defined in two places; that's harmless (yours wins).
 
 **Check it works:** ask Claude Code *"Use puzzle-lead-scoring to check linear.app"*. To remove it: `claude mcp remove puzzle-lead-scoring -s local`.
 
 #### Connect Claude Desktop
 
-Settings > Developer > Edit Config opens `~/Library/Application Support/Claude/claude_desktop_config.json`. Add this inside it under `mcpServers` (keep what's already there), with your own project path, then quit Claude Desktop fully (Cmd+Q) and open it again. Use full paths: Claude Desktop doesn't start in the project folder, which is why `PYTHONPATH` points to it. Keys, lists and settings are found from the project folder automatically.
+Settings > Developer > Edit Config opens `~/Library/Application Support/Claude/claude_desktop_config.json` (Windows: `%APPDATA%\Claude\claude_desktop_config.json`; there, `command` is the full path to `.venv\Scripts\python.exe`, with double backslashes in JSON). Add this inside it under `mcpServers` (keep what's already there), with your own project path, then quit Claude Desktop fully (Cmd+Q) and open it again. Use full paths: Claude Desktop doesn't start in the project folder, which is why `PYTHONPATH` points to it. Keys, lists and settings are found from the project folder automatically.
 
 ```json
 {
@@ -3081,13 +3086,42 @@ Each new fact gets a waterfall file, a prompt, rules, tests, and a row in the da
 | Average score of YES, won vs lost | 1.9 vs 3.2 | 1.8 vs 3.2 |
 
 The test found and fixed three rules that rejected paying customers, plus one prompt (188 tests; each is in the [Improvements log](IMPROVEMENTS.md)):
-- **M2 in services** (`website_optional: true` in roles.json): a coming-soon page or a 404 is Unknown, not No. Ridgeline Drilling (coming-soon page) and CanAm Logistics (404) are paying customers. With nothing proven the verdict is "Needs a call: no website" (PENDING, sales confirms it on the call; no AI or Prospeo spend). A domain that doesn't resolve or is for sale still fails.
+- **M2 in services** (`website_optional: true` in roles.json; turned off again on 2026-11-13, see [9.7](#97-cold-outreach-test-on-82-real-leads-2026-11-13)): a coming-soon page or a 404 is Unknown, not No. Ridgeline Drilling (coming-soon page) and CanAm Logistics (404) are paying customers. With nothing proven the verdict is "Needs a call: no website" (PENDING, sales confirms it on the call; no AI or Prospeo spend). A domain that doesn't resolve or is for sale still fails.
 - **W6 in services:** USD plus foreign prices or fees on a pricing page is Needs check, not Yes; the AI decides with an updated prompt (Dueflow shows a UK fee table). Product keeps the free Yes.
 - **F16:** "hybrid" counts only next to work words ("hybrid team", "(Hybrid)"), not "a hybrid between direct mail".
 - **F15 prompt:** counts of people helped, patients, projects done or years of experience are not growth numbers.
 
 The model now passes 15 of 17 won deals, but its score does not yet rank won deals above lost ones. Still open:
 - **The score doesn't separate won from lost.** The weights reward startup traits (Delaware C-Corp, B2B SaaS, subscription); the lost deals are startups, the won deals mostly local businesses with thin websites. Buying signals (books behind, looking for help) were Unknown for all 26, although 8 of the 17 won deals bought Historical Catchup. Proposal: lower the startup weights and feed HubSpot data (service type, deal stage) in as signals.
-- **Verse** (won) is excluded as e-commerce holding physical stock: ask Alexey whether that hard stop is right.
+- **Verse** (won) is excluded as e-commerce holding physical stock. Fixed in [9.7](#97-cold-outreach-test-on-82-real-leads-2026-11-13): stock is a weak signal now.
 - **Entity mismatches:** the contact's email domain is not always the company's (Eng Hua: a Malaysian firm on a US domain; 32 Ivory Lane Dental on dental-architects.com). Several names are shared with other companies.
 - The Sense Lab's domain no longer resolves; All Seasons Wild Bird Store timed out.
+
+### 9.7 Cold-outreach test on 82 real leads (2026-11-13)
+
+**Goal.** The model is a cold-outreach filter: Puzzle contacts every lead it approves. All 82 leads (HubSpot, `services_deals82`) were real leads, so what matters is recall, not rejecting good leads. Matching won or lost is not the goal; the score only sets the outreach order. Decided without further input from Puzzle.
+
+**Before.** 18 of the 82 were rejected: 11 pre-launch startups (waitlist or coming-soon page), Verse and BoxHero (stock), SEYA (marketplace), Wealthie (several companies), Phoenix Bikes and Trinity River Church (non-profit), and nineteen58.co.za (South Africa). Several of the rejected ones were won deals.
+
+**Changes** (all in roles.json, scoring.json and rules.py, tested; each is in the [Improvements log](IMPROVEMENTS.md)):
+- Pre-launch passes as "Yes (pre-launch)", priority C. Only a parked, for-sale, shut-down or non-resolving domain still fails M2.
+- E6, E5, S2, F17 and B8 are weak signals (-2, check on the call) instead of hard stops. Hard stops left: outside the US, accounting firm, sole proprietorship or partnership, non-USD books, manufacturing, too big.
+- New column **Outreach priority** (A, B, C).
+- Rule fixes: a Stripe donation button is not billing (F2); founder bios are not company age (S12); the site's own headcount ("our 150+ team") counts for S7; "work from anywhere" counts only on the careers page (F16); GoDaddy for-sale pages are parked; a 3PL warehouse does not hold its own stock (E6 prompt v2).
+
+- A domain that is registered but has no web address for it or www (public DNS) is a dead site: no website (Starson Tech, The Sense Lab, Benath Dev).
+- A builder placeholder ("Launching Soon" repeated, a contact form and a cookie banner) counts as a coming-soon page, judged by its few distinct words, not only its length (Harmonic Systems).
+- **Bot check fallback:** a site behind a bot check (CAPTCHA) is never forced. Its must-haves and hard stops go to the AI web step instead (OpenAI with `python -m enrich ai`, or the chat model through MCP); if the web finds nothing about the company, it stays PENDING.
+
+**After** (rules, signals and the AI checks answered in chat; no OpenAI or Prospeo spend):
+
+| | Before | After |
+|---|---|---|
+| ICP YES | 50 | 72 (9 of them pre-launch) |
+| NO | 10 | 8: nineteen58.co.za (South Africa), and 7 with no working website (CanAm Logistics, Ridgeline Drilling, Hub & Ranch, Harmonic Systems, Starson Tech, The Sense Lab, Benath Dev) |
+| PENDING | 22 | 2: Wild Bird Store (server has not answered since Nov 9) and Daybook (bot check; the web has nothing on this domain) |
+| Contacted (has a priority) | | 72 of 82: A 9, B 22, C 41 |
+
+**No website is a NO** (decided 2026-11-13): cold outreach skips leads without a working website (a 404, a coming-soon or parked page, a dead domain), so `website_optional` is off again. This rejects 5 won deals without a working website on purpose. A pre-launch company with a real site and a waitlist still passes.
+
+The score favours startups, so won deals (mostly local businesses) land in C more often than lost ones (won: A 2, B 8, C 19; lost: A 3, B 6, C 3). This sets the order only, not who is contacted.

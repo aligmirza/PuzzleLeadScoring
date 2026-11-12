@@ -52,6 +52,6 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
   fixed company flipped back to NO mid-run). Re-score saved lists with the new code from the command line:
   `.venv/bin/python -m enrich rules <list> --phase both` (free; keeps the AI answers; never `--no-directories`).
 - Pipeline-specific behaviour belongs in `config/icps/<pipeline>/roles.json`, read by the rules through
-  `icp.roles()`; e.g. `website_optional` (services: a parked or dead site leaves M2 Unknown).
+  `icp.roles()`; e.g. `website_optional` (off in both pipelines: no working website is a hard No on M2) and `soft_musts` (services: a pre-launch No on M2/M4 passes as "Yes (pre-launch)").
 - Test rule changes on real deals, not only on the sample list: `services-deals-all.csv` (HubSpot export, won and
   lost services deals) showed three rules failing paying customers.

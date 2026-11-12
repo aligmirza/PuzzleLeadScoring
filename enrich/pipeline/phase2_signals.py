@@ -140,7 +140,7 @@ def report(results: list[dict], folder: Path, store: Store) -> None:
     out = final.write(folder, store)
     from ..core.runlog import log
     import csv
-    with open(out, newline="") as f:
+    with open(out, newline="", encoding="utf-8") as f:
         tiers = [r.get("Lead tier", "") for r in csv.DictReader(f)]
     log(folder, "Phase 2 (signals)", companies=len(results), strong_fit=sum(t.startswith("Strong") for t in tiers),
         weak_fit=sum(t.startswith("Weak") for t in tiers))

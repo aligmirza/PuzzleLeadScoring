@@ -110,7 +110,7 @@ def status() -> dict:
 def read_contacts(folder: Path, domain: str = "", decision_makers_only: bool = False) -> list[dict]:
     """The contacts file (rewritten first, so it is current), optionally one company or decision-makers only."""
     path = write_contacts(folder, Store(folder))
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     return [r for r in rows if (not domain or r["Domain"] == domain) and (not decision_makers_only or r["Decision maker"])]
 
@@ -427,7 +427,7 @@ def write_contacts(folder: Path, store: Store) -> Path:
                                                               r"vp,? finance|controller", title, re.I) else "",
                          "Person LinkedIn": p.get("linkedin") or "", "Person location": p.get("location") or "",
                          "Email": em.get("email") or "", "Email status": em.get("email_status") or ""})
-    with open(out, "w", newline="") as f:
+    with open(out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=CONTACT_FIELDS)
         w.writeheader()
         w.writerows(rows)

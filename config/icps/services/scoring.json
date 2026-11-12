@@ -8,7 +8,7 @@
   },
   "weak_signal_points": -2,
   "tiers": {
-    "note": "Strong fit at or above this score. Provisional: set from Alexey's labelled companies (stage 5).",
+    "note": "Strong fit at or above this score. Kept as set (2026-11-13); recalibrate with labelled companies when available.",
     "strong_fit_min_score": 12
   },
   "segments": {
@@ -84,7 +84,7 @@
     "valuation_at_least_usd": 1000000000
   },
   "outreach_priority": {
-    "note": "Cold outreach order for ICP YES leads (provisional): A at or above 'A', B at or above 'B', else C. Pre-launch leads and leads with no website are C.",
+    "note": "Cold outreach order for ICP YES leads (set 2026-11-13 from the 82 real leads): A at or above 'A', B at or above 'B', else C. Pre-launch leads and leads with no website are C.",
     "A": 6,
     "B": 3
   }

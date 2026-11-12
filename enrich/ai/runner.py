@@ -252,7 +252,8 @@ class Runner:
                 continue
             sid = datapoints.sid_for_prompt(pid)
             clue = bool(sid) and result["signals"].get(sid, {}).get("value") == "check"
-            if datapoints.web_after(pid, step1.get(pid), still_open.get(pid, True), site_ok, clue):
+            blocked = (result.get("crawl") or {}).get("status") == "blocked"
+            if datapoints.web_after(pid, step1.get(pid), still_open.get(pid, True), site_ok, clue, blocked=blocked):
                 web.append(pid)
         for chunk in chunks(web, self.mode["web_group"], by_model=False):
             await self.step2(domain, result, facts, chunk, step1)

@@ -63,7 +63,7 @@ def publish_site(store, domain: str, record: dict) -> None:
         _link(f, folder / f.name)
     keep = {k: v for k, v in record.items() if k != "input"}
     tmp = folder / "record.json.tmp"
-    tmp.write_text(json.dumps({**keep, "shared_at": time.time()}))
+    tmp.write_text(json.dumps({**keep, "shared_at": time.time()}), encoding="utf-8")
     tmp.replace(folder / "record.json")
 
 
@@ -77,7 +77,7 @@ def adopt_site(store, domain: str, kinds: set[str], need_signals: bool = False) 
     if not path.exists():
         return None
     try:
-        record = json.loads(path.read_text())
+        record = json.loads(path.read_text(encoding="utf-8"))
     except ValueError:
         return None
     if time.time() - record.get("shared_at", 0) > _days("SHARED_PAGES_DAYS", 30) * 86400:
@@ -181,7 +181,7 @@ def stale(days: float) -> tuple[list[Path], int]:
     old = []
     for d in (COMPANIES.glob("*") if COMPANIES.exists() else []):
         try:
-            if json.loads((d / "record.json").read_text()).get("shared_at", 0) < cutoff:
+            if json.loads((d / "record.json").read_text(encoding="utf-8")).get("shared_at", 0) < cutoff:
                 old.append(d)
         except (OSError, ValueError):
             old.append(d)

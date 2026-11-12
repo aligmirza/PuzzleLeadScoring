@@ -75,7 +75,7 @@ def _description(sid: str) -> str:
     path = ROOT / "docs" / "DOCUMENTATION.md"
     if not path.exists():
         return ""
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     m = re.search(rf"^#{{3,4}} {re.escape(sid)}\. (.+?)$(.*?)(?=^#{{2,4}} |\Z)", text, re.M | re.S)
     if not m:
         return ""
@@ -261,7 +261,7 @@ def _session_path(folder: Path) -> Path:
 def _session(folder: Path) -> dict:
     path = _session_path(folder)
     if path.exists():
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     return {"started": datetime.now().astimezone().isoformat(timespec="seconds"), "state": "idle", "current": None,
             "runs": {}, "retries": {}, "reviews": {}}
 
@@ -269,7 +269,7 @@ def _session(folder: Path) -> dict:
 def _save_session(folder: Path, s: dict) -> None:
     path = _session_path(folder)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(s, indent=1))
+    path.write_text(json.dumps(s, indent=1), encoding="utf-8")
 
 
 def _key(domain: str, sid: str) -> str:
@@ -655,7 +655,7 @@ def _log(folder: Path, rep: dict, key: str, expected: str, notes: str, reference
     out = folder / "output" / "dp_test_log.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     new = not out.exists()
-    with open(out, "a", newline="") as f:
+    with open(out, "a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=LOG_FIELDS)
         if new:
             w.writeheader()
@@ -668,7 +668,7 @@ def summary(test_list: str = PREFIX) -> dict:
     path = folder / "output" / "dp_test_log.csv"
     if not path.exists():
         return {"tested": 0, "of": len(_in_review()), "note": "No reviews recorded yet.", "progress": progress(folder)}
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     latest = {}
     for r in rows:  # the latest review per company + data point counts

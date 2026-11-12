@@ -50,7 +50,7 @@ KNOWN = {k for _, k, *_ in ENV_KEYS}
 def load_env() -> None:
     if not ENV_FILE.exists():
         return
-    for line in ENV_FILE.read_text().splitlines():
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -79,7 +79,7 @@ def _render(values: dict[str, str], blank: bool) -> str:
 def _read_values() -> dict[str, str]:
     values = {}
     if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.lstrip().startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
                 values[k.strip()] = v.strip()
@@ -89,9 +89,9 @@ def _read_values() -> dict[str, str]:
 def write_files(values: dict[str, str] | None = None) -> None:
     """Rewrite .env (keeping its values) and .env.example (blank) with every known key and its comment."""
     values = _read_values() if values is None else values
-    ENV_FILE.write_text(_render(values, blank=False))
+    ENV_FILE.write_text(_render(values, blank=False), encoding="utf-8")
     os.chmod(ENV_FILE, 0o600)
-    EXAMPLE_FILE.write_text(_render({}, blank=True))
+    EXAMPLE_FILE.write_text(_render({}, blank=True), encoding="utf-8")
 
 
 def set_env(key: str, value: str) -> None:

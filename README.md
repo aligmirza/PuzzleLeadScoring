@@ -30,6 +30,8 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests
 ```
 
+Works on macOS, Linux and Windows (Python 3.10 or later; tested on 3.14). On Windows, use `py -m venv .venv` and `.venv\Scripts\python` in place of `.venv/bin/python` (PowerShell or Command Prompt); everything else is the same.
+
 Results land in `lists/<list>/output/`; the main file is `<list>_enriched.csv`.
 
 ## Three ways to use it

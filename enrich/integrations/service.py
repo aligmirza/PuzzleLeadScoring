@@ -229,7 +229,7 @@ def _write_input(folder: Path, rows: list[dict]) -> None:
     cols = list(dict.fromkeys(k for r in rows for k in r))
     if not any(c.strip().lower() in ("domain", "website", "url", "company domain", "company website") for c in cols):
         raise ValueError("Rows need a domain column: one of Domain, Website, URL, Company Domain")
-    with open(folder / "input.csv", "w", newline="") as f:
+    with open(folder / "input.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         w.writerows(rows)
@@ -237,9 +237,9 @@ def _write_input(folder: Path, rows: list[dict]) -> None:
 
 def _status(folder: Path, **update) -> dict:
     path = folder / "status.json"
-    data = json.loads(path.read_text()) if path.exists() else {}
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     data.update(update)
-    path.write_text(json.dumps(data, indent=2))
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return data
 
 
@@ -277,7 +277,7 @@ async def _callback(folder: Path, url: str | None) -> None:
     """Tell the caller the list is finished: POST the status (with summary) to their URL, 3 tries."""
     if not url:
         return
-    body = json.loads((folder / "status.json").read_text())
+    body = json.loads((folder / "status.json").read_text(encoding="utf-8"))
     for attempt in range(3):
         try:
             async with httpx.AsyncClient(timeout=20) as c:
@@ -346,7 +346,7 @@ def _folder(name: str) -> Path:
 def list_status(name: str) -> dict:
     folder = _folder(name)
     path = folder / "status.json"
-    data = json.loads(path.read_text()) if path.exists() else {"list": folder.name, "state": "done (run from the terminal)"}
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"list": folder.name, "state": "done (run from the terminal)"}
     data["summary"] = summary(folder)
     return data
 
@@ -388,7 +388,7 @@ def lists_overview() -> list[dict]:
     out = []
     for folder in sorted((f for f in LISTS.glob("*") if (f / "input.csv").exists()), key=lambda f: f.stat().st_mtime, reverse=True):
         path = folder / "status.json"
-        state = json.loads(path.read_text()).get("state") if path.exists() else "done (run from the terminal)"
+        state = json.loads(path.read_text(encoding="utf-8")).get("state") if path.exists() else "done (run from the terminal)"
         out.append({"list": folder.name, "state": state, **summary(folder)})
     return out
 
@@ -480,13 +480,13 @@ def evaluate_list(name: str, labels: list[dict] | None = None) -> dict:
     if labels:
         path = folder / "output" / "labels_from_api.csv"
         cols = list(dict.fromkeys(k for r in labels for k in r))
-        with open(path, "w", newline="") as f:
+        with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=cols)
             w.writeheader()
             w.writerows(labels)
     result = evaluate.run(folder, path)
     log(folder, "Evaluate (API)", **result)
-    with open(folder / "output" / "evaluation.csv", newline="") as f:
+    with open(folder / "output" / "evaluation.csv", newline="", encoding="utf-8") as f:
         result["disagreements"] = list(csv.DictReader(f))
     return result
 
@@ -528,7 +528,7 @@ def resume_unfinished() -> list[str]:
     resumed = []
     for path in LISTS.glob("*/status.json"):
         try:
-            st = json.loads(path.read_text())
+            st = json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
             continue
         if st.get("state") not in ("queued", "running"):

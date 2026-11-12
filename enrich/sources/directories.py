@@ -109,11 +109,11 @@ def _yc_index(refresh: bool = False) -> dict:
                     if d:
                         slim[d] = {k: x.get(k) for k in ("name", "slug", "batch", "status", "stage", "team_size",
                                                          "all_locations", "regions", "nonprofit", "former_names")}
-                YC_FILE.write_text(json.dumps(slim))
+                YC_FILE.write_text(json.dumps(slim), encoding="utf-8")
             except (httpx.HTTPError, ValueError):
                 if not YC_FILE.exists():
                     raise
-        _yc = json.loads(YC_FILE.read_text())
+        _yc = json.loads(YC_FILE.read_text(encoding="utf-8"))
         return _yc
 
 
@@ -580,7 +580,7 @@ def status() -> list[dict]:
             row["updated"] = date.fromtimestamp(path.stat().st_mtime).isoformat()
             row["size"] = path.stat().st_size
             if path == YC_FILE:
-                row["count"] = f"{len(json.loads(path.read_text())):,} {what}"
+                row["count"] = f"{len(json.loads(path.read_text(encoding="utf-8"))):,} {what}"
             else:
                 db = sqlite3.connect(path)
                 table = "orgs" if path == IRS_FILE else "calls"

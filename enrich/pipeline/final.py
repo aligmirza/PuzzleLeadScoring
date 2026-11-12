@@ -196,6 +196,8 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
         row["Outreach priority"] = outreach_priority(yes_no, verdict, 0)
     elif yes_no != "NO":
         row["Lead tier"] = "Scored after phase 2"
+        if verdict == "Yes (pre-launch)":  # contacted last whatever the score
+            row["Outreach priority"] = outreach_priority(yes_no, verdict, 0)
     src = sig or icp
     s_all = {**(sig or {}).get("signals", {}), **icp.get("signals", {})}
     roles = src.get("crawl", {}).get("jobs_count")
@@ -279,7 +281,7 @@ def write(folder: Path, store: Store) -> Path:
     order = ["Pipeline", "ICP", "ICP status", "Why", "Route", "Arrival", "Value angle", "Lead score", "Lead tier", "Outreach priority", "Reasoning", "Score breakdown", "Segment", "Segment based on",
              "Fit signals found", "Buying signals found", "Weak fit signals found", "Needs checking", "Notes"]
     added_cols = [c for c in order if c in added_cols] + [c for c in added_cols if c not in order]
-    with open(out, "w", newline="") as f:
+    with open(out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=original_cols + added_cols)
         w.writeheader()
         w.writerows(out_rows)

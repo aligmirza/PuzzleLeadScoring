@@ -176,7 +176,7 @@ def run(domain_in: str, company: str = "", employees: str = "", use_ai: bool = F
         raise SystemExit(f"'{domain_in}' is not a valid domain")
     folder = LISTS / f"trace_{domain.replace('.', '_')}"
     (folder / "output").mkdir(parents=True, exist_ok=True)
-    with open(folder / "input.csv", "w", newline="") as f:
+    with open(folder / "input.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["Company Name", "Domain", "Employees"])
         w.writeheader()
         w.writerow({"Company Name": company, "Domain": domain_in, "Employees": employees})
@@ -370,7 +370,7 @@ def run(domain_in: str, company: str = "", employees: str = "", use_ai: bool = F
 
     # 10. score and final row
     out = final.write(folder, store)
-    with open(out, newline="") as fh:
+    with open(out, newline="", encoding="utf-8") as fh:
         frow = next(csv.DictReader(fh))
     breakdown = [[part.rsplit(" ", 1)[0], part.rsplit(" ", 1)[1]] for part in (frow.get("Score breakdown") or "").split("; ") if part]
     tr.step("Score and final row",
@@ -381,6 +381,6 @@ def run(domain_in: str, company: str = "", employees: str = "", use_ai: bool = F
              f"Final list: {rel(out)}"])
 
     report = folder / "output" / f"trace_{domain.replace('.', '_')}.md"
-    report.write_text(f"# Trace: {domain}\n\n" + "\n".join(tr.md) + "\n")
+    report.write_text(f"# Trace: {domain}\n\n" + "\n".join(tr.md) + "\n", encoding="utf-8")
     console.print(f"[green]Trace saved:[/] {rel(report)}")
     return report

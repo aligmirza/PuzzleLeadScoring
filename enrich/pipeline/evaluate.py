@@ -103,7 +103,7 @@ def run(folder: Path, labels: Path | None = None) -> dict:
                 per_signal[sid]["empty"] += 1
 
     out = folder / "output" / "evaluation.csv"
-    with open(out, "w", newline="") as f:
+    with open(out, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["Company", "Domain", "What", "Expected", "Got", "Our proof / breakdown", "Expected reason"])
         w.writerows(issues)
@@ -141,7 +141,7 @@ def write_template(path: Path) -> Path:
     example = {"Company Name": "Acme", "Domain": "acme.com", "Expected ICP": "YES", "Expected tier": "Strong fit",
                "Expected reason": "Puzzle customer since 2025",
                f"Expected: {SIGNALS['M1'][1]}": "Yes", f"Expected: {SIGNALS['F3'][1]}": "Yes"}
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         w.writerow(example)

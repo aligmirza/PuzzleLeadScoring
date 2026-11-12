@@ -56,7 +56,7 @@ def record(kind: str, **fields) -> None:
     try:
         DIR.mkdir(parents=True, exist_ok=True)
         from . import icp
-        with open(EVENTS, "a") as f:
+        with open(EVENTS, "a", encoding="utf-8") as f:
             f.write(json.dumps({"at": time.strftime("%Y-%m-%d %H:%M:%S"), "kind": kind, "pipeline": icp.name(), **fields},
                                default=str) + "\n")
     except Exception:  # noqa: BLE001  (learning never breaks a run)
@@ -100,7 +100,7 @@ def _events() -> list[dict]:
     if not EVENTS.exists():
         return []
     out = []
-    for line in EVENTS.read_text().splitlines():
+    for line in EVENTS.read_text(encoding="utf-8").splitlines():
         try:
             out.append(json.loads(line))
         except ValueError:
@@ -110,14 +110,14 @@ def _events() -> list[dict]:
 
 def _state() -> dict:
     try:
-        return json.loads(STATE.read_text())
+        return json.loads(STATE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def _save_state(s: dict) -> None:
     DIR.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(s, indent=2))
+    STATE.write_text(json.dumps(s, indent=2), encoding="utf-8")
 
 
 def _id(*parts) -> str:
@@ -263,15 +263,15 @@ def apply(proposal_id: str, _proposal: dict | None = None, by: str = "the user's
                 "why": f"a {p['kind']} change is made by editing the files: {p['change']} Then call mark_improvement."}
     sid = p["data_point"]
     path = datapoints.path(sid, datapoints.load()[sid])
-    before = path.read_text()
+    before = path.read_text(encoding="utf-8")
     data = json.loads(before)
     for layer, settings in p["setting"].items():
         data.setdefault("steps", {}).setdefault(layer, {}).update(settings)
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     datapoints.load.cache_clear()
     ok, last = _tests()
     if not ok:
-        path.write_text(before)
+        path.write_text(before, encoding="utf-8")
         datapoints.load.cache_clear()
         mark(proposal_id, "failed", f"tests failed, reverted: {last}", _proposal=p)
         return {"id": proposal_id, "applied": False, "why": f"tests failed, change reverted ({last})"}
@@ -292,9 +292,9 @@ def mark(proposal_id: str, status: str, note: str = "", _proposal: dict | None =
     if not CHANGELOG.exists():
         CHANGELOG.write_text("# Improvements\n\nWhat the pipeline changed about itself, from what it learned while scoring "
                              "leads (`enrich/core/learning.py`). Newest last.\n\n| Date | Proposal | Status | What and why |\n"
-                             "|---|---|---|---|\n")
+                             "|---|---|---|---|\n", encoding="utf-8")
     proof = p.get("proof", "")
     cell = f"{note}{' Proof: ' + proof if proof else ''}".replace("|", "/").replace("\n", " ")
-    with open(CHANGELOG, "a") as f:
+    with open(CHANGELOG, "a", encoding="utf-8") as f:
         f.write(f"| {s[proposal_id]['decided_at'][:10]} | {s[proposal_id]['title']} (`{proposal_id}`) | {status} | {cell} |\n")
     return {"id": proposal_id, "status": status, "note": note}

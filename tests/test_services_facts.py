@@ -109,16 +109,15 @@ class CustomerTypes(unittest.TestCase):
 class TestOnRealDeals(unittest.TestCase):
     """Fixes from the 26-deal test (Nov 9, 2026): paying customers the rules wrongly failed or scored."""
 
-    def test_no_working_website_is_unknown_for_services(self):
+    def test_no_working_website_is_a_no(self):
+        # Cold outreach (2026-11-13): leads without a website are not contacted (was Unknown on 2026-11-09)
         soon = {"home": "<p>Coming Soon</p>"}
-        r = run(soon, phase="icp")
-        self.assertEqual(value(r, "M2"), "unknown")  # Ridgeline Drilling
-        self.assertEqual(r["icp_verdict"], "Needs a call: no website")  # nothing proven: not a YES
-        self.assertEqual(value(run(soon, phase="icp", pipeline="product"), "M2"), "no")  # startups still need a site
         gone = {"record_extra": {"status": "dead", "error": "http 404"}}
-        r = run({}, phase="icp", **gone)
-        self.assertEqual((value(r, "M2"), r["icp_verdict"]), ("unknown", "Needs a call: no website"))  # CanAm Logistics
-        self.assertEqual(value(run({}, phase="icp", pipeline="product", **gone), "M2"), "no")
+        for pipeline in ("services", "product"):
+            r = run(soon, phase="icp", pipeline=pipeline)
+            self.assertEqual((value(r, "M2"), r["icp_verdict"]), ("no", "No"), pipeline)  # Ridgeline Drilling
+            r = run({}, phase="icp", pipeline=pipeline, **gone)
+            self.assertEqual((value(r, "M2"), r["icp_verdict"]), ("no", "No"), pipeline)  # CanAm Logistics
 
     def test_a_wrong_or_sold_domain_still_fails(self):
         no_dns = {"record_extra": {"status": "dead", "error": "domain does not resolve"}}
@@ -292,3 +291,47 @@ class ColdOutreach(unittest.TestCase):
             self.assertEqual(outreach_priority("YES", "Yes (pre-launch)", 12), "C")
             self.assertEqual(outreach_priority("PENDING", "Needs a call: no website", 0), "C")
             self.assertEqual(outreach_priority("NO", "No", 9), "")
+
+
+class NoWebsite(unittest.TestCase):
+    def test_a_builder_placeholder_is_no_website(self):
+        page = {"home": "<p>" + "harmonicsystems.ai " * 8 + "Launching Soon " * 8 + "Contact Us Drop us a line! Name Email* "
+                "Sign up for our email list for updates, promotions, and more. Send This site is protected by reCAPTCHA "
+                "and the Google Privacy Policy and Terms of Service apply. Copyright 2026 All Rights Reserved. This "
+                "website uses cookies. We use cookies to analyze website traffic and optimize your website experience. "
+                "By accepting our use of cookies, your data will be aggregated with all other user data. Accept</p>"}
+        r = run(page, phase="icp")
+        self.assertEqual((value(r, "M2"), r["icp_verdict"]), ("no", "No"))
+
+    def test_coming_soon_apps_on_a_real_site_are_not_a_placeholder(self):
+        import string
+        words = " ".join(a + b + "ish" for a in string.ascii_lowercase[:10] for b in string.ascii_lowercase[:10])
+        r = run({"home": f"<p>Almari is a marketplace for outfits. Coming soon to iPhone and Android. {words}</p>"}, phase="icp")
+        self.assertNotEqual(value(r, "M2"), "no")
+
+
+class BotCheckFallsBackToTheWeb(unittest.TestCase):
+    """A site behind a bot check (CAPTCHA) is never forced: its must-haves and hard stops go to the AI web step."""
+    blocked = {"record_extra": {"status": "blocked", "error": "blocked by bot protection"}}
+
+    def test_must_haves_and_hard_stops_go_to_the_web_step(self):
+        from enrich.checks import datapoints
+        r = run({}, phase="icp", **self.blocked)
+        self.assertEqual(r["icp_verdict"], "Needs AI check")
+        self.assertEqual(value(r, "M2"), "unknown")  # web step is off for M2: a bot check is not a dead site
+        self.assertIn("must_haves/based_in_us", r["ai"]["prompts"])
+        self.assertIn("exclusions/outside_us", r["ai"]["prompts"])
+        waiting = dict(datapoints.waiting(r, {}))
+        self.assertEqual(waiting.get("must_haves/based_in_us"), "web")
+
+    def test_nothing_found_on_the_web_stays_pending(self):
+        from enrich.checks.rules import decide, SIGNALS
+        s = {sid: {"value": "unknown", "evidence": ""} for sid in SIGNALS}
+        with icp.use("services"):
+            self.assertEqual(decide(s, "blocked")["verdict"], "Unknown: site not reached")
+            s["M1"] = {"value": "yes", "evidence": "x"}
+            self.assertNotEqual(decide(s, "blocked")["verdict"], "Unknown: site not reached")
+
+    def test_a_timeout_is_still_a_retry(self):
+        r = run({}, phase="icp", record_extra={"status": "unreachable", "error": "timeout"})
+        self.assertEqual(r["icp_verdict"], "Unknown: site not reached")

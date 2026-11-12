@@ -36,7 +36,7 @@ BUYER_TYPES = ("help", "review", "diy")
 
 
 def write_template(path: Path) -> Path:
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["Domain", "Company", "Buyer type", "Outcome", "Notes"])
         w.writerow(["example.com", "Example Co", "help", "closed_won", "books 6 months behind; left Pilot"])
@@ -169,8 +169,8 @@ def run(folder: Path, labels_path: Path, apply: bool = False) -> dict:
     }
     out = folder / "output"
     out.mkdir(parents=True, exist_ok=True)
-    (out / "calibration.json").write_text(json.dumps(report, indent=1))
-    with open(out / "calibration.csv", "w", newline="") as f:
+    (out / "calibration.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    with open(out / "calibration.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(facts[0]))
         w.writeheader()
         w.writerows(sorted(facts, key=lambda r: -abs(r["log_ratio"])))
@@ -205,7 +205,7 @@ def _apply(suggested: dict, cut: int | None, cfg: dict, by_name: dict) -> str:
     """Write the suggested weights and cut-off to the services scoring.json; revert if the tests fail."""
     from ..core import icp
     path = icp.folder("services") / "scoring.json"
-    before = path.read_text()
+    before = path.read_text(encoding="utf-8")
     data = json.loads(before)
     for group in ("fit_signals", "buying_signals"):
         for name in data[group]:
@@ -215,12 +215,12 @@ def _apply(suggested: dict, cut: int | None, cfg: dict, by_name: dict) -> str:
     if cut is not None:
         data["tiers"]["strong_fit_min_score"] = cut
         data["tiers"]["note"] = "Set by calibrate on labelled companies; re-run calibrate when more labels arrive."
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     icp._scoring.cache_clear()
     r = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"], capture_output=True, text=True,
                        cwd=Path(__file__).resolve().parents[2], timeout=900)
     if r.returncode != 0:
-        path.write_text(before)
+        path.write_text(before, encoding="utf-8")
         icp._scoring.cache_clear()
         console.print("[red]Tests failed: the weights were not changed.[/]")
         return "reverted (tests failed)"
