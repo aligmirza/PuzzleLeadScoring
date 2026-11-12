@@ -14,7 +14,7 @@ This tool checks a list of companies against Puzzle's ideal customer profile, sc
 | [8. Testing](#8-testing) | Smoke test, AI run, trace, waterfall, manual review, accuracy, regression checklist, connection tests |
 | [9. Decisions and reviews](#9-decisions-and-reviews) | The manual review, decisions per data point, the services build plan, the 26-deal test |
 
-Also separate: [HANDOFF.md](HANDOFF.md) (the guide for the Puzzle team), [STATUS.md](STATUS.md) (status, before go-live, open decisions) and [IMPROVEMENTS.md](IMPROVEMENTS.md) (the improvements log).
+Also separate: [HANDOFF.md](HANDOFF.md), the guide for the Puzzle team.
 
 ---
 
@@ -2500,7 +2500,7 @@ Every run feeds a learning log (`learning/events.jsonl`, not in git, each event 
 | Questions the chat model couldn't answer, 3+ times | A free rule or directory for it, or `list_ai` | **You** |
 | Your corrections in test mode | Find and change the rule, prompt or setting behind the wrong answer | **You** |
 
-Must-haves and exclusions are never changed automatically. A rejected proposal only comes back if it keeps happening. Every decision is logged in the [Improvements log](IMPROVEMENTS.md). `LEARNING_AUTO_APPLY=0` in `.env` makes everything wait for you. `/enrich-chat`, `check-company` and `bulk-enrich` end with the `improve-pipeline` skill.
+Must-haves and exclusions are never changed automatically. A rejected proposal only comes back if it keeps happening. Every decision is logged in `learning/improvements.md` (in git). `LEARNING_AUTO_APPLY=0` in `.env` makes everything wait for you. `/enrich-chat`, `check-company` and `bulk-enrich` end with the `improve-pipeline` skill.
 
 ### List viewer
 
@@ -3085,7 +3085,7 @@ Each new fact gets a waterfall file, a prompt, rules, tests, and a row in the da
 | Lost (6) | 5 YES, 0 NO, 1 PENDING | 5 YES, 1 NO |
 | Average score of YES, won vs lost | 1.9 vs 3.2 | 1.8 vs 3.2 |
 
-The test found and fixed three rules that rejected paying customers, plus one prompt (188 tests; each is in the [Improvements log](IMPROVEMENTS.md)):
+The test found and fixed three rules that rejected paying customers, plus one prompt (188 tests):
 - **M2 in services** (`website_optional: true` in roles.json; turned off again on 2026-11-13, see [9.7](#97-cold-outreach-test-on-82-real-leads-2026-11-13)): a coming-soon page or a 404 is Unknown, not No. Ridgeline Drilling (coming-soon page) and CanAm Logistics (404) are paying customers. With nothing proven the verdict is "Needs a call: no website" (PENDING, sales confirms it on the call; no AI or Prospeo spend). A domain that doesn't resolve or is for sale still fails.
 - **W6 in services:** USD plus foreign prices or fees on a pricing page is Needs check, not Yes; the AI decides with an updated prompt (Dueflow shows a UK fee table). Product keeps the free Yes.
 - **F16:** "hybrid" counts only next to work words ("hybrid team", "(Hybrid)"), not "a hybrid between direct mail".
@@ -3103,7 +3103,7 @@ The model now passes 15 of 17 won deals, but its score does not yet rank won dea
 
 **Before.** 18 of the 82 were rejected: 11 pre-launch startups (waitlist or coming-soon page), Verse and BoxHero (stock), SEYA (marketplace), Wealthie (several companies), Phoenix Bikes and Trinity River Church (non-profit), and nineteen58.co.za (South Africa). Several of the rejected ones were won deals.
 
-**Changes** (all in roles.json, scoring.json and rules.py, tested; each is in the [Improvements log](IMPROVEMENTS.md)):
+**Changes** (all in roles.json, scoring.json and rules.py, tested):
 - Pre-launch passes as "Yes (pre-launch)", priority C. Only a parked, for-sale, shut-down or non-resolving domain still fails M2.
 - E6, E5, S2, F17 and B8 are weak signals (-2, check on the call) instead of hard stops. Hard stops left: outside the US, accounting firm, sole proprietorship or partnership, non-USD books, manufacturing, too big.
 - New column **Outreach priority** (A, B, C).

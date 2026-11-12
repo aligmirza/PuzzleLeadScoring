@@ -80,9 +80,9 @@ To check the weights against real results, label companies Puzzle already knows 
 - Prospeo credits are spent only with an approved limit; the first call always shows the most it could use.
 - Nothing can be deleted through the API, and every API call needs the key. Keep the key and the server address private.
 
-## Before go-live
+## Results on real leads
 
-The model is a cold-outreach filter: contact every lead it approves, in the order of the Outreach priority column (A, then B, then C). On 82 real Puzzle leads (November 13, 2026) it approves 72 for outreach (A 9, B 22, C 41) and rejects 8: one South African company and seven with no working website (leads without a website are skipped on purpose). Two stay pending: one server that doesn't answer and one site behind a bot check with nothing about it on the web. The checklist is in [STATUS.md](STATUS.md).
+The model is a cold-outreach filter: contact every lead it approves, in the order of the Outreach priority column (A, then B, then C). On 82 real Puzzle leads (November 13, 2026) it approves 72 for outreach (A 9, B 22, C 41) and rejects 8: one South African company and seven with no working website (leads without a website are skipped on purpose). Two stay pending: one server that doesn't answer and one site behind a bot check with nothing about it on the web.
 
 ## Where to read more
 
@@ -90,5 +90,3 @@ The model is a cold-outreach filter: contact every lead it approves, in the orde
 | --- | --- |
 | [README.md](../README.md) | The short overview |
 | [DOCUMENTATION.md](DOCUMENTATION.md) | Everything else: setup, commands, how the pipeline works, the ICP models, every data point, integrations, testing, decisions |
-| [STATUS.md](STATUS.md) | What is done, the before-go-live checklist, open decisions |
-| [IMPROVEMENTS.md](IMPROVEMENTS.md) | Every change the pipeline made to itself, and why |

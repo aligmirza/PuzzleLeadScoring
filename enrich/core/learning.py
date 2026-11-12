@@ -10,7 +10,7 @@
                                    pass) and switching a phase 2 data point's web search to on-clue when it almost
                                    never finds anything (applied here, tests run, reverted if they fail)
                  safety "approve"  prompt, rule and workflow changes: proposed, applied only after the user says yes
-    apply()    applies a setting proposal (tests run; reverted on failure); every change goes to docs/IMPROVEMENTS.md
+    apply()    applies a setting proposal (tests run; reverted on failure); every change goes to learning/improvements.md (in git)
     mark()     records the outcome of a proposal made by hand (code, prompt or rule edits)
 
 A decided proposal (applied, rejected, done) only comes back when new events after that decision show the same
@@ -38,7 +38,7 @@ DIR = Path(os.environ.get("LEARNING_DIR") or (Path(tempfile.gettempdir()) / "puz
                                               else DATA_DIR / "learning"))
 EVENTS = DIR / "events.jsonl"
 STATE = DIR / "proposals.json"
-CHANGELOG = ROOT / "docs" / "IMPROVEMENTS.md"  # rows are appended to the end of its table
+CHANGELOG = ROOT / "learning" / "improvements.md"  # decision log (in git; the rest of learning/ is not); rows appended
 WEB_COST = 0.011  # one OpenAI web search answer (measured); $0 through MCP, but the chat's time and limits too
 
 MIN_SAMPLES = 8          # answers before a web-search pattern counts
@@ -281,7 +281,7 @@ def apply(proposal_id: str, _proposal: dict | None = None, by: str = "the user's
 
 
 def mark(proposal_id: str, status: str, note: str = "", _proposal: dict | None = None) -> dict:
-    """Record a decision: applied, done (fixed by hand), rejected or failed. Logged in docs/IMPROVEMENTS.md."""
+    """Record a decision: applied, done (fixed by hand), rejected or failed. Logged in learning/improvements.md."""
     if status not in ("applied", "done", "rejected", "failed"):
         raise ValueError("status must be applied, done, rejected or failed")
     p = _proposal or next((x for x in report(auto_apply=False)["proposals"] if x["id"] == proposal_id), {})
@@ -290,6 +290,7 @@ def mark(proposal_id: str, status: str, note: str = "", _proposal: dict | None =
                       "title": p.get("title", (s.get(proposal_id) or {}).get("title", ""))}
     _save_state(s)
     if not CHANGELOG.exists():
+        CHANGELOG.parent.mkdir(parents=True, exist_ok=True)
         CHANGELOG.write_text("# Improvements\n\nWhat the pipeline changed about itself, from what it learned while scoring "
                              "leads (`enrich/core/learning.py`). Newest last.\n\n| Date | Proposal | Status | What and why |\n"
                              "|---|---|---|---|\n", encoding="utf-8")
