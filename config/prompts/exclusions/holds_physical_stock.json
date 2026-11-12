@@ -5,7 +5,7 @@
   "signal_id": "E6",
   "profile_section": "exclusions",
   "weight": "disqualifies",
-  "version": 1,
+  "version": 2,
   "stage": "site_text",
   "model": "small",
   "run_when": "Code found a store platform, 'add to cart', stock labels or shipping pages.",
@@ -38,7 +38,8 @@
     ],
     "watch_out_for": [
       "Print-on-demand (Printful, Printify) and dropshipping are NOT excluded",
-      "If you can't tell whether they hold inventory, answer unknown"
+      "If you can't tell whether they hold inventory, answer unknown",
+      "A warehouse, 3PL or fulfilment company that stores and ships its customers' inventory does not hold its own stock"
     ],
     "where_to_look": [
       "Homepage product listings",

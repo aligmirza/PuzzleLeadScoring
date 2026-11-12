@@ -106,7 +106,7 @@ def csv_row(r: dict) -> dict:
 
 
 def report(results: list[dict], folder: Path, store: Store, input_report: dict | None) -> None:
-    order = {"Yes": 0, "Yes (some must-haves unconfirmed)": 1, "Needs AI check": 2, "Unknown: site not reached": 3, "Needs a call: no website": 3, "No": 4}
+    order = {"Yes": 0, "Yes (some must-haves unconfirmed)": 1, "Yes (pre-launch)": 1, "Needs AI check": 2, "Unknown: site not reached": 3, "Needs a call: no website": 3, "No": 4}
     results.sort(key=lambda r: order.get(r.get("icp_verdict", ""), 9))
     paths = write_outputs(results, [csv_row(r) for r in results], folder / "output", OUTPUTS)
     signal_summary(results, GROUPS, "Phase 1: must-haves and exclusions")

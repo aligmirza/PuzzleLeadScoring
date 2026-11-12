@@ -6,7 +6,8 @@
     "Books behind (S3), looking for help (S4) and DIY (S5) are rarely public; Unknown stays Unknown",
     "Weights and the Strong-fit cut-off are guesses until calibrated on Alexey's 152 companies (stage 5)",
     "Decided 2026-11-07 (Alexey): young companies lose no points for being young; AI companies lose no points (Puzzle's MCP lets them do the books with their own agent), so does-its-own-books (S5) is info and routes to Platform + MCP; real estate and legal pass with 'ask how the books are handled'",
-    "website_optional (2026-11-09): a coming-soon page or a 404 leaves M2 Unknown instead of No, because established local businesses often have no real website (Ridgeline Drilling, CanAm Logistics: paying customers). A domain that doesn't resolve or is for sale stays No. With no website and no must-have proven the verdict is 'Needs a call: no website'."
+    "website_optional (2026-11-09): a coming-soon page or a 404 leaves M2 Unknown instead of No, because established local businesses often have no real website (Ridgeline Drilling, CanAm Logistics: paying customers). A domain that doesn't resolve or is for sale stays No. With no website and no must-have proven the verdict is 'Needs a call: no website'.",
+    "Cold outreach (2026-11-12): the model should only reject what Puzzle can't serve. Pre-launch companies (a waitlist or coming-soon page, no sales yet) are not failed on M2/M4: they pass as 'Yes (pre-launch)', lose 2 points (W5) and are contacted last; 11 of 82 real leads were pre-launch and several bought. Holding stock (E6), marketplace (S2), running several US companies (F17), a new subsidiary (B8) and non-profit (E5) are weak signals (-2, check on the call) instead of hard stops until Alexey says Puzzle can't serve them. Hard stops left: outside the US, accounting firm, sole proprietorship, multi-currency, manufacturing, too big."
   ],
   "website_optional": true,
   "reason_groups": {
@@ -25,8 +26,8 @@
     "E2": "weak",
     "E3": "exclusion",
     "E4": "exclusion",
-    "E5": "exclusion",
-    "E6": "exclusion",
+    "E5": "weak",
+    "E6": "weak",
     "F1": "fit",
     "F2": "fit",
     "F3": "fit",
@@ -43,7 +44,7 @@
     "F14": "fit",
     "F15": "fit",
     "F16": "fit",
-    "F17": "exclusion",
+    "F17": "weak",
     "F18": "fit",
     "F19": "fit",
     "F20": "fit",
@@ -55,7 +56,7 @@
     "B5": "buying",
     "B6": "buying",
     "B7": "buying",
-    "B8": "exclusion",
+    "B8": "weak",
     "B9": "buying",
     "B10": "buying",
     "B11": "buying",
@@ -75,7 +76,7 @@
     "W11": "weak",
     "W12": "weak",
     "S1": "exclusion",
-    "S2": "exclusion",
+    "S2": "weak",
     "S3": "buying",
     "S4": "buying",
     "S5": "info",
@@ -392,5 +393,9 @@
     "W10": "F13",
     "W12": "M3",
     "W9": "E6"
-  }
+  },
+  "soft_musts": [
+    "M2",
+    "M4"
+  ]
 }

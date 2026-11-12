@@ -90,17 +90,20 @@ class ServicesAgainstProduct(unittest.TestCase):
             s[sid] = {"value": v, "evidence": "x"}
         return s
 
-    def test_several_entities_is_fit_for_product_and_a_hard_stop_for_services(self):
-        from enrich.checks.rules import decide
-        s = self._signals(F17="yes")
-        with icp.use("product"):
-            self.assertEqual(decide(s, "live")["gate"], "pass")
+    def test_softened_hard_stops_only_cost_points_in_services(self):
+        # Cold outreach (2026-11-12): several companies, new subsidiary, stock, marketplace and non-profit
+        # are weak signals (-2, check on the call) until Alexey decides; none of them rejects a lead
+        from enrich.checks.rules import SIGNALS, decide
         with icp.use("services"):
-            self.assertEqual(decide(s, "live")["gate"], "excluded")
+            for sid in ("F17", "B8", "E6", "S2", "E5"):
+                self.assertEqual(SIGNALS[sid][0], "weak", sid)
+                self.assertEqual(decide(self._signals(**{sid: "yes"}), "live")["gate"], "pass", sid)
+        with icp.use("product"):
+            self.assertEqual(decide(self._signals(F17="yes"), "live")["gate"], "pass")
 
     def test_non_usd_books_and_netsuite_are_hard_stops_for_services_only(self):
         from enrich.checks.rules import decide
-        for sid in ("W6", "W10", "B8", "W7"):
+        for sid in ("W6", "W10", "W7"):
             with icp.use("product"):
                 self.assertNotEqual(decide(self._signals(**{sid: "yes"}), "live")["gate"], "excluded", sid)
             with icp.use("services"):

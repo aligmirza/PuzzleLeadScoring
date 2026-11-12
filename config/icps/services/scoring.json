@@ -82,5 +82,10 @@
     "note": "Exclusion 'Series C or later': a confirmed single round or valuation at least this big counts as proof, because it is a stated fact rather than an estimated stage. Used by the rules and the AI prompt.",
     "round_at_least_usd": 100000000,
     "valuation_at_least_usd": 1000000000
+  },
+  "outreach_priority": {
+    "note": "Cold outreach order for ICP YES leads (provisional): A at or above 'A', B at or above 'B', else C. Pre-launch leads and leads with no website are C.",
+    "A": 6,
+    "B": 3
   }
 }

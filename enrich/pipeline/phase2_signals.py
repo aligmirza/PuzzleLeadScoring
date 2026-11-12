@@ -22,12 +22,12 @@ from ..core.store import Store
 
 OUTPUTS = {"csv": "signals.csv", "evidence": "signals_evidence.jsonl", "ai_queue": "signals_ai_queue.jsonl"}
 GROUPS = ("fit", "buying", "weak")
-PASSING = ("Yes", "Yes (some must-haves unconfirmed)", "Needs AI check")
+PASSING = ("Yes", "Yes (some must-haves unconfirmed)", "Yes (pre-launch)", "Needs AI check")
 
 
 def select(store: Store, rows: list[dict], only_yes: bool) -> tuple[list[dict], dict]:
     """Companies phase 1 passed. With only_yes, leave out 'Needs AI check'."""
-    allowed = PASSING[:2] if only_yes else PASSING
+    allowed = PASSING[:3] if only_yes else PASSING
     picked, skipped = [], {"not checked in phase 1": 0, "not ICP or not reached": 0, "needs AI check (left out)": 0}
     for row in rows:
         r = store.get_result(row["domain"], "icp")

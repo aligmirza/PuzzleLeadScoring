@@ -16,10 +16,11 @@ from ..core.store import Store
 ICP_STATUS = {
     "Yes": ("YES", "All 4 must-haves confirmed, no exclusion found"),
     "Yes (some must-haves unconfirmed)": ("YES", "No must-have failed and no exclusion found; some must-haves couldn't be confirmed (that never counts against a company)"),
+    "Yes (pre-launch)": ("YES", "Pre-launch: a waitlist or coming-soon page and no sales yet; contact after the established leads"),
     "Needs AI check": ("PENDING", "A possible exclusion or must-have needs the AI check"),
     "No": ("NO", ""),
     "Unknown: site not reached": ("PENDING", "Website could not be reached; retry"),
-    "Needs a call: no website": ("PENDING", "No working website and nothing proven yet: confirm the company on the call"),
+    "Needs a call: no website": ("PENDING", "No working website, or nothing on it proven yet: confirm the company on the call"),
 }
 
 
@@ -82,6 +83,20 @@ def reasoning(icp: dict, sig: dict | None, row: dict, sc: dict | None) -> str:
 ASK_HOW_BOOKS = ("Real Estate & Property", "Legal")  # their books can differ (per property, client trust accounts)
 
 
+def outreach_priority(yes_no: str, verdict: str, score_now: int) -> str:
+    """Cold outreach order (scoring.json outreach_priority): A, B or C for approved leads; C for pre-launch and
+    no-website leads; empty for everything else (not approved yet, or not ICP)."""
+    from ..core import icp as pipelines
+    cfg = pipelines.scoring().get("outreach_priority")
+    if not cfg:
+        return ""
+    if verdict in ("Yes (pre-launch)", "Needs a call: no website"):
+        return "C"
+    if yes_no != "YES":
+        return ""
+    return "A" if score_now >= cfg["A"] else "B" if score_now >= cfg["B"] else "C"
+
+
 def services_columns(yes_no: str, icp: dict, s: dict, vertical: str = "") -> dict:
     """Route, arrival and value angle for the services pipeline, from proven facts only (the ICP page's routing
     table). Route says what to offer; arrival says why now; value angle is the opening line for outreach."""
@@ -96,6 +111,10 @@ def services_columns(yes_no: str, icp: dict, s: dict, vertical: str = "") -> dic
     if icp.get("icp_verdict") == "Needs a call: no website":
         return {"Route": "Qualify on the call: no website, confirm the business and how the books are handled",
                 "Arrival": "", "Value angle": ""}
+    if icp.get("icp_verdict") == "Yes (pre-launch)":
+        return {"Route": "Pre-launch: Expert Review or Platform + MCP, contact after the established leads",
+                "Arrival": "Proactive",
+                "Value angle": "Start with clean books before the first sale, so launch, fundraising and taxes are easy"}
     if "S3" in yes:
         route = "Catch-Up, then Full Service"
     elif yes & {"S4", "B9"}:
@@ -168,11 +187,13 @@ def findings(domain: str, employees: str, icp: dict | None, sig: dict | None, co
     if sig and yes_no != "NO":
         sc = score(sig["signals"], seg)
         row.update({"Lead score": sc["score"], "Lead tier": sc["tier"] + (" (pending AI check)" if yes_no == "PENDING" else ""),
+                    "Outreach priority": outreach_priority(yes_no, verdict, sc["score"]),
                     "Score breakdown": sc["breakdown"]})
     elif verdict == "Unknown: site not reached":
         row["Lead tier"] = "Not scored: website not reached (retry)"
     elif verdict == "Needs a call: no website":
         row["Lead tier"] = "Not scored: no website (confirm on the call)"
+        row["Outreach priority"] = outreach_priority(yes_no, verdict, 0)
     elif yes_no != "NO":
         row["Lead tier"] = "Scored after phase 2"
     src = sig or icp
@@ -255,7 +276,7 @@ def write(folder: Path, store: Store) -> Path:
         out_rows.append({**raw, **{k: v for k, v in extra.items() if k not in original_cols}})
 
     # keep a stable, readable column order for the added columns
-    order = ["Pipeline", "ICP", "ICP status", "Why", "Route", "Arrival", "Value angle", "Lead score", "Lead tier", "Reasoning", "Score breakdown", "Segment", "Segment based on",
+    order = ["Pipeline", "ICP", "ICP status", "Why", "Route", "Arrival", "Value angle", "Lead score", "Lead tier", "Outreach priority", "Reasoning", "Score breakdown", "Segment", "Segment based on",
              "Fit signals found", "Buying signals found", "Weak fit signals found", "Needs checking", "Notes"]
     added_cols = [c for c in order if c in added_cols] + [c for c in added_cols if c not in order]
     with open(out, "w", newline="") as f:

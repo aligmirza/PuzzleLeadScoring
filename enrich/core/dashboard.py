@@ -25,7 +25,7 @@ def _short(group: str) -> dict[str, str]:
     return {sid: SHORT.get(sid, n[:18]) for sid, (g, n) in SIGNALS.items() if g == group}
 
 ICON = {"yes": "[green]✓[/]", "no": "[red]✗[/]", "unknown": "[dim]·[/]", "check": "[yellow]?[/]", "na": "[dim]–[/]"}
-VERDICT_STYLE = {"Yes": "green", "Yes (some must-haves unconfirmed)": "cyan", "Needs AI check": "yellow",
+VERDICT_STYLE = {"Yes": "green", "Yes (some must-haves unconfirmed)": "cyan", "Yes (pre-launch)": "cyan", "Needs AI check": "yellow",
                  "No": "red", "Unknown: site not reached": "yellow", "Needs a call: no website": "yellow"}
 
 

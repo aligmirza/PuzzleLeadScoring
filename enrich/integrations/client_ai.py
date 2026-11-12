@@ -268,7 +268,7 @@ def overview(list_name: str) -> dict:
     from ..checks.scoring import score
     folder, store = _folder_store(list_name)
     out = []
-    rank = {"Yes": 0, "Yes (some must-haves unconfirmed)": 1, "Needs AI check": 2}
+    rank = {"Yes": 0, "Yes (some must-haves unconfirmed)": 1, "Yes (pre-launch)": 2, "Needs AI check": 2}
     for domain, company in dict.fromkeys(_domains(folder, store)):
         icp = store.get_result(domain, "icp")
         if not icp:

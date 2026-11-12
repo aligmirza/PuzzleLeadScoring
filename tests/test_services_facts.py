@@ -37,7 +37,7 @@ class SoleProprietorshipOrPartnership(unittest.TestCase):
 
 class Marketplace(unittest.TestCase):
     def test_says_it_is_one(self):
-        r = run({"home": "<p>Acme is a peer-to-peer trailer marketplace for owners and renters.</p>"}, phase="icp")
+        r = run({"home": "<p>Acme is a peer-to-peer trailer marketplace for owners and renters.</p>"})
         self.assertEqual(value(r, "S2"), "yes")
 
     def test_listing_on_a_cloud_marketplace_is_not(self):
@@ -173,15 +173,16 @@ class PipelineRoles(unittest.TestCase):
             self.assertNotIn("F1", zero_point_sids())
         with icp.use("services"):
             self.assertEqual((SIGNALS["S2"][0], SIGNALS["S3"][0], SIGNALS["S5"][0], SIGNALS["E1"][0], SIGNALS["S10"][0]),
-                             ("exclusion", "buying", "info", "info", "fit"))  # S5: no points off (Alexey, Nov 2026)
+                             ("weak", "buying", "info", "info", "fit"))  # S5: no points off (Alexey, Nov 2026)
             zero = zero_point_sids()
             self.assertTrue({"E1", "F1", "F10", "F11"} <= zero)  # no paid questions on funding, AI, YC
             self.assertFalse({"S3", "S4", "B9"} & zero)
 
-    def test_a_marketplace_is_excluded_by_services_only(self):
+    def test_a_marketplace_is_not_a_hard_stop_for_cold_outreach(self):
+        # Cold outreach (2026-11-12): a marketplace is a weak signal (-2, check on the call), never a rejection
         page = {"home": "<p>Acme is a peer-to-peer trailer marketplace for owners and renters.</p>"}
-        self.assertNotEqual(run(page, phase="icp", pipeline="product")["gate"], "excluded")
-        self.assertEqual(run(page, phase="icp", pipeline="services")["gate"], "excluded")
+        for pipeline in ("product", "services"):
+            self.assertNotEqual(run(page, pipeline=pipeline)["gate"], "excluded", pipeline)
 
 
 class RouteArrivalAngle(unittest.TestCase):
@@ -229,3 +230,65 @@ class RouteArrivalAngle(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ColdOutreach(unittest.TestCase):
+    """Cold outreach (Nov 12, 2026): the 82 real leads; recall first, the score is the outreach order."""
+
+    def test_a_waitlist_startup_passes_as_pre_launch(self):
+        r = run({"home": "<p>Acme helps clinics bill faster. Join the waitlist for early access.</p>"}, phase="icp")
+        self.assertEqual(value(r, "M4"), "no")
+        self.assertNotEqual(r["icp_verdict"], "No")  # was rejected before; now the AI confirms the site, then pre-launch
+        p = run({"home": "<p>Acme helps clinics bill faster. Join the waitlist.</p>"}, phase="icp", pipeline="product")
+        self.assertNotEqual(p["icp_verdict"], "Yes (pre-launch)")
+
+    def test_a_hard_no_on_a_soft_must_still_fails(self):
+        from enrich.checks.rules import decide, SIGNALS
+        s = {sid: {"value": "unknown", "evidence": ""} for sid in SIGNALS}
+        s.update({m: {"value": "yes", "evidence": "x"} for m in ("M1", "M3", "M4")})
+        with icp.use("services"):
+            s["M2"] = {"value": "no", "evidence": "parked", "hard": True}
+            self.assertEqual(decide(s, "live")["verdict"], "No")
+            s["M2"] = {"value": "no", "evidence": "waitlist"}
+            self.assertEqual(decide(s, "live")["verdict"], "Yes (pre-launch)")
+            s["M2"], s["M4"] = {"value": "yes", "evidence": "x"}, {"value": "no", "evidence": "waitlist only"}
+            self.assertEqual(decide(s, "live")["verdict"], "Yes (pre-launch)")
+
+    def test_a_godaddy_for_sale_page_fails(self):
+        r = run({"home": "<p>acmeroofing.com is for sale! Get this domain.</p>"}, phase="icp")
+        self.assertEqual(r["icp_verdict"], "No")
+
+    def test_a_stripe_donation_button_is_not_billing(self):
+        page = {"home": "<p>Support our work: donate through Stripe.</p>"}
+        self.assertNotEqual(value(run(page), "F2"), "yes")
+
+    def test_a_bio_is_not_the_company_age(self):
+        bio = {"about": "<p>Jane, our founder, has worked in finance for 25 years.</p>"}
+        self.assertNotEqual(value(run(bio), "S12"), "yes")
+        own = {"about": "<p>Proudly serving Austin families since 1995.</p>"}
+        self.assertEqual(value(run(own), "S12"), "yes")
+
+    def test_the_sites_own_headcount_counts(self):
+        r = run({"about": "<p>Our 150+ team supports brands across the US.</p>"}, phase="icp")
+        self.assertEqual(value(r, "S7"), "yes")
+        r = run({"about": "<p>We are a team of 12 bookkeeping fans.</p>"}, phase="icp")
+        self.assertEqual(value(r, "S7"), "no")
+
+    def test_work_from_anywhere_counts_only_on_the_careers_page(self):
+        self.assertNotEqual(value(run({"home": "<p>Send invoices and work from anywhere.</p>"}), "F16"), "yes")
+        self.assertEqual(value(run({"careers": "<p>Join us. Work from anywhere in the US.</p>"}), "F16"), "yes")
+
+    def test_a_3pl_warehouse_is_a_weak_signal_at_most(self):
+        from enrich.checks.rules import SIGNALS
+        with icp.use("services"):
+            self.assertEqual(SIGNALS["E6"][0], "weak")
+
+    def test_outreach_priority(self):
+        from enrich.pipeline.final import outreach_priority
+        with icp.use("services"):
+            self.assertEqual(outreach_priority("YES", "Yes", 9), "A")
+            self.assertEqual(outreach_priority("YES", "Yes", 4), "B")
+            self.assertEqual(outreach_priority("YES", "Yes", 1), "C")
+            self.assertEqual(outreach_priority("YES", "Yes (pre-launch)", 12), "C")
+            self.assertEqual(outreach_priority("PENDING", "Needs a call: no website", 0), "C")
+            self.assertEqual(outreach_priority("NO", "No", 9), "")

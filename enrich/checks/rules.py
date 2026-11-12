@@ -273,6 +273,8 @@ FIELD_SOFTWARE = {"ServiceTitan": r"servicetitan\.com", "Jobber": r"getjobber\.c
                   "JobNimbus": r"jobnimbus\.com", "Buildertrend": r"buildertrend\.(?:com|net)", "Procore": r"procore\.com",
                   "ServiceM8": r"servicem8\.com", "Service Fusion": r"servicefusion\.com", "AccuLynx": r"acculynx\.com"}
 # S12: the company says how long it has been in business ("since 1998", "over 25 years")
+RE_BIO = re.compile(r"\b(?:he|she|his|her|career|worked|joined|experience|previously|formerly|served as|ceo|cto|founder)\b", re.I)
+RE_OWN_HEADCOUNT = re.compile(r"\b(?:our|a|the) team of (\d{2,4})\+?\b|\b(\d{2,4})\+?[ -](?:person team|team members|employees|staff|team)\b(?! of)", re.I)
 RE_SINCE_YEAR = re.compile(r"\b(?:since|founded in|established in|established|est\.?|serving [\w\s,]{0,30} since)\s+((?:19|20)\d\d)\b", re.I)
 # the company's own age only: "20 years of experience" is a person's bio, never the company's
 RE_YEARS_IN_BUSINESS = re.compile(r"\b(?:over|more than|for|nearly|almost)?\s*(\d{2})\+?\s+years (?:in business|of (?:service|serving)|"
@@ -324,6 +326,7 @@ COMPETITOR_RULES = {
     "Minerva": r"\bMinerva (?:accounting|bookkeeping|finance)\b",
 }
 USAGE_KINDS = {"privacy", "security", "terms", "legal"}
+RE_DONATION = re.compile(r"donat|voluntary contribution|contribut\w* (?:through|via|with)|tip jar|buy (?:me|us) a coffee|support (?:us|our work|the project)", re.I)
 INTEGRATION_CONTEXT = re.compile(r"connect|integrat|sync|import|your [\w ]{0,20}account|plug(?:s|in)|(?<!we )works? (?:best |seamlessly |great )?with|supports?|partners?|investors?|backed by|financing", re.I)
 USAGE_CONTEXT = re.compile(r"benefit|payroll|we use|our (?:\w+ )?stack|tools? (?:we|like)|experience (?:with|in|using)|familiar|proficien", re.I)
 
@@ -381,7 +384,8 @@ RE_METRIC = re.compile(
 RE_NOT_OWN_METRIC = re.compile(r"\b(?:market|industry|TAM|addressable|customers? (?:save|saw|see|grew|raised|achieve)|"
                                r"clients? (?:save|saw|see|grew|raised|achieve)|helped \w+ (?:grow|raise)|followers|"
                                r"downloads|subscribers on|views)\b", re.I)
-RE_REMOTE = re.compile(r"remote[- ]first|fully remote|remote[- ]friendly|distributed (?:team|company)|work from anywhere"
+RE_REMOTE_CAREERS = re.compile(r"work from anywhere", re.I)
+RE_REMOTE = re.compile(r"remote[- ]first|fully remote|remote[- ]friendly|distributed (?:team|company)"
                        r"|\bhybrid[- ](?:work(?:ing|place|force)?|remote|team|role|position|schedule|employees?)\b"
                        r"|\bremote\s?(?:or|and|/)\s?hybrid\b|\b(?:on-?site|in[- ]office)\s?(?:or|and|/)\s?hybrid\b"
                        r"|\(hybrid\)|\bhybrid\s*\||\bhybrid\s+[–-]\s+\w|\b(?:location|workplace|work type)\s*:\s*hybrid\b", re.I)
@@ -429,9 +433,14 @@ def decide(signals: dict, site_status: str | None) -> dict:
     """The ICP verdict from must-have and exclusion answers. Used by the rules and again after AI answers."""
     def val(sid):
         return signals.get(sid, {}).get("value", UNKNOWN)
+    from ..core import icp
+    soft = set(icp.roles().get("soft_musts") or [])  # services: a pre-launch No doesn't fail these
+    musts = [sid for sid, (g, _) in SIGNALS.items() if g == "must"]
     excluded = [sid for sid, (g, _) in SIGNALS.items() if g == "exclusion" and val(sid) == YES]
-    failed = [sid for sid, (g, _) in SIGNALS.items() if g == "must" and val(sid) == NO]
-    confirmed = [sid for sid, (g, _) in SIGNALS.items() if g == "must" and val(sid) == YES]
+    no = [sid for sid in musts if val(sid) == NO]
+    prelaunch = [sid for sid in no if sid in soft and not signals[sid].get("hard")]
+    failed = [sid for sid in no if sid not in prelaunch]
+    confirmed = [sid for sid in musts if val(sid) == YES]
     checks = [sid for sid, (g, _) in SIGNALS.items() if g in ("must", "exclusion") and val(sid) == CHECK]
     if site_status in ("blocked", "unreachable", "error"):
         gate = "not reached (retry)"
@@ -439,7 +448,7 @@ def decide(signals: dict, site_status: str | None) -> dict:
         gate = "excluded"
     elif failed:
         gate = "failed must-have"
-    elif len(confirmed) == 4:
+    elif len(confirmed) == len(musts):
         gate = "pass"
     else:
         gate = "pass (some unknown)"
@@ -451,12 +460,14 @@ def decide(signals: dict, site_status: str | None) -> dict:
         verdict = "Needs AI check"
     elif gate == "pass":
         verdict = "Yes"
-    elif signals.get("M2", {}).get("no_website") and not confirmed:
-        verdict = NO_WEBSITE  # nothing about the company was read: sales confirms it before any AI or Prospeo spend
+    elif prelaunch:
+        verdict = PRELAUNCH  # no live product or sales yet: contacted last, not dropped (services)
+    elif not confirmed and _website_optional() and val("M2") != YES:
+        verdict = NO_WEBSITE  # no website, or nothing on it proven: sales confirms it before any AI or Prospeo spend
     else:
         verdict = "Yes (some must-haves unconfirmed)"
     return {"gate": gate, "verdict": verdict, "checks": checks, "excluded": excluded, "failed": failed,
-            "confirmed": confirmed,
+            "confirmed": confirmed, "prelaunch": prelaunch,
             "exclusion_reason": exclusion_reason(signals, excluded)}
 
 
@@ -690,14 +701,23 @@ class Extractor:
                 break
         # S12 in business 10 or more years (established operators, often with messy older books)
         year_now = date.today().year
+        found = None
         for rx, years in ((RE_SINCE_YEAR, lambda m: year_now - int(m.group(1))),
                           (RE_YEARS_IN_BUSINESS, lambda m: int(m.group(1)))):
-            p, snip = self.find(rx, kinds=["home", "about", "team", "contact"])
-            if p:
-                n = years(rx.search(p.text))
-                if 10 <= n <= 150:
-                    self.s["S12"] = sig(YES, snip, p.url, note=f"about {n} years")
+            for kind in ("home", "about", "contact"):  # not the team page: bios say "at X since 1996"
+                p = self.page(kind)
+                for m in (rx.finditer(p.text) if p else ()):
+                    before = p.text[max(0, m.start() - 80): m.start()]
+                    own = (rx is RE_YEARS_IN_BUSINESS or re.match(r"(?i)founded|established|est|serving", m.group(0))
+                           or RE_FIRST_PERSON.search(before) or self.mentions_company(before))
+                    if own and not RE_BIO.search(before) and 10 <= years(m) <= 150:
+                        found = (_snip(p.text, m), p.url, years(m))
+                        break
+                if found:
                     break
+            if found:
+                self.s["S12"] = sig(YES, found[0], found[1], note=f"about {found[2]} years")
+                break
 
     def _headcount(self) -> tuple[int | None, str, str]:
         """(people, proof, method) from: the list's count, a Prospeo headcount already bought, the YC team size."""
@@ -710,6 +730,11 @@ class Extractor:
         yc = self.facts.get("team_size_directory") or {}
         if str(yc.get("value", "")).isdigit():
             return int(yc["value"]), f"{yc['value']} people per the {yc.get('source', 'YC directory')}", "directory"
+        for kind in ("about", "home", "careers"):  # the company's own words: "150+ team", "a team of 40 people"
+            p = self.page(kind)
+            m = RE_OWN_HEADCOUNT.search(p.text) if p else None
+            if m:
+                return int(m.group(1) or m.group(2)), f"the site says: {_snip(p.text, m)}", "code"
         return None, "", "code"
 
     def services_derived(self):
@@ -752,7 +777,7 @@ class Extractor:
             if _website_optional() and err.startswith("http "):  # the server answers, the site is just gone (CanAm: 404)
                 self.s["M2"] = {**sig(UNKNOWN, note=f"site did not load ({err}); {NO_SITE_NOTE}"), "no_website": True}
             else:  # the domain doesn't resolve: wrong domain or the business is gone
-                self.s["M2"] = sig(NO, evidence=f"site did not load: {err}")
+                self.s["M2"] = {**sig(NO, evidence=f"site did not load: {err}"), "hard": True}
             self.s["E2"] = sig(CHECK, evidence=f"site did not load: {err}",
                                note="also needs proof of no funding and a new incorporation")
 
@@ -761,7 +786,8 @@ class Extractor:
         home = self.page("home")
         text = home.text
         parked = re.search(r"this domain (?:is|may be) for sale|buy this domain|domain (?:is )?parked|sedoparking|hugedomains|"
-                           r"afternic|dan\.com|parkingcrew|bodis\.com|domain has expired", home.html, re.I)
+                           r"afternic|dan\.com|parkingcrew|bodis\.com|domain has expired|\b[\w-]+\.[a-z]{2,6} is for sale\b|godaddy\.com/forsale",
+                           home.html + " " + (self.record.get("final_url") or ""), re.I)
         coming = len(text) < 600 and re.search(r"coming soon|launching soon|under construction", text, re.I)
         self.facts["text_chars"] = len(text)
         self.facts["needs_js"] = len(text) < 250 and len(home.html) > 2000
@@ -775,9 +801,9 @@ class Extractor:
             if shutdown:
                 break
         if parked:  # a for-sale or parked domain: the company doesn't own it (or is gone), in every pipeline
-            self.s["M2"] = sig(NO, evidence=f"parked or for-sale page: {parked.group(0)}", url=home.url)
+            self.s["M2"] = {**sig(NO, evidence=f"parked or for-sale page: {parked.group(0)}", url=home.url), "hard": True}
         elif shutdown:
-            self.s["M2"] = sig(NO, evidence=f"the company says it is shutting down: {shutdown}", url=home.url)
+            self.s["M2"] = {**sig(NO, evidence=f"the company says it is shutting down: {shutdown}", url=home.url), "hard": True}
             self.facts["shutting_down"] = shutdown
         elif coming and _website_optional():  # Ridgeline Drilling: a paying customer behind a coming-soon page
             self.s["M2"] = {**sig(UNKNOWN, note=f"only a coming-soon page; {NO_SITE_NOTE}", url=home.url), "no_website": True}
@@ -1056,7 +1082,7 @@ class Extractor:
                     m = rx.search(p.text)
                     if m:
                         snip = _snip(p.text, m)
-                        hit = (CHECK if INTEGRATION_CONTEXT.search(snip) else YES, snip, p.url)
+                        hit = (CHECK if INTEGRATION_CONTEXT.search(snip) or RE_DONATION.search(snip) else YES, snip, p.url)
                         break
             if not hit or hit[0] == CHECK:
                 for j in self.jobs:
@@ -1190,6 +1216,8 @@ class Extractor:
             self.s["F16"] = sig(YES, f"{len(remote_jobs)} of {len(self.jobs)} jobs are remote")
         else:
             p, snip = self.find(RE_REMOTE, kinds=["careers", "about", "home"])
+            if not p:
+                p, snip = self.find(RE_REMOTE_CAREERS, kinds=["careers"])
             if p:
                 self.s["F16"] = sig(YES, snip, p.url)
 
@@ -1699,7 +1727,8 @@ def unscored(seg: str) -> list[str]:
     return [by_name[n] for n, w in pts.items() if isinstance(w, dict) and w.get(seg) == "none" and n in by_name]
 
 
-NO_WEBSITE = "Needs a call: no website"  # services verdict: no readable website and no must-have proven
+NO_WEBSITE = "Needs a call: no website"  # services verdict: no website (or nothing on it proven), no must-have proven
+PRELAUNCH = "Yes (pre-launch)"  # services verdict: waitlist or coming-soon, no sales yet; passes, contacted last
 NO_SITE_NOTE = ("established businesses may not keep a website, so this pipeline doesn't fail them for it: "
                 "confirm the company on the call")
 
