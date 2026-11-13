@@ -1,6 +1,6 @@
 ---
 name: bulk-enrich
-description: Enrich big lead lists (over ~100 up to thousands of companies) with puzzle-lead-scoring - free steps in the background, OpenAI via list_ai only with an approved cost cap, optional LeadMagic (or Prospeo), costs, results and Clay push. Use when the user wants to enrich a large CSV or Clay table, check costs, or push results.
+description: Enrich big lead lists (over ~100 up to thousands of companies) with puzzle-lead-scoring - free steps in the background, then the OpenAI AI steps by default inside the standing cost cap, optional LeadMagic (or Prospeo), costs, results and Clay push. Use when the user wants to enrich a large CSV or Clay table, check costs, or push results.
 ---
 
 # Big lists (over ~100 companies)
@@ -8,22 +8,25 @@ description: Enrich big lead lists (over ~100 up to thousands of companies) with
 Pipeline: **services** is the default ICP. Use `icp="product"` on every call only when the user asks for the product (platform) ICP, and keep the same `icp` for all calls on a list.
 
 Up to ~100 companies, use `/enrich-chat` (Claude answers in chat, $0 API). Above that, Claude can't answer tens of
-thousands of questions in a chat, so the AI steps run on the OpenAI engine, only with the user's approved cap.
+thousands of questions in a chat, so the AI steps run on the OpenAI engine. They run by default (production), inside
+the standing cap (`API_AI_MAX_COST_USD`, else $5, and `AI_MONTHLY_BUDGET_USD`), without asking.
 
 ## Workflow
 
-1. **Free steps:** `enrich_list(csv_path, list_name)` (or `pull_clay_table(table_id)` for a Clay table). Background;
-   poll `list_status(list_name)` every ~60 s until `done`. Report rows and ICP YES / NO / PENDING.
-2. **Phase 1 AI estimate:** `list_ai(list_name, "icp")` with no cap returns the estimate only. Show: companies, questions,
-   worst case in accurate mode and in cheap mode. Ask for a cap.
-3. **Run with the cap:** `list_ai(list_name, "icp", max_cost_usd=<approved cap>)`. If it's refused, say why (above the
-   cap or the monthly budget) and offer cheap mode (`mode="cheap"`) or a higher cap. Never raise a cap on your own.
-4. When `list_status` shows phase 1 AI finished, repeat 2-3 for `"signals"`.
-5. **Optional step 5:** provider finance check (LeadMagic, else Prospeo), one search per company still open. Ask first; then re-run
+1. **Free steps and AI:** `enrich_list(csv_path, list_name)` (or `pull_clay_table(table_id)` for a Clay table). Over 100
+   companies it runs phase 1, AI, phase 2, AI in the background on its own. Poll `list_status(list_name)` every ~60 s
+   until `done`. Report rows, ICP YES / NO / PENDING and the AI cost (`ai_phase1`, `ai_phase2`).
+2. **If an AI step was skipped** (`ai_phase1` / `ai_phase2` say `skipped`: above the cap, monthly budget, or no OpenAI
+   key): say why, show `list_ai(list_name, phase, estimate_only=true)`, and offer cheap mode (`mode="cheap"`) or a
+   higher cap. Run `list_ai(list_name, phase, max_cost_usd=<the user's cap>)` only with a cap the user gave. Never
+   raise a cap on your own.
+3. **A list already saved** (e.g. enriched with `use_openai=false`): `list_ai(list_name, "icp")` runs inside the
+   standing cap; when `list_status` shows it finished, `list_ai(list_name, "signals")`.
+4. **Optional step 5:** provider finance check (LeadMagic, else Prospeo), one search per company still open. Ask first; then re-run
    `enrich_list(..., use_provider=true)` on the same CSV and list name (pages and answers are cached).
-6. **Results:** `list_results(list_name)` (ICP YES by default), `questions_overview(list_name)` for what's open.
+5. **Results:** `list_results(list_name)` (ICP YES by default), `questions_overview(list_name)` for what's open.
    `push_list_to_clay(list_name)` only if the user asks.
-7. **Learn from the run:** the **improve-pipeline** skill (`improvement_report`): report what was fixed automatically,
+6. **Learn from the run:** the **improve-pipeline** skill (`improvement_report`): report what was fixed automatically,
    fix crashes, and show the other proposals for the user's OK.
 
 ## Costs and checks (terminal, from the project folder)

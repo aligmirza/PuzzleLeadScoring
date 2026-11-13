@@ -159,7 +159,7 @@
           "Companies"
         ],
         "summary": "Check Batch",
-        "description": "Up to 25 companies at once, answered while you wait: their free steps run at the same time. Same answers as\nPOST /v1/check for each (AI questions stay open; use a list with ai=true for those).",
+        "description": "Up to 25 companies at once, answered while you wait: their free steps run at the same time. Same answers as\nPOST /v1/check for each, AI step included unless ai is false.",
         "operationId": "check_batch_v1_check_batch_post",
         "parameters": [
           {
@@ -339,7 +339,7 @@
           "Lists"
         ],
         "summary": "Create List",
-        "description": "Start a whole list in the background: phase 1, optional AI, phase 2, optional AI, final list, optional Clay\npush and callback. Follow it with GET /v1/lists/{name}.",
+        "description": "Start a whole list in the background: phase 1, AI (unless ai is false), phase 2, AI, final list, optional Clay\npush and callback. Follow it with GET /v1/lists/{name}.",
         "operationId": "create_list_v1_lists_post",
         "parameters": [
           {
@@ -2605,6 +2605,19 @@
             "title": "Signals",
             "default": true
           },
+          "ai": {
+            "type": "boolean",
+            "title": "Ai",
+            "description": "Run the AI step (on by default; false for the free steps only)",
+            "default": true
+          },
+          "ai_options": {
+            "$ref": "#/components/schemas/AiOptions",
+            "default": {
+              "web": true,
+              "search_signals": true
+            }
+          },
           "wait_seconds": {
             "type": "number",
             "title": "Wait Seconds",
@@ -2644,7 +2657,7 @@
           "ai": {
             "type": "boolean",
             "title": "Ai",
-            "default": false
+            "default": true
           },
           "mode": {
             "anyOf": [
@@ -2732,8 +2745,8 @@
           "ai": {
             "type": "boolean",
             "title": "Ai",
-            "description": "Also run the AI step (costs money; capped by ai_options.max_cost_usd)",
-            "default": false
+            "description": "Run the AI step (on by default; send false for the free steps only). Costs money: skipped with the reason in ai_steps above ai_options.max_cost_usd, the monthly budget, or without an OpenAI key",
+            "default": true
           },
           "ai_options": {
             "$ref": "#/components/schemas/AiOptions",
@@ -2883,8 +2896,8 @@
           "ai": {
             "type": "boolean",
             "title": "Ai",
-            "description": "Run the AI step after each phase (costs money; capped)",
-            "default": false
+            "description": "Run the AI step after each phase (on by default; send false for the free steps only). Skipped with the reason in the status above the cost cap or without an OpenAI key",
+            "default": true
           },
           "ai_options": {
             "$ref": "#/components/schemas/AiOptions",
@@ -3029,7 +3042,8 @@
           "ai": {
             "type": "boolean",
             "title": "Ai",
-            "default": false
+            "description": "Run the AI step (on by default; false for the free steps only)",
+            "default": true
           },
           "ai_options": {
             "$ref": "#/components/schemas/AiOptions",

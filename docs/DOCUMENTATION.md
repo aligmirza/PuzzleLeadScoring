@@ -307,7 +307,8 @@ lists/<list>/         created per list: input.csv, raw/, cache.sqlite, runs.json
 # AI for phase 2: AI-only signals, industry, company size (asks before spending)
 .venv/bin/python scripts/ai_check.py leads --phase signals
 
-# phases 1 and 2 without AI, one after the other
+# everything in one go: phase 1, AI, phase 2, AI (the AI steps show the cost and ask first;
+# --yes-ai for scheduled runs, --no-ai for the free steps only; skipped with a note without an OpenAI key)
 .venv/bin/python -m enrich run leads.csv
 ```
 
@@ -353,7 +354,7 @@ AI options:
 | See the free directories, or look up one company in YC, SEC and IRS | `python -m enrich directories` / `python -m enrich directories acme.com --legal-name "Acme, Inc."` |
 | See the API key and save keys once (OpenAI, Clay webhook) | `python -m enrich settings` |
 | Start the API for Clay, scripts and other tools (docs at http://127.0.0.1:8787/docs; all calls in [section 7](#api), importable description in [openapi.json](openapi.json)) | `python -m enrich serve` |
-| List Clay tables / run one as a list | `python -m enrich pull` / `python -m enrich pull t_abc123 --list q4` |
+| List Clay tables / run one as a list (AI included; `--no-ai` for free only) | `python -m enrich pull` / `python -m enrich pull t_abc123 --list q4` |
 | Send a finished list to a Clay table | `python -m enrich push leads` |
 | Use it from Claude Code or Claude Desktop (the chat model answers the AI questions itself: no OpenAI cost) | Approve **puzzle-lead-scoring** once in `/mcp` (registered in `.mcp.json`); setup in [section 7](#mcp-server-claude-code-claude-desktop) |
 | Open an enriched list as a table in the browser (read-only) | `.venv/bin/python viewer/server.py` ([section 7](#list-viewer)) |
@@ -2280,17 +2281,17 @@ Every `/v1` call needs the key as a header: `x-api-key: <key>` (or `Authorizatio
 The full description of every call (fields, types, examples) is in [openapi.json](openapi.json), which any API tool (Postman, Insomnia, code generators) can import without the server running. Every call takes `?icp=product`; without it, services is used.
 
 **Safety rules:**
-- AI only runs when a request says `"ai": true` (or calls the AI endpoint).
-- Every AI run is estimated first. If the worst case is above `max_cost_usd` (default `API_AI_MAX_COST_USD` in `.env`, else $5), the request is refused with `402` and nothing is sent. The message gives the cheap-mode worst case too.
+- The AI step runs by default (production): `POST /v1/check`, `/v1/check/batch`, `/v1/lists`, `/v1/lists/upload` and `/v1/clay/pull` all have `"ai": true` unless the request sends `"ai": false` (free steps only).
+- Every AI run is estimated first. If the worst case is above `max_cost_usd` (default `API_AI_MAX_COST_USD` in `.env`, else $5) or the monthly budget (`AI_MONTHLY_BUDGET_USD`), or there is no OpenAI key, the AI step is skipped and nothing is sent: the free results are still saved and returned, and the reason is in `ai_steps` (one company) or `ai_phase1` / `ai_phase2` in the list status. `POST /v1/lists/{name}/ai` still refuses with `402` above its cap.
 - Nothing can be deleted through the API.
 
 | Group | Method and path | What it does |
 |---|---|---|
 | | `GET /health` | Is the API up (no key needed) |
 | Companies | `POST /v1/check` | One company, answered while you wait: ICP, reason, score, tier, reasoning, every data point. Cached. Body: `{"domain": "acme.com", "company": "Acme", "employees": "12"}`; options `signals`, `ai`, `ai_options`, `refresh`, `wait_seconds` |
-| | `POST /v1/check/batch` | Up to 25 companies at once, answered while you wait; their free steps run at the same time. Body: `{"companies": [{"domain": "acme.com"}, {"domain": "beta.io"}]}`; options `signals`, `wait_seconds` (default 300) |
+| | `POST /v1/check/batch` | Up to 25 companies at once, answered while you wait; their free steps run at the same time. Body: `{"companies": [{"domain": "acme.com"}, {"domain": "beta.io"}]}`; options `signals`, `ai`, `ai_options`, `wait_seconds` (default 300) |
 | Lists | `GET /v1/lists` | Every list with state and counts |
-| | `POST /v1/lists` | Start a whole list in the background. Body: `{"name": "q4", "rows": [{"Domain": "..."}], "ai": false, "callback_url": "https://..."}`; your other columns are kept |
+| | `POST /v1/lists` | Start a whole list in the background. Body: `{"name": "q4", "rows": [{"Domain": "..."}], "callback_url": "https://..."}`; your other columns are kept |
 | | `POST /v1/lists/upload` | The same with a CSV file (form fields `name`, `ai`, `mode`, `max_cost_usd`, `callback_url`) |
 | | `GET /v1/lists/{name}` | Progress: state, step, AI usage and cost, counts, push and callback result |
 | | `GET /v1/lists/{name}/results` | Every row: original columns + findings. `?format=csv`, `?only_icp=true`, `?limit=50` |
@@ -2396,7 +2397,7 @@ Decision-makers found through LeadMagic (or Prospeo), with their emails and mobi
 
 ```bash
 .venv/bin/python -m enrich pull                                # list the Clay tables in your workspace
-.venv/bin/python -m enrich pull t_abc123 --list q4_clay         # read the table and run both phases
+.venv/bin/python -m enrich pull t_abc123 --list q4_clay         # read the table and run both phases with AI (--no-ai: free only)
 .venv/bin/python -m enrich pull t_abc123 --list q4_clay --push  # ...then push the results to the webhook
 ```
 
@@ -2460,7 +2461,7 @@ In `.claude/`, loaded automatically when you open the project:
 |---|---|
 | `check-company` (skill) | One company through the full waterfall, Claude answering, Prospeo only after your yes |
 | `/enrich-chat <csv> [list]` (command) + `company-answerer` (subagent) | Lists up to about 100 companies, answered in chat, 5 companies at a time |
-| `bulk-enrich` (skill) | Bigger lists: free steps, `list_ai` with an approved cost cap, costs, Clay push |
+| `bulk-enrich` (skill) | Bigger lists: free steps and the OpenAI AI steps by default inside the standing cost cap, costs, Clay push |
 | `icp-answering` (skill) | The answering rules: stated proof only, confidence scale, same-name traps, cannot_answer |
 | `review-datapoints` (skill) | The manual data point review (resume, one data point at a time, record decisions) |
 | `datapoint-dev` (skill) | Changing a data point in the code with config, defaults, tests and docs kept in sync |
@@ -2471,13 +2472,13 @@ In `.claude/`, loaded automatically when you open the project:
 | List | Steps 1-2 and 5 | Steps 3-4 (AI) |
 |---|---|---|
 | One company or a list up to about 100 | `check_company` / `enrich_list` (+ `use_provider`) | **Claude in the chat** (`open_questions`, `submit_answers`): $0 API. In Claude Code, `/enrich-chat <csv>` runs it all, one `company-answerer` subagent per company, 5 at a time |
-| Bigger lists (over about 100, up to thousands) | `enrich_list` (+ `use_provider`) | **OpenAI** via `list_ai`: estimate first, then only with your approved cap. Claude can't answer tens of thousands of questions in a chat |
+| Bigger lists (over about 100, up to thousands) | `enrich_list` (+ `use_provider`) | **OpenAI**, on by default: `enrich_list` / `pull_clay_table` run it for lists over 100, `list_ai` for a saved list, inside the standing cap (`API_AI_MAX_COST_USD`, else $5, and the monthly budget). Claude can't answer tens of thousands of questions in a chat |
 
 **Up to about 100 companies in Claude Code:** type `/enrich-chat path/to/list.csv my_list`. It runs the free steps, answers every company's open questions with the `company-answerer` subagent (`.claude/agents/`: its own fresh context per company, so the main chat stays short; 5 in parallel), asks you before any provider credit, and shows the results. About 1,000-1,500 answers for 100 companies; expect roughly an hour and a good share of your Claude plan's usage.
 
-**Bigger lists, bulk workflow:** `enrich_list` (free, background) → `list_status` until done → `list_ai(list, "icp")` shows the estimate → approve a cap → `list_ai(list, "icp", max_cost_usd=<cap>)` → when done, the same for `"signals"` → `list_results` / `push_list_to_clay`.
+**Bigger lists, bulk workflow:** `enrich_list` (background: phase 1, AI, phase 2, AI) → `list_status` until done → `list_results` / `push_list_to_clay`. If an AI step was skipped (above the cap, monthly budget, no OpenAI key), `list_status` says why: `list_ai(list, phase, estimate_only=true)` shows the estimate, and `list_ai(list, phase, max_cost_usd=<cap>)` runs it with a higher cap you give. `use_openai=false` skips the AI steps.
 
-**In the chat path the model you're chatting with is the only AI** (Claude in Claude Code or Claude Desktop), at no API cost. The tool never calls OpenAI there; `list_ai` is the only way OpenAI is used through MCP:
+**In the chat path the model you're chatting with is the only AI** (Claude in Claude Code or Claude Desktop), at no API cost. The tool never calls OpenAI there; big lists (`enrich_list` / `pull_clay_table` over 100 companies, and `list_ai`) are the only way OpenAI is used through MCP:
 
 1. `check_company` (or `enrich_list`) runs the free layers: website rules and directories.
 2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ground rules, confidence scale; no ICP description, since the questions ask for facts), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
@@ -2495,7 +2496,7 @@ Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring
 | `open_questions` | The questions still open for a company, for the model to answer (phase 1, then phase 2). 3 at a time by default (the page text is repeated per question); they arrive in waterfall order, so call it again after each submit until it returns none. `next` says how many are left and when to move to phase 'signals' |
 | `submit_answers` | Saves the model's answers through the quality checks; returns what counted and the new verdict and score. `cannot_answer` items stay open (no other AI is used) |
 | `questions_overview` | For a whole list: open questions per company |
-| `list_ai` | **Big lists only.** The AI steps for a whole list with the OpenAI engine, in the background. Called without a cap it only returns the cost estimate; it runs only with `max_cost_usd` set to a cap you approved, and never above it or the monthly budget |
+| `list_ai` | **Big lists only.** The AI steps for a whole list with the OpenAI engine, in the background. Runs by default inside the standing cap (`API_AI_MAX_COST_USD`, else $5); `max_cost_usd` sets a higher cap you give, `estimate_only=true` only returns the estimate. Never above the cap or the monthly budget |
 | `enrich_list` | Start a CSV file as a list in the background (free waterfall steps); `use_provider=true` adds step 5 for each company where the finance check is still open (one search each) |
 | `list_status` | Progress and counts of a list |
 | `list_results` | Rows of a finished list (ICP = YES by default) |
@@ -2575,7 +2576,7 @@ Commands below assume you are in the project folder with the virtual environment
 
 | Level | What you check | Command | Cost |
 |---|---|---|---|
-| 1. Smoke test | Everything runs; the test list gets its known answers | `python -m enrich run examples/accuracy_test.csv --list accuracy_test` | Free |
+| 1. Smoke test | Everything runs; the test list gets its known answers | `python -m enrich run examples/accuracy_test.csv --list accuracy_test --no-ai` | Free |
 | 2. AI run | AI settles the open questions within budget | `python scripts/ai_check.py accuracy_test --phase icp` | About $0.05 per 10 companies |
 | 3. One company in depth | Every step for one company | `python -m enrich trace linear.app` | Free (`--ai` asks first) |
 | 4. One data point in depth | Each data point through all 5 layers | `python -m enrich waterfall linear.app --group all` | Free (`--ai`, `--providers` ask first) |
@@ -2629,7 +2630,7 @@ Set a monthly cap so testing can't overspend: `AI_MONTHLY_BUDGET_USD=10` (and `L
 ### 8.4 Smoke test (free)
 
 ```bash
-python -m enrich run examples/accuracy_test.csv --list accuracy_test --keep all
+python -m enrich run examples/accuracy_test.csv --list accuracy_test --keep all --no-ai
 python -m enrich evaluate accuracy_test --labels examples/accuracy_test.csv
 ```
 
@@ -2910,7 +2911,7 @@ These apply to every data point, in the review and in every run.
 1. **Only stated proof.** Every part of a definition must be shown by a quote. Something only implied is Unknown and the waterfall moves on. Unknown is never a No. Short explanations: proof first, little reasoning.
 2. **High confidence = the source clearly states it** (any source type: news, the company, an official record), about this company (domain match), not older than about 2 years. Medium = clearly stated but matched by name and location. Low = implied, name-only, outdated or conflicting (never counts).
 3. **Waterfall rule for all:** steps 1 and 2 (rules, directories) are free; if they find nothing, run step 3 (AI on our pages), then step 4 (AI web search) if still open, unless the data point's file switches a step off with a reason.
-4. **Through MCP, Claude answers AI questions for single companies and lists up to about 100** (in Claude Code: `/enrich-chat`, one `company-answerer` subagent per company), with the prompts in `config/prompts`; OpenAI is never called on that chat path. A question Claude can't answer the way it asks stays open. **Bigger lists use OpenAI** through the `list_ai` tool only (cost estimate first, then only with a cap the user approved), or the terminal, API and Clay.
+4. **Through MCP, Claude answers AI questions for single companies and lists up to about 100** (in Claude Code: `/enrich-chat`, one `company-answerer` subagent per company), with the prompts in `config/prompts`; OpenAI is never called on that chat path. A question Claude can't answer the way it asks stays open. **Bigger lists use OpenAI**, on by default (production): `enrich_list` / `pull_clay_table` over 100 companies and `list_ai`, inside the standing cost cap, or the terminal, API and Clay.
 5. **Prospeo only for the finance-person check (F13, F14), at most 1 credit per company** (one team search, cached 90 days; the company details that come with it go to the contacts CSV only, `<list>_contacts.csv`, not into other answers). Ask before using it anywhere else.
 6. **Size first:** work out the segment before the finance checks, and skip data points that can't score for that size. YC team size is part of the size waterfall.
 7. **Rules over AI where the words are in our data:** when the pages, code and DNS already show (or don't show) a tool name, no AI step (F19, F20).

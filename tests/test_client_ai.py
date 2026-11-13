@@ -94,20 +94,28 @@ class OpenAIFallback(unittest.TestCase):
         self.assertEqual(out["not_answered"]["questions"][0]["id"], self.q["id"])
         self.assertNotIn(self.q["id"], self.store.get_ai(DOMAIN, "icp"))
 
-    def test_openai_only_through_list_ai_with_an_approved_cap(self):
+    def test_list_ai_runs_by_default_inside_the_standing_cap(self):
         from enrich.integrations import mcp_server, service
         est = {"list": "big", "phase": "icp", "companies": 900, "chosen_mode": "accurate",
                "accurate": {"data_points": 4000, "worst_case_usd": 12.5}, "cheap": {"data_points": 4000, "worst_case_usd": 6.1}}
         with mock.patch.object(service, "estimate_ai", return_value=est), \
-                mock.patch.object(service, "start_ai", side_effect=AssertionError("ran without a cap")):
-            out = asyncio.run(mcp_server.list_ai("big"))
+                mock.patch.object(service, "start_ai", side_effect=AssertionError("estimate_only sent something")):
+            out = asyncio.run(mcp_server.list_ai("big", estimate_only=True))
         self.assertTrue(out["estimate_only"])
         self.assertIn("$12.50", out["next"])
-        with mock.patch.object(service, "start_ai", side_effect=service.CostLimit("above the limit")):
-            self.assertEqual(asyncio.run(mcp_server.list_ai("big", max_cost_usd=5))["refused"], "above the limit")
-        with mock.patch.object(service, "start_ai", return_value={"state": "running"}) as s:
-            asyncio.run(mcp_server.list_ai("big", max_cost_usd=15))
-        self.assertEqual(s.call_args.args[2]["max_cost_usd"], 15)
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test", "API_AI_MAX_COST_USD": "7"}):
+            with mock.patch.object(service, "start_ai", return_value={"state": "running"}) as s:
+                asyncio.run(mcp_server.list_ai("big"))  # no cap given: the standing one, no asking
+            self.assertEqual(s.call_args.args[2]["max_cost_usd"], 7)
+            with mock.patch.object(service, "start_ai", return_value={"state": "running"}) as s:
+                asyncio.run(mcp_server.list_ai("big", max_cost_usd=15))  # a cap the user gave
+            self.assertEqual(s.call_args.args[2]["max_cost_usd"], 15)
+            with mock.patch.object(service, "start_ai", side_effect=service.CostLimit("above the limit")):
+                out = asyncio.run(mcp_server.list_ai("big"))
+            self.assertEqual((out["started"], out["refused"]), (False, "above the limit"))
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": ""}), \
+                mock.patch.object(service, "start_ai", side_effect=AssertionError("ran without a key")):
+            self.assertIn("No OpenAI key", asyncio.run(mcp_server.list_ai("big"))["refused"])
 
     def test_list_ai_runs_inside_an_event_loop(self):
         # start_ai starts a background job, which needs a running loop: a plain def tool crashed with no message
@@ -121,9 +129,10 @@ class OpenAIFallback(unittest.TestCase):
         self.assertFalse(hasattr(client_ai, "openai_fallback"))  # the chat path never falls back to OpenAI
         tools = {t.name: t for t in asyncio.run(mcp_server.mcp.list_tools())}
         self.assertNotIn("allow_openai_fallback", tools["submit_answers"].input_schema["properties"])
-        for name in ("check_company", "enrich_list", "pull_clay_table"):  # free layers only: use_ai is never true
-            src = inspect.getsource(getattr(mcp_server, name))
-            self.assertNotIn("use_ai=True", src)
+        self.assertNotIn("use_ai=True", inspect.getsource(mcp_server.check_company))  # one company: Claude answers
+        from enrich.integrations import service
+        self.assertEqual([service.openai_for(n) for n in (5, 100, 101)], [False, False, True])  # lists: OpenAI only over 100
+        self.assertFalse(service.openai_for(500, False))
 
     def test_answered_questions_are_saved_as_the_attached_model(self):
         ans = {"id": self.q["id"], "answer_from": self.q["answer_from"], "answer": "unknown", "confidence": "low",

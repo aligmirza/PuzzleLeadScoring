@@ -1,13 +1,15 @@
 """Run the pipeline from code instead of the terminal. Used by the API and the MCP server.
 
 check_one()     one company, answered while you wait (for Clay's per-row HTTP API column)
-start_list()    a whole list in the background: phase 1, optional AI, phase 2, optional AI, final list,
+start_list()    a whole list in the background: phase 1, AI, phase 2, AI, final list,
                 optional push to a Clay webhook, optional callback. Progress is in lists/<name>/status.json.
 start_ai()      the AI step for an existing list, in the background
 also: lists_overview, company_detail, estimate_ai, rerun_rules, evaluate_list, runs, lookup, signals_reference
 
-AI never runs unless asked for, and every AI run is estimated first and refused above max_ai_cost_usd
-(default API_AI_MAX_COST_USD in .env, else $5).
+The API asks for the AI step by default (production); the MCP server never does (there Claude is the AI). Every AI
+run is estimated first and skipped, with the reason in the status, when it could cost more than max_cost_usd
+(default API_AI_MAX_COST_USD in .env, else $5) or the monthly budget, or when there is no OpenAI key: the free
+results are still saved and returned.
 """
 import os
 import asyncio
@@ -80,6 +82,26 @@ def estimate_ai(name: str, phase: str, mode: str | None = None, search_signals: 
     return out
 
 
+def ai_ready() -> str | None:
+    """None when the OpenAI step can run, else why not (no key). The API runs AI by default, so a server without a key
+    still answers with the free steps instead of failing."""
+    from ..ai import prompts as P
+    env = P.provider().get("api_key_env") or "OPENAI_API_KEY"
+    return None if os.environ.get(env, "").strip() else f"{env} is not set (python -m enrich settings --set {env}=...)"
+
+
+async def _ai_or_skip(store: Store, domains: list[str], phase: str, opts: dict) -> dict:
+    """The AI step, or a note why it was skipped (no key, above max_cost_usd, monthly budget used): the free results
+    are still saved and returned, and the open questions stay open for a later run."""
+    why = ai_ready()
+    if why:
+        return {"skipped": why}
+    try:
+        return await _ai(store, domains, phase, opts)
+    except CostLimit as e:
+        return {"skipped": str(e)}
+
+
 async def _ai(store: Store, domains: list[str], phase: str, opts: dict) -> dict:
     """Estimate, refuse above the limit, run, log. Returns the usage."""
     from ..ai import runner as ai
@@ -133,7 +155,7 @@ async def run_rows(folder: Path, rows: list[dict], signals: bool = True, use_ai:
     await phase1_icp._crawl_and_check(rows, store, Dashboard("", len(rows), "icp"), workers, 200, refresh)
     if use_ai:
         step("AI for phase 1")
-        step(None, ai_phase1=await _ai(store, [r["domain"] for r in rows], "icp", opts))
+        step(None, ai_phase1=await _ai_or_skip(store, [r["domain"] for r in rows], "icp", opts))
     if signals:
         picked, _ = phase2_signals.select(store, rows, only_yes=False)
         if picked:
@@ -141,7 +163,7 @@ async def run_rows(folder: Path, rows: list[dict], signals: bool = True, use_ai:
             await phase2_signals._crawl_and_check(picked, store, Dashboard("", len(picked), "signals"), workers, 200, refresh)
             if use_ai:
                 step("AI for phase 2")
-                step(None, ai_phase2=await _ai(store, [r["domain"] for r in picked], "signals", opts))
+                step(None, ai_phase2=await _ai_or_skip(store, [r["domain"] for r in picked], "signals", opts))
     return store
 
 
@@ -162,10 +184,11 @@ async def check_one(domain: str, company: str = "", employees: str = "", signals
     folder = LISTS / SINGLE_LIST
     folder.mkdir(parents=True, exist_ok=True)
     row = {"domain": d, "company": company, "employees": employees, "input": {}}
+    ai_steps: dict = {}
     task = _inflight.get(_key(d))
     if task is None or task.done():
         task = asyncio.ensure_future(run_rows(folder, [row], signals, use_ai, web, refresh, workers=1,
-                                              ai={**(ai or {}), "web": web}))
+                                              on_step=lambda s, **kw: ai_steps.update(kw), ai={**(ai or {}), "web": web}))
         _inflight[_key(d)] = task
     try:
         store = await asyncio.wait_for(asyncio.shield(task), timeout=wait_seconds)
@@ -177,6 +200,8 @@ async def check_one(domain: str, company: str = "", employees: str = "", signals
         from ..providers import run as prun
         step5 = await asyncio.to_thread(prun.step5_one, folder, store, d)
     out = {"status": "done", **findings(store, d, company, employees)}
+    if ai_steps:
+        out["ai_steps"] = ai_steps
     if step5 is not None:
         out["provider_step"] = step5
     return out
@@ -185,7 +210,8 @@ async def check_one(domain: str, company: str = "", employees: str = "", signals
 MAX_BATCH = 25
 
 
-async def check_many(companies: list, signals: bool = True, use_provider: bool = False, wait_seconds: float = 300) -> dict:
+async def check_many(companies: list, signals: bool = True, use_provider: bool = False, wait_seconds: float = 300,
+                     use_ai: bool = False, ai: dict | None = None) -> dict:
     """Several companies at once (free steps, up to 25): all of them download and run their rules at the same time,
     each going on to phase 2 as soon as it passes. Items are domains or {domain, company, employees}. Cached like
     check_one; a company already being checked is waited for, not started twice."""
@@ -205,7 +231,7 @@ async def check_many(companies: list, signals: bool = True, use_provider: bool =
     new = [r for r in rows if r["domain"] not in busy]
     tasks = {_inflight[_key(d)] for d in busy}
     if new:
-        task = asyncio.ensure_future(run_rows(folder, new, signals, False, True, False, workers=len(new)))
+        task = asyncio.ensure_future(run_rows(folder, new, signals, use_ai, True, False, workers=len(new), ai=ai))
         for r in new:
             _inflight[_key(r["domain"])] = task
         tasks.add(task)
@@ -374,10 +400,21 @@ async def push_contacts(name: str, webhook_url: str | None = None, decision_make
     return await clay.push_rows(rows, url)
 
 
+BIG_LIST = 100  # MCP: up to this many companies Claude answers in the chat; above it the OpenAI engine does
+
+
+def openai_for(rows: int, asked: bool | None = None) -> bool:
+    """MCP lists: the OpenAI AI step on (asked), or by default only for big lists (Claude answers the small ones)."""
+    return asked if asked is not None else rows > BIG_LIST
+
+
 def start_from_clay(table_id: str, name: str | None = None, limit: int = 0, **options) -> dict:
+    """options as start_list; use_ai=None (MCP) means on for a table over BIG_LIST rows."""
     rows, info = clay.pull_table(table_id, limit)
     if not rows:
         raise ValueError(f"Clay table {table_id} has no rows")
+    if options.get("use_ai") is None:
+        options["use_ai"] = openai_for(len(rows))
     status = start_list(name or f"clay_{table_id}", rows, source="clay", **options)
     status["clay"] = {"table_id": table_id, "columns": info["columns"], "truncated": info["truncated"]}
     return status

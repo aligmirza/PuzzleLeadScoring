@@ -86,7 +86,7 @@ There are three ways to use the model:
    5. Start with a rate limit of about 5 requests per 10 seconds. A new company takes 5 to 35 seconds; repeats are instant.
 
    Whole lists: an engineer can also score a whole list and push it into a Clay table through a webhook. Decision-makers found through LeadMagic, with their emails and mobiles, go into a second Clay table.
-* Command line or API (engineers): For big lists or a weekly batch, run `python -m enrich run leads.csv`, then `python -m enrich ai` (shows the cost and asks first), then `python -m enrich push leads`. For contacts: `python -m enrich people leads --emails` (LeadMagic), then `python -m enrich emails leads --phones` for mobile numbers. Every API call is documented in [openapi.json](openapi.json) for the CRM or other tools.
+* Command line or API (engineers): For big lists or a weekly batch, run `python -m enrich run leads.csv` (both phases with the AI step after each; it shows the cost and asks first, `--no-ai` for the free steps only), then `python -m enrich push leads`. The API runs the AI step by default too (send `"ai": false` to skip it); without an OpenAI key, or above the cost cap, it is skipped with a note and the free results still come back. For contacts: `python -m enrich people leads --emails` (LeadMagic), then `python -m enrich emails leads --phones` for mobile numbers. Every API call is documented in [openapi.json](openapi.json) for the CRM or other tools.
 
 ## Changing the Model
 

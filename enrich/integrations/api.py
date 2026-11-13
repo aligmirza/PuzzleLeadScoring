@@ -88,7 +88,9 @@ class CheckIn(BaseModel):
     company: str = ""
     employees: str = Field("", description="Employee count, used for the size segment")
     signals: bool = Field(True, description="Also run phase 2 (signals and lead score) if the company is ICP")
-    ai: bool = Field(False, description="Also run the AI step (costs money; capped by ai_options.max_cost_usd)")
+    ai: bool = Field(True, description="Run the AI step (on by default; send false for the free steps only). Costs money: "
+                                       "skipped with the reason in ai_steps above ai_options.max_cost_usd, the monthly "
+                                       "budget, or without an OpenAI key")
     ai_options: AiOptions = AiOptions()
     refresh: bool = Field(False, description="Download the website again instead of using the cache")
     wait_seconds: float = Field(45, description="Answer within this time; longer checks keep running, ask again")
@@ -99,7 +101,8 @@ class ListIn(BaseModel):
     rows: list[dict[str, Any]] = Field(description="Rows with at least a Domain (or Website) column; other columns are kept",
                                        examples=[[{"Company Name": "Linear", "Domain": "linear.app", "Owner": "Sam"}]])
     signals: bool = True
-    ai: bool = Field(False, description="Run the AI step after each phase (costs money; capped)")
+    ai: bool = Field(True, description="Run the AI step after each phase (on by default; send false for the free steps "
+                                       "only). Skipped with the reason in the status above the cost cap or without an OpenAI key")
     ai_options: AiOptions = AiOptions()
     push_to_clay: bool = Field(False, description="When done, push every row to a Clay table webhook")
     clay_webhook_url: str | None = Field(None, description="Clay webhook; default is CLAY_WEBHOOK_URL from settings")
@@ -155,7 +158,7 @@ class PullIn(BaseModel):
     name: str | None = None
     limit: int = Field(0, description="Only the first N rows (0 = all)")
     signals: bool = True
-    ai: bool = False
+    ai: bool = Field(True, description="Run the AI step (on by default; false for the free steps only)")
     ai_options: AiOptions = AiOptions()
     push_to_clay: bool = False
     clay_webhook_url: str | None = None
@@ -185,16 +188,19 @@ async def check(body: CheckIn):
 class BatchIn(BaseModel):
     companies: list[CheckIn] = Field(description="Up to 25 companies, each like the body of POST /v1/check")
     signals: bool = True
+    ai: bool = Field(True, description="Run the AI step (on by default; false for the free steps only)")
+    ai_options: AiOptions = AiOptions()
     wait_seconds: float = Field(300, description="How long to wait before answering 'still running'")
 
 
 @app.post("/v1/check/batch", dependencies=AUTH, tags=["Companies"])
 async def check_batch(body: BatchIn):
     """Up to 25 companies at once, answered while you wait: their free steps run at the same time. Same answers as
-    POST /v1/check for each (AI questions stay open; use a list with ai=true for those)."""
+    POST /v1/check for each, AI step included unless ai is false."""
     try:
         return await service.check_many([c.model_dump(include={"domain", "company", "employees"}) for c in body.companies],
-                                        body.signals, False, body.wait_seconds)
+                                        body.signals, False, body.wait_seconds, use_ai=body.ai,
+                                        ai={**body.ai_options.model_dump(), "web": body.ai_options.web})
     except (ValueError, RuntimeError) as e:
         _fail(e)
 
@@ -208,7 +214,7 @@ def all_lists():
 
 @app.post("/v1/lists", dependencies=AUTH, status_code=202, tags=["Lists"])
 async def create_list(body: ListIn):
-    """Start a whole list in the background: phase 1, optional AI, phase 2, optional AI, final list, optional Clay
+    """Start a whole list in the background: phase 1, AI (unless ai is false), phase 2, AI, final list, optional Clay
     push and callback. Follow it with GET /v1/lists/{name}."""
     try:
         return service.start_list(body.name, body.rows, body.signals, body.ai, body.ai_options.web, body.push_to_clay,
@@ -219,7 +225,7 @@ async def create_list(body: ListIn):
 
 @app.post("/v1/lists/upload", dependencies=AUTH, status_code=202, tags=["Lists"])
 async def upload_list(file: UploadFile = File(...), name: str | None = Form(None), signals: bool = Form(True),
-                      ai: bool = Form(False), mode: str | None = Form(None), max_cost_usd: float | None = Form(None),
+                      ai: bool = Form(True), mode: str | None = Form(None), max_cost_usd: float | None = Form(None),
                       push_to_clay: bool = Form(False), clay_webhook_url: str | None = Form(None),
                       callback_url: str | None = Form(None)):
     """Same as POST /v1/lists, with a CSV file upload."""

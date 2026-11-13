@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 SRC = ROOT / "connectors" / "claude-desktop"
 OUT = ROOT / "connectors" / "puzzle-lead-scoring.mcpb"
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 # Keys and caps people can enter in Claude Desktop (Settings > Extensions > Puzzle Lead Scoring > Configure), from the
 # shared list in enrich/core/settings.py (the hosted connector's /settings page uses the same one). Secret fields are
@@ -45,8 +45,8 @@ def manifest() -> dict:
         "long_description": (
             "Runs the Puzzle lead scoring pipeline from your copy of the PuzzleLeadScoring repository. Ask in plain "
             "English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push "
-            "the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost "
-            "nothing in OpenAI. LeadMagic credits are spent only after you approve a limit. Needs the repository set up "
+            "the results to Clay\". The AI steps always run: Claude answers them itself for companies and lists up "
+            "to about 100 (nothing in OpenAI); bigger lists use OpenAI inside the cost cap set under Configure. LeadMagic credits are spent only after you approve a limit. Needs the repository set up "
             "once (docs/HANDOFF.md, Setup). Add the LeadMagic key and the Clay webhooks under Configure; they are kept in "
             "your system keychain. Keys already in the project's .env work too."),
         "author": {"name": "Beat the Bush", "url": "https://beatthebush.co"},

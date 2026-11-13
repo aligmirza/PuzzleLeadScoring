@@ -3,7 +3,7 @@
 Two separate phases:
   python -m enrich icp leads.csv          phase 1: is it our ICP? (must-haves and exclusions only)
   python -m enrich signals leads          phase 2: fit, buying and weak signals, for companies that passed phase 1
-  python -m enrich run leads.csv          both phases, one after the other
+  python -m enrich run leads.csv          both phases with the AI step after each (shows the cost and asks; --no-ai: free only)
   python -m enrich ai leads --phase icp   answer phase 1's AI prompts with OpenAI (then --phase signals after phase 2)
 
 Other commands:
@@ -56,10 +56,27 @@ def cmd_signals(args):
     phase2_signals.run(list_dir(args.list), args.only_yes, args.workers, args.max_requests, args.refresh, args.keep, args.yes)
 
 
+def _run_ai(folder, phase: str, args) -> None:
+    """The AI step inside `run` (on by default): shows the cost and asks first unless --yes-ai; skipped with a note when
+    there is no OpenAI key."""
+    from .ai import runner as ai
+    from .integrations.service import ai_ready
+    why = ai_ready()
+    if why:
+        console.print(f"[yellow]AI step skipped: {why}. The open questions stay open.[/]")
+        return
+    console.rule()
+    ai.run(folder, phase, assume_yes=args.yes_ai)
+
+
 def cmd_run(args):
     folder = phase1_icp.run(Path(args.csv), args.list, args.workers, args.max_requests, args.limit, args.refresh, "all", False)
+    if not args.no_ai:
+        _run_ai(folder, "icp", args)
     console.rule()
     phase2_signals.run(folder, args.only_yes, args.workers, args.max_requests, args.refresh, args.keep, args.yes)
+    if not args.no_ai:
+        _run_ai(folder, "signals", args)
 
 
 def cmd_ai(args):
@@ -126,7 +143,7 @@ def cmd_pull(args):
         return
 
     async def go():
-        status = service.start_from_clay(args.table_id, args.list, args.limit, signals=not args.icp_only, use_ai=args.ai,
+        status = service.start_from_clay(args.table_id, args.list, args.limit, signals=not args.icp_only, use_ai=not args.no_ai,
                                          web=True, push_to_clay=args.push)
         console.print(f"Pulled {status['rows']} rows from Clay into list [bold]{status['list']}[/]; processing...")
         await service._jobs[status["list"]]
@@ -658,11 +675,14 @@ def main(argv: list[str] | None = None):
     speed(p)
     p.set_defaults(fn=cmd_signals)
 
-    p = sub.add_parser("run", help="both phases, one after the other")
+    p = sub.add_parser("run", help="both phases with the AI step after each (shows the cost and asks first)")
     p.add_argument("csv")
     p.add_argument("--list", help="list folder name (default: the CSV file name)")
     p.add_argument("--limit", type=int, default=0, help="only the first N rows")
     p.add_argument("--only-yes", action="store_true", help="phase 2 leaves out 'Needs AI check' companies")
+    p.add_argument("--no-ai", action="store_true", help="free steps only, no AI")
+    p.add_argument("--yes-ai", action="store_true", help="run the AI steps without asking about the cost (scheduled runs; "
+                                                         "the monthly budget still applies)")
     speed(p)
     p.set_defaults(fn=cmd_run)
 
@@ -715,7 +735,9 @@ def main(argv: list[str] | None = None):
     p.add_argument("--list", help="list name (default clay_<table id>)")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--icp-only", action="store_true", help="phase 1 only")
-    p.add_argument("--ai", action="store_true", help="also run the AI step (costs money)")
+    p.add_argument("--no-ai", action="store_true", help="free steps only (the AI step runs by default, capped by "
+                                                        "API_AI_MAX_COST_USD and the monthly budget)")
+    p.add_argument("--ai", action="store_true", help=argparse.SUPPRESS)  # old flag: AI is the default now
     p.add_argument("--push", action="store_true", help="push results to the Clay webhook when done")
     p.set_defaults(fn=cmd_pull)
 

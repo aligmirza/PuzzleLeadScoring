@@ -9,8 +9,9 @@ Pipeline: services (the default). If I wrote `product` in the arguments, pass `i
 
 1. Call `enrich_list` with the CSV path (and the list name if given). Then call `list_status` every 30 seconds until
    the state is `done`. Tell me how many companies and the ICP YES / NO / PENDING counts.
-2. Call `questions_overview(list_name)`. If more than 100 companies have open questions, stop and suggest `list_ai`
-   (OpenAI, with a cost estimate first) instead of answering in chat.
+2. Call `questions_overview(list_name)`. Over 100 companies, the list's AI steps already ran on the OpenAI engine
+   (`enrich_list` does that by default for big lists): report `list_status` and stop. Otherwise answer in chat below,
+   without asking first: the AI steps always run.
 3. Take `work_order` from `questions_overview` (best leads first) and, in that order, start one `company-answerer`
    subagent per company (give it the domain and the list name). Run them 5 at a time in parallel. If the usage limit
    is reached, stop and tell me how far it got: running `/enrich-chat` again later continues with what's left.
@@ -28,7 +29,7 @@ Pipeline: services (the default). If I wrote `product` in the arguments, pass `i
 7. As the GTM engineer who owns this pipeline, run the **improve-pipeline** skill: say what was fixed automatically,
    fix any crash (tests must pass), and show the other proposals with their proof for my OK.
 
-Never call `list_ai` or anything with OpenAI in this command unless I ask for it.
+For 100 companies or fewer, Claude answers; don't call `list_ai` for those unless I ask.
 
 If you change rules, prompts or roles.json during the run, the MCP server still runs the old code and
 `submit_answers` re-scores with it (a fixed company can flip back to NO). Ask me to reconnect it (`/mcp`), and

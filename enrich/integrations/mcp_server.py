@@ -33,7 +33,8 @@ mcp = MCPServer(
         "automatically, fix crashes in the code yourself (tests must pass, then tell the user), and show every other "
         "proposal with its proof and apply it only after the user says yes. Never lower the proof standard to get more "
         "answers. Through MCP YOU are the only "
-        "AI: you answer every AI question with the project's prompts; the tool never calls OpenAI or any other AI API. "
+        "AI for companies and lists up to 100: you answer every AI question with the project's prompts; for those the "
+        "tool never calls OpenAI or any other AI API. "
         "A question you can't answer the way it asks (e.g. no web search tool) is sent back as cannot_answer and stays open. "
         "Each data point follows its own waterfall (config/datapoints): free steps in check_company / enrich_list, then "
         "your answers (pages, then web), then step 5, the paid provider (LeadMagic, Puzzle's provider; Prospeo only without a LeadMagic key), only for the finance-person check: when submit_answers "
@@ -41,8 +42,12 @@ mcp = MCPServer(
         "Provider for a whole list: provider_companies (open data points) and find_contacts (decision-makers, optional emails) first return a plan with the most credits they could use; show it, and run only with a max_credits cap the user approved. find_emails fills in work emails (and mobiles if asked) with LeadMagic for the contacts found without one, with the same plan-then-cap rule. provider_status shows which provider is used and the credits left; list_contacts reads contacts already bought; Clay: clay_tables, pull_clay_table, push_list_to_clay (companies) and push_contacts_to_clay (people, its own webhook). "
         "Lists up to about 100 companies: answer in the chat, one company at a time per helper (in Claude Code, the "
         "company-answerer subagent, about 5 in parallel; the /enrich-chat command runs the whole flow). BIGGER LISTS: "
-        "don't answer in the chat; offer list_ai, which runs the AI steps with the OpenAI engine: show its estimate "
-        "first and run only with a cost cap the user approved. That is the only way OpenAI is used through MCP. Workflow for a company: check_company(domain) runs the free layers "
+        "don't answer in the chat: the AI steps run by default (production) on the OpenAI engine. enrich_list and "
+        "pull_clay_table start them on their own for lists over 100 companies, and list_ai runs them for a list already "
+        "saved; each runs inside the standing cost cap (API_AI_MAX_COST_USD, else $5, and the monthly AI budget) without "
+        "asking. Above the cap nothing is sent and the free results stay: show the estimate and ask the user for a "
+        "higher cap or cheap mode. Those are the only ways OpenAI is used through MCP. Always run the AI steps: after "
+        "the free steps, answer the open questions (or let list_ai run) without asking first. Workflow for a company: check_company(domain) runs the free layers "
         "(website rules and directories); then open_questions(domain) lists what is still open, with the page text and "
         "instructions; answer each one yourself (read the page text, or search the web for answer_from = web if you can), "
         "quoting your proof exactly; then submit_answers. Answers pass the same quality checks as any AI answer, and the "
@@ -101,8 +106,8 @@ def tool():
 async def check_company(domain: str, company: str = "", employees: str = "", include_signals: bool = True,
                         use_provider: bool = False, icp: str = "") -> dict:
     """Check one company against the ICP: the free waterfall steps (size, website rules and code checks, YC, SEC,
-    IRS, DNS). Example: domain='linear.app'. No OpenAI: questions still open are answered by you via open_questions
-    and submit_answers. use_provider=true (only after the user agrees; one LeadMagic search, or 1 Prospeo credit) runs step 5, the
+    IRS, DNS). Example: domain='linear.app'. No OpenAI: then always answer the questions still open yourself
+    (open_questions, submit_answers) without asking first. use_provider=true (only after the user agrees; one LeadMagic search, or 1 Prospeo credit) runs step 5, the
     finance-person check (F13, F14), if it is still open after your answers."""
     return await service.check_one(domain, company, employees, include_signals, False, wait_seconds=120,
                                    use_provider=use_provider)
@@ -120,16 +125,19 @@ async def check_companies(domains: list[str], include_signals: bool = True, use_
 
 @tool()
 async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool = True, push_to_clay: bool = False,
-                      use_provider: bool = False, icp: str = "") -> dict:
-    """Start enriching a CSV file of companies (needs a Domain or Website column) with the free waterfall steps.
-    Runs in the background; check progress with list_status, then answer open questions (questions_overview).
+                      use_provider: bool = False, use_openai: bool | None = None, icp: str = "") -> dict:
+    """Start enriching a CSV file of companies (needs a Domain or Website column) in the background: the free waterfall
+    steps, and for lists over 100 companies the AI steps on the OpenAI engine too (on by default, inside the standing
+    cost cap; use_openai=false to skip). Check progress with list_status; for 100 or fewer, answer the open questions
+    yourself (questions_overview).
     push_to_clay sends the results to the Clay webhook in settings when done. use_provider=true (only after the user
     agrees: one provider search per company) runs the finance-person check where it is still open."""
     import csv
     from pathlib import Path
     with open(Path(csv_path).expanduser(), newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
-    return service.start_list(list_name or Path(csv_path).stem, rows, include_signals, False, True, push_to_clay,
+    big = service.openai_for(len(rows), use_openai)
+    return service.start_list(list_name or Path(csv_path).stem, rows, include_signals, big, True, push_to_clay,
                               source="mcp", use_provider=use_provider)
 
 
@@ -178,9 +186,10 @@ def clay_tables() -> dict:
 
 @tool()
 async def pull_clay_table(table_id: str, list_name: str = "", limit: int = 0, include_signals: bool = True,
-                          push_to_clay: bool = False, icp: str = "") -> dict:
-    """Read a Clay table (id like t_abc123) and enrich it as a new list in the background."""
-    return service.start_from_clay(table_id, list_name or None, limit, signals=include_signals, use_ai=False,
+                          push_to_clay: bool = False, use_openai: bool | None = None, icp: str = "") -> dict:
+    """Read a Clay table (id like t_abc123) and enrich it as a new list in the background. Over 100 rows the AI steps
+    run on the OpenAI engine too (on by default, inside the standing cost cap; use_openai=false to skip)."""
+    return service.start_from_clay(table_id, list_name or None, limit, signals=include_signals, use_ai=use_openai,
                                    web=True, push_to_clay=push_to_clay)
 
 
@@ -316,24 +325,32 @@ def submit_answers(domain: str, answers: list[dict], list_name: str = service.SI
 
 
 @tool()
-async def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "", icp: str = "") -> dict:
+async def list_ai(list_name: str, phase: str = "icp", max_cost_usd: float = 0, mode: str = "", estimate_only: bool = False,
+                  icp: str = "") -> dict:
     """BIG LISTS ONLY (more than about 100 companies): the AI steps (pages, then web) for a whole list with the OpenAI
     engine, in the background, with the same prompts and checks. Up to about 100 companies answer the questions
-    yourself instead (open_questions, one company per helper). max_cost_usd=0 (default) only returns the cost estimate: show it to the user. Run it only after
-    the user approves a cap: call again with max_cost_usd = that cap. Nothing is sent above the cap or the monthly
-    AI budget. phase: icp first; after it finishes (list_status), run phase signals. mode: accurate (default) or cheap."""
-    if max_cost_usd <= 0:
+    yourself instead (open_questions, one company per helper). Runs by default (production) inside the standing cap:
+    max_cost_usd=0 uses API_AI_MAX_COST_USD (else $5); pass a higher cap only when the user gave one.
+    estimate_only=true returns the cost estimate and sends nothing. Nothing is sent above the cap or the monthly AI
+    budget: then show the estimate and ask the user for a higher cap or cheap mode. phase: icp first; after it
+    finishes (list_status), run phase signals. mode: accurate (default) or cheap."""
+    if estimate_only:
         est = service.estimate_ai(list_name, phase, mode or None)
         chosen = est[est["chosen_mode"]]
         return {"estimate_only": True, **est,
                 "next": (f"OpenAI would answer {chosen['data_points']} questions for {est['companies']} companies, "
                          f"worst case ${chosen['worst_case_usd']:.2f} ({est['chosen_mode']} mode; cheap mode "
-                         f"${est['cheap']['worst_case_usd']:.2f}). Ask the user to approve a cap, then call list_ai again "
-                         f"with max_cost_usd set to it.") if chosen["data_points"] else "No open AI questions in this phase."}
+                         f"${est['cheap']['worst_case_usd']:.2f}). Call list_ai without estimate_only to run it inside "
+                         f"the standing cap.") if chosen["data_points"] else "No open AI questions in this phase."}
+    why = service.ai_ready()
+    if why:
+        return {"started": False, "refused": f"No OpenAI key: {why}"}
+    cap = max_cost_usd if max_cost_usd > 0 else service.default_max_cost()
     try:
-        return service.start_ai(list_name, phase, {"max_cost_usd": max_cost_usd, "mode": mode or None})
+        return service.start_ai(list_name, phase, {"max_cost_usd": cap, "mode": mode or None})
     except service.CostLimit as e:
-        return {"started": False, "refused": str(e)}
+        return {"started": False, "refused": str(e), "cap_usd": cap,
+                "next": "Show the user this estimate and ask for a higher cap or mode='cheap'; never raise it yourself."}
 
 
 @tool()
