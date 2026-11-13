@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 SRC = ROOT / "connectors" / "claude-desktop"
 OUT = ROOT / "connectors" / "puzzle-lead-scoring.mcpb"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 
 def manifest() -> dict:
@@ -35,7 +35,7 @@ def manifest() -> dict:
             "the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost "
             "nothing in OpenAI. Prospeo credits are spent only after you approve a limit. Needs the repository set up "
             "once (docs/HANDOFF.md, Setup)."),
-        "author": {"name": "Puzzle"},
+        "author": {"name": "Beat the Bush", "url": "https://beatthebush.co"},
         "repository": {"type": "git", "url": "https://github.com/aligmirza/PuzzleLeadScoring"},
         "server": {
             "type": "python",
