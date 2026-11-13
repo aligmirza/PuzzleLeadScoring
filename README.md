@@ -20,9 +20,11 @@ All documentation is in **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md)**.
 ## Quick setup
 
 ```bash
+git clone https://github.com/aligmirza/PuzzleLeadScoring.git
+cd PuzzleLeadScoring
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m enrich settings --openai-key sk-...   # keys live in .env, never committed
+.venv/bin/python -m enrich settings --set LEADMAGIC_API_KEY=...   # keys live in .env, never committed
 
 # first test run on the 14-company sample
 .venv/bin/python scripts/icp_check.py examples/sample_leads.csv
@@ -30,11 +32,26 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests
 ```
 
-One-click Claude connectors: `connectors/puzzle-lead-scoring.mcpb` for Claude Desktop, and `python -m enrich mcp --http` for a hosted claude.ai connector ([docs/HANDOFF.md](docs/HANDOFF.md)).
+Every key is optional: without one, that step is skipped. Keys can also be added without a terminal, in the Claude Desktop extension's Configure screen or on the hosted connector's `/settings` page (below).
 
 Works on macOS, Linux and Windows (Python 3.10 or later; tested on 3.14). On Windows, use `py -m venv .venv` and `.venv\Scripts\python` in place of `.venv/bin/python` (PowerShell or Command Prompt); everything else is the same.
 
 Results land in `lists/<list>/output/`; the main file is `<list>_enriched.csv`.
+
+## Claude Desktop (one click)
+
+1. **Get a copy and set it up once:** Quick setup above, up to `pip install`. A ZIP from GitHub (Code > Download ZIP) works too; unzip it to a folder without spaces in its name.
+2. **Install the extension:** double-click `connectors/puzzle-lead-scoring.mcpb` and pick the project folder.
+3. **Add keys (optional):** Settings > Extensions > Puzzle Lead Scoring > **Configure**. Each box is optional and shows an example; keys are kept in the computer's keychain. Keys already in the folder's `.env` work too.
+4. **Restart Claude Desktop** (quit fully, Cmd+Q on Mac), then ask "show provider status".
+
+**Moving to a new copy** (a fresh clone or download): set it up (step 1), change **PuzzleLeadScoring folder** under Configure to the new folder, and restart Claude Desktop. Keys typed into Configure carry over; keys only in the old copy's `.env` don't, so copy that file across or paste them into Configure. Saved lists stay in the old copy's `lists/` and `cache/`: copy those folders across, or set `DATA_DIR` in `.env` so every copy shares one data folder.
+
+**Updating:** `git pull` in the folder, `.venv/bin/pip install -r requirements.txt` if `requirements.txt` changed, double-click the `.mcpb` again if it changed, then restart Claude Desktop.
+
+**If it doesn't start:** Claude Desktop's log for the extension says why. "No executable file at …/.venv/bin/python" means the folder wasn't set up (step 1) or Configure points at the wrong folder.
+
+**Hosted connector for the whole team** (claude.ai, nothing to install): `python -m enrich mcp --http --host 0.0.0.0 --public-url https://<address>`; keys at `https://<address>/settings` with the admin password (`MCP_ADMIN_PASSWORD` in `.env`). Details in [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## Three ways to use it
 
