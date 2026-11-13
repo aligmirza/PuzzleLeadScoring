@@ -33,11 +33,20 @@ class SettingsForm(unittest.TestCase):
 
     def test_keys_are_secret_caps_are_numbers(self):
         form = self.m["user_config"]
-        for field in ("leadmagic_api_key", "openai_api_key", "clay_webhook_url", "clay_contacts_webhook_url", "clay_webhook_token"):
+        for field in ("leadmagic_api_key", "openai_api_key", "clay_webhook_url", "clay_contacts_webhook_url",
+                      "clay_webhook_token", "prospeo_api_key"):
             self.assertTrue(form[field].get("sensitive"), field)
-        for field in ("leadmagic_monthly_credits", "ai_monthly_budget_usd"):
-            self.assertEqual(form[field]["type"], "number")
+        for field in ("leadmagic_monthly_credits", "ai_monthly_budget_usd", "api_ai_max_cost_usd", "provider_monthly_credits"):
+            self.assertEqual((form[field]["type"], form[field]["min"]), ("number", 0))
             self.assertNotIn("sensitive", form[field])
+        self.assertEqual((form["leadmagic_people_limit"]["min"], form["leadmagic_people_limit"]["max"]), (1, 50))
+
+    def test_every_field_is_marked_optional_with_an_example(self):
+        for field, spec in self.m["user_config"].items():
+            if field == "project_dir":
+                continue
+            self.assertTrue(spec["title"].endswith("(optional)"), field)
+            self.assertTrue(spec["description"].startswith("Optional.") and "Example:" in spec["description"], field)
 
     def test_launcher_knows_every_setting(self):
         self.assertEqual(set(launcher().SETTINGS), {var for _, var, *_ in build_mcpb.SETTINGS})

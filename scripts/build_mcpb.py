@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 SRC = ROOT / "connectors" / "claude-desktop"
 OUT = ROOT / "connectors" / "puzzle-lead-scoring.mcpb"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 # Keys and caps people can enter in Claude Desktop (Settings > Extensions > Puzzle Lead Scoring > Configure), from the
 # shared list in enrich/core/settings.py (the hosted connector's /settings page uses the same one). Secret fields are
@@ -25,8 +25,11 @@ VERSION = "1.2.0"
 # (field, env var, title, description, secret, type)
 from enrich.core.settings import EDITABLE  # noqa: E402
 
-SETTINGS = [(var.lower(), var, title, desc, secret, "number" if kind == "number" else "string")
-            for var, title, desc, secret, kind in EDITABLE]
+SETTINGS = [(var.lower(), var, f"{title} (optional)", f"Optional. {desc} Example: {example}", secret,
+             "number" if kind.startswith("number") else "string")
+            for var, title, desc, secret, kind, example in EDITABLE]
+LIMITS = {var.lower(): [int(x) for x in kind.split(":")[1].split("-")] for var, _, _, _, kind, _ in EDITABLE
+          if kind.startswith("number:")}
 
 
 def manifest() -> dict:
@@ -68,7 +71,9 @@ def manifest() -> dict:
                 "required": True,
             },
             **{field: {"type": kind, "title": title, "description": desc, "required": False,
-                       **({"sensitive": True} if secret else {}), **({"min": 0} if kind == "number" else {})}
+                       **({"sensitive": True} if secret else {}),
+                       **({"min": LIMITS.get(field, [0])[0]} if kind == "number" else {}),
+                       **({"max": LIMITS[field][1]} if field in LIMITS else {})}
                for field, _, title, desc, secret, kind in SETTINGS},
         },
         "tools": [{"name": t.name, "description": (t.description or "").strip().split("\n")[0][:300]} for t in tools],

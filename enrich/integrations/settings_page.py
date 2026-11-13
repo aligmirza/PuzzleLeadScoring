@@ -5,7 +5,7 @@
 Signed in with the ADMIN password (MCP_ADMIN_PASSWORD in .env, created on the first run), not the team's connector
 password: everyone who uses the connector knows that one, and they shouldn't all be able to replace the keys.
 
-What it does: one box per key in settings.EDITABLE (LeadMagic, Clay, OpenAI, monthly caps). A key is never shown
+What it does: one box per key in settings.EDITABLE (LeadMagic, Clay, OpenAI, Prospeo, caps), all optional. A key is never shown
 back, only "set" or "not set". A box left empty keeps the key; "Remove" clears it. Saved keys go to .env (mode 600)
 and into this running server at once; the API server (`python -m enrich serve`) reads .env when it starts, so
 restart it to use them there.
@@ -40,7 +40,7 @@ STYLE = """body{font-family:system-ui,sans-serif;max-width:640px;margin:6vh auto
 input,button{font-size:15px;padding:9px;box-sizing:border-box}input[type=password],input[type=text]{width:100%}
 label{font-weight:600;display:block;margin-top:18px}small{color:#666;display:block;margin:2px 0 6px}
 .set{color:#0a7d32}.unset{color:#999}.err{color:#b00}.ok{color:#0a7d32}button{cursor:pointer;margin-top:18px}
-.row{display:flex;gap:8px;align-items:center}.rm{font-weight:400;font-size:13px;white-space:nowrap}"""
+.row{display:flex;gap:8px;align-items:center}.opt{font-weight:400;color:#888}.rm{font-weight:400;font-size:13px;white-space:nowrap}"""
 
 
 def check(kind: str, value: str) -> str | None:
@@ -49,12 +49,21 @@ def check(kind: str, value: str) -> str | None:
         return "too long"
     if re.search(r"[\x00-\x1f\x7f]", value):
         return "has a line break or a control character"
-    if kind == "number":
+    if kind.startswith("number"):
+        low, high = (float(x) for x in kind.split(":")[1].split("-")) if ":" in kind else (0.0, None)
         try:
-            if float(value) < 0:
-                return "must be 0 or more"
+            n = float(value)
         except ValueError:
             return "must be a number"
+        if n < low or (high is not None and n > high):
+            return f"must be from {low:g} to {high:g}" if high is not None else f"must be {low:g} or more"
+    elif kind.startswith("choice:"):
+        options = kind.split(":", 1)[1].split("|")
+        if value.lower() not in options:
+            return "must be " + " or ".join(options)
+    elif kind == "email":
+        if not re.fullmatch(r"[^@\s\"'<>]+@[^@\s\"'<>]+\.[a-z]{2,}", value, re.I):
+            return "must be an email address"
     elif kind == "url":
         if not re.fullmatch(r"https://[^\s\"'<>]+", value):
             return "must be an https:// address"
@@ -118,18 +127,20 @@ class Page:
     def form(self, s: dict, note: str = "", errors: dict | None = None) -> Response:
         errors = errors or {}
         rows = []
-        for var, title, desc, secret, kind in settings.EDITABLE:
+        for var, title, desc, secret, kind, example in settings.EDITABLE:
             now = os.environ.get(var, "").strip()
             state = ('<span class="set">set</span>' if now else '<span class="unset">not set</span>') if secret else \
-                (f'<span class="set">{html.escape(now)}</span>' if now else '<span class="unset">no cap</span>')
+                (f'<span class="set">{html.escape(now)}</span>' if now else '<span class="unset">not set</span>')
             err = f'<small class="err">{html.escape(errors[var])}</small>' if var in errors else ""
-            rows.append(f'<label for="{var}">{html.escape(title)}: {state}</label><small>{html.escape(desc)}</small>{err}'
+            rows.append(f'<label for="{var}">{html.escape(title)} <span class="opt">(optional)</span>: {state}</label>'
+                        f'<small>{html.escape(desc)}</small>{err}'
                         f'<div class="row"><input id="{var}" name="{var}" type="{"password" if secret else "text"}" '
-                        f'autocomplete="off" placeholder="{"Paste a new value to replace it" if now else "Paste the value"}">'
+                        f'autocomplete="off" placeholder="{html.escape(("Optional. Paste a new value to replace it" if now else f"Optional, e.g. {example}"))}">'
                         f'<label class="rm"><input type="checkbox" name="remove_{var}"> Remove</label></div>')
         msg = f'<p class="{"err" if errors else "ok"}">{html.escape(note)}</p>' if note else ""
         return self._page(
-            f'{msg}<p>Keys are never shown here, only whether they are set. A box left empty keeps what is there.</p>'
+            f'{msg}<p>Every box is optional: without a key that step is skipped. Keys are never shown here, only whether '
+            f'they are set. A box left empty keeps what is there.</p>'
             f'<form method="post" action="/settings" autocomplete="off"><input type="hidden" name="csrf" value="{s["csrf"]}">'
             f'{"".join(rows)}<button type="submit">Save</button></form>'
             f'<form method="post" action="/settings/logout"><input type="hidden" name="csrf" value="{s["csrf"]}">'
@@ -182,8 +193,10 @@ class Page:
         if not s:
             return self.login_form("Your session ended. Sign in again.", 401)
         changes, errors = {}, {}
-        for var, title, _desc, _secret, kind in settings.EDITABLE:
+        for var, title, _desc, _secret, kind, _example in settings.EDITABLE:
             value = str(form.get(var, "")).strip()
+            if kind.startswith("choice:"):
+                value = value.lower()
             if form.get(f"remove_{var}"):
                 changes[var] = None
             elif value:

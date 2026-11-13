@@ -127,23 +127,43 @@ def api_key(create: bool = True, rotate: bool = False) -> str | None:
 
 
 # Keys people may set without a terminal: the Claude Desktop extension's Configure form (scripts/build_mcpb.py) and
-# the hosted connector's /settings page (integrations/settings_page.py). (env var, title, description, secret, kind)
+# the hosted connector's /settings page (integrations/settings_page.py). Every one is optional: without it that step
+# is skipped. Not here on purpose: the passwords and PUZZLE_API_KEY (generated; replacing them from a form could
+# lock people out) and settings that aren't API keys or limits.
+# (env var, title, description, secret, kind, example shown in the empty box)
+# kind: key, url, number, number:<min>-<max>, email, choice:<a>|<b>
 EDITABLE = [
     ("LEADMAGIC_API_KEY", "LeadMagic API key",
-     "Contacts, emails, mobiles and the finance check. app.leadmagic.io > API > API key.", True, "key"),
+     "Contacts, emails, mobiles and the finance check. app.leadmagic.io > API > API key.", True, "key", "lm_live_..."),
     ("LEADMAGIC_MONTHLY_CREDITS", "LeadMagic monthly credit cap", "Most LeadMagic credits per calendar month. Blank: no cap.",
-     False, "number"),
+     False, "number", "500"),
+    ("LEADMAGIC_PEOPLE_LIMIT", "LeadMagic people per company search",
+     "1 to 50. Blank: 25 (a full team list, which the finance check needs). 1 credit per person found.", False,
+     "number:1-50", "25"),
     ("CLAY_WEBHOOK_URL", "Clay webhook URL (companies)",
-     "Clay table > Add source > Webhook > copy URL. Scored companies are pushed here.", True, "url"),
+     "Clay table > Add source > Webhook > copy URL. Scored companies are pushed here.", True, "url",
+     "https://api.clay.com/v3/sources/webhook/..."),
     ("CLAY_CONTACTS_WEBHOOK_URL", "Clay webhook URL (contacts)", "A second Clay table for people, one row per person.",
-     True, "url"),
+     True, "url", "https://api.clay.com/v3/sources/webhook/..."),
     ("CLAY_WEBHOOK_TOKEN", "Clay webhook token", "Only if you turned on auth for the webhook (Clay > Webhook source settings).",
-     True, "key"),
-    ("OPENAI_API_KEY", "OpenAI API key (big lists only)",
+     True, "key", "the webhook's auth token"),
+    ("OPENAI_API_KEY", "OpenAI API key, big lists only",
      "Only for lists over about 100 companies; Claude answers smaller ones for free. platform.openai.com > API keys.",
-     True, "key"),
+     True, "key", "sk-..."),
     ("AI_MONTHLY_BUDGET_USD", "OpenAI monthly budget (USD)", "Most OpenAI spend per calendar month. Blank: no cap.",
-     False, "number"),
+     False, "number", "50"),
+    ("API_AI_MAX_COST_USD", "OpenAI cost limit per API request (USD)",
+     "Most one API request may spend on AI (estimated first). Blank: 5.", False, "number", "5"),
+    ("PROSPEO_API_KEY", "Prospeo API key, fallback",
+     "Only if there is no LeadMagic key: the same people and company data. app.prospeo.io > API > API key.", True, "key",
+     "pk_..."),
+    ("PROVIDER_MONTHLY_CREDITS", "Prospeo monthly credit cap", "Most Prospeo credits per calendar month. Blank: no cap.",
+     False, "number", "500"),
+    ("CONTACTS_PROVIDER", "Provider for people and company data",
+     "leadmagic or prospeo. Blank: LeadMagic when its key is set, else Prospeo.", False, "choice:leadmagic|prospeo",
+     "leadmagic"),
+    ("SEC_CONTACT_EMAIL", "Contact email for SEC lookups",
+     "SEC EDGAR asks automated tools for a contact email. Lookups work without it.", False, "email", "ops@puzzle.io"),
 ]
 
 

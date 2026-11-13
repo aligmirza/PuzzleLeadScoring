@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "puzzle-lead-scoring",
   "display_name": "Puzzle Lead Scoring",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Check companies against Puzzle's ideal customer profile, score them and set the outreach order.",
   "long_description": "Runs the Puzzle lead scoring pipeline from your copy of the PuzzleLeadScoring repository. Ask in plain English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. LeadMagic credits are spent only after you approve a limit. Needs the repository set up once (docs/HANDOFF.md, Setup). Add the LeadMagic key and the Clay webhooks under Configure; they are kept in your system keychain. Keys already in the project's .env work too.",
   "author": {
@@ -27,11 +27,17 @@
         "PYTHONUTF8": "1",
         "LEADMAGIC_API_KEY": "${user_config.leadmagic_api_key}",
         "LEADMAGIC_MONTHLY_CREDITS": "${user_config.leadmagic_monthly_credits}",
+        "LEADMAGIC_PEOPLE_LIMIT": "${user_config.leadmagic_people_limit}",
         "CLAY_WEBHOOK_URL": "${user_config.clay_webhook_url}",
         "CLAY_CONTACTS_WEBHOOK_URL": "${user_config.clay_contacts_webhook_url}",
         "CLAY_WEBHOOK_TOKEN": "${user_config.clay_webhook_token}",
         "OPENAI_API_KEY": "${user_config.openai_api_key}",
-        "AI_MONTHLY_BUDGET_USD": "${user_config.ai_monthly_budget_usd}"
+        "AI_MONTHLY_BUDGET_USD": "${user_config.ai_monthly_budget_usd}",
+        "API_AI_MAX_COST_USD": "${user_config.api_ai_max_cost_usd}",
+        "PROSPEO_API_KEY": "${user_config.prospeo_api_key}",
+        "PROVIDER_MONTHLY_CREDITS": "${user_config.provider_monthly_credits}",
+        "CONTACTS_PROVIDER": "${user_config.contacts_provider}",
+        "SEC_CONTACT_EMAIL": "${user_config.sec_contact_email}"
       },
       "platform_overrides": {
         "win32": {
@@ -49,52 +55,93 @@
     },
     "leadmagic_api_key": {
       "type": "string",
-      "title": "LeadMagic API key",
-      "description": "Contacts, emails, mobiles and the finance check. app.leadmagic.io > API > API key.",
+      "title": "LeadMagic API key (optional)",
+      "description": "Optional. Contacts, emails, mobiles and the finance check. app.leadmagic.io > API > API key. Example: lm_live_...",
       "required": false,
       "sensitive": true
     },
     "leadmagic_monthly_credits": {
       "type": "number",
-      "title": "LeadMagic monthly credit cap",
-      "description": "Most LeadMagic credits per calendar month. Blank: no cap.",
+      "title": "LeadMagic monthly credit cap (optional)",
+      "description": "Optional. Most LeadMagic credits per calendar month. Blank: no cap. Example: 500",
       "required": false,
       "min": 0
     },
+    "leadmagic_people_limit": {
+      "type": "number",
+      "title": "LeadMagic people per company search (optional)",
+      "description": "Optional. 1 to 50. Blank: 25 (a full team list, which the finance check needs). 1 credit per person found. Example: 25",
+      "required": false,
+      "min": 1,
+      "max": 50
+    },
     "clay_webhook_url": {
       "type": "string",
-      "title": "Clay webhook URL (companies)",
-      "description": "Clay table > Add source > Webhook > copy URL. Scored companies are pushed here.",
+      "title": "Clay webhook URL (companies) (optional)",
+      "description": "Optional. Clay table > Add source > Webhook > copy URL. Scored companies are pushed here. Example: https://api.clay.com/v3/sources/webhook/...",
       "required": false,
       "sensitive": true
     },
     "clay_contacts_webhook_url": {
       "type": "string",
-      "title": "Clay webhook URL (contacts)",
-      "description": "A second Clay table for people, one row per person.",
+      "title": "Clay webhook URL (contacts) (optional)",
+      "description": "Optional. A second Clay table for people, one row per person. Example: https://api.clay.com/v3/sources/webhook/...",
       "required": false,
       "sensitive": true
     },
     "clay_webhook_token": {
       "type": "string",
-      "title": "Clay webhook token",
-      "description": "Only if you turned on auth for the webhook (Clay > Webhook source settings).",
+      "title": "Clay webhook token (optional)",
+      "description": "Optional. Only if you turned on auth for the webhook (Clay > Webhook source settings). Example: the webhook's auth token",
       "required": false,
       "sensitive": true
     },
     "openai_api_key": {
       "type": "string",
-      "title": "OpenAI API key (big lists only)",
-      "description": "Only for lists over about 100 companies; Claude answers smaller ones for free. platform.openai.com > API keys.",
+      "title": "OpenAI API key, big lists only (optional)",
+      "description": "Optional. Only for lists over about 100 companies; Claude answers smaller ones for free. platform.openai.com > API keys. Example: sk-...",
       "required": false,
       "sensitive": true
     },
     "ai_monthly_budget_usd": {
       "type": "number",
-      "title": "OpenAI monthly budget (USD)",
-      "description": "Most OpenAI spend per calendar month. Blank: no cap.",
+      "title": "OpenAI monthly budget (USD) (optional)",
+      "description": "Optional. Most OpenAI spend per calendar month. Blank: no cap. Example: 50",
       "required": false,
       "min": 0
+    },
+    "api_ai_max_cost_usd": {
+      "type": "number",
+      "title": "OpenAI cost limit per API request (USD) (optional)",
+      "description": "Optional. Most one API request may spend on AI (estimated first). Blank: 5. Example: 5",
+      "required": false,
+      "min": 0
+    },
+    "prospeo_api_key": {
+      "type": "string",
+      "title": "Prospeo API key, fallback (optional)",
+      "description": "Optional. Only if there is no LeadMagic key: the same people and company data. app.prospeo.io > API > API key. Example: pk_...",
+      "required": false,
+      "sensitive": true
+    },
+    "provider_monthly_credits": {
+      "type": "number",
+      "title": "Prospeo monthly credit cap (optional)",
+      "description": "Optional. Most Prospeo credits per calendar month. Blank: no cap. Example: 500",
+      "required": false,
+      "min": 0
+    },
+    "contacts_provider": {
+      "type": "string",
+      "title": "Provider for people and company data (optional)",
+      "description": "Optional. leadmagic or prospeo. Blank: LeadMagic when its key is set, else Prospeo. Example: leadmagic",
+      "required": false
+    },
+    "sec_contact_email": {
+      "type": "string",
+      "title": "Contact email for SEC lookups (optional)",
+      "description": "Optional. SEC EDGAR asks automated tools for a contact email. Lookups work without it. Example: ops@puzzle.io",
+      "required": false
     }
   },
   "tools": [

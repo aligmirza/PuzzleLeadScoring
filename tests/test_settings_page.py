@@ -60,19 +60,34 @@ class SettingsPage(unittest.TestCase):
         self.assertEqual(self._sign_in().status_code, 303)
         page = self.c.get("/settings").text
         self.assertNotIn("lm_old_secret_value", page)
-        self.assertRegex(page, r"LeadMagic API key: <span class=\"set\">set")
-        self.assertRegex(page, r"OpenAI API key \(big lists only\): <span class=\"unset\">not set")
+        self.assertIn('LeadMagic API key <span class="opt">(optional)</span>: <span class="set">set', page)
+        self.assertIn('OpenAI API key, big lists only <span class="opt">(optional)</span>: <span class="unset">not set', page)
+
+    def test_every_box_is_optional_with_an_example(self):
+        self._sign_in()
+        page = self.c.get("/settings").text
+        for var, title, *_ in settings.EDITABLE:
+            self.assertIn(f'{title} <span class="opt">(optional)</span>', page.replace("&#x27;", "'"))
+        self.assertIn('placeholder="Optional, e.g. sk-..."', page)
+        self.assertIn('placeholder="Optional, e.g. https://api.clay.com/v3/sources/webhook/..."', page)
+        self.assertIn('placeholder="Optional. Paste a new value to replace it"', page)  # LeadMagic is set
+        r = self.c.post("/settings", data={"csrf": self._csrf()}, follow_redirects=False)  # all empty: fine, nothing changes
+        self.assertEqual(r.status_code, 303)
+        self.assertEqual(os.environ["LEADMAGIC_API_KEY"], "lm_old_secret_value")
         self.assertEqual(self.c.get("/settings").headers["cache-control"], "no-store")
 
     def test_save_replace_keep_and_remove(self):
         self._sign_in()
         r = self.c.post("/settings", data={"csrf": self._csrf(), "OPENAI_API_KEY": "sk-test123", "LEADMAGIC_MONTHLY_CREDITS": "500",
+                                           "CONTACTS_PROVIDER": "LeadMagic", "LEADMAGIC_PEOPLE_LIMIT": "10",
+                                           "SEC_CONTACT_EMAIL": "ops@puzzle.io", "PROSPEO_API_KEY": "pk_test",
                                            "CLAY_WEBHOOK_URL": "https://api.clay.com/v3/sources/webhook/abc"},
                         follow_redirects=False)
         self.assertEqual(r.status_code, 303)
         self.assertEqual(os.environ["OPENAI_API_KEY"], "sk-test123")  # live in the running server
         text = settings.ENV_FILE.read_text(encoding="utf-8")
-        for line in ("OPENAI_API_KEY=sk-test123", "LEADMAGIC_MONTHLY_CREDITS=500", "LEADMAGIC_API_KEY=lm_old_secret_value", "OTHER=keep"):
+        for line in ("OPENAI_API_KEY=sk-test123", "LEADMAGIC_MONTHLY_CREDITS=500", "CONTACTS_PROVIDER=leadmagic",
+                     "LEADMAGIC_PEOPLE_LIMIT=10", "SEC_CONTACT_EMAIL=ops@puzzle.io", "PROSPEO_API_KEY=pk_test", "LEADMAGIC_API_KEY=lm_old_secret_value", "OTHER=keep"):
             self.assertIn(line, text)  # empty box kept the LeadMagic key; unknown keys kept
         self.c.post("/settings", data={"csrf": self._csrf(), "remove_OPENAI_API_KEY": "on"})
         self.assertNotIn("OPENAI_API_KEY", os.environ)
@@ -82,7 +97,9 @@ class SettingsPage(unittest.TestCase):
         self._sign_in()
         csrf = self._csrf()
         for field, value in (("LEADMAGIC_API_KEY", "lm_x\nPUZZLE_API_KEY=stolen"), ("CLAY_WEBHOOK_URL", "http://not-https"),
-                             ("LEADMAGIC_MONTHLY_CREDITS", "lots"), ("OPENAI_API_KEY", "sk with spaces")):
+                             ("LEADMAGIC_MONTHLY_CREDITS", "lots"), ("OPENAI_API_KEY", "sk with spaces"),
+                             ("LEADMAGIC_PEOPLE_LIMIT", "80"), ("CONTACTS_PROVIDER", "apollo"),
+                             ("SEC_CONTACT_EMAIL", "not-an-email")):
             r = self.c.post("/settings", data={"csrf": csrf, field: value, "AI_MONTHLY_BUDGET_USD": "20"})
             self.assertEqual(r.status_code, 400, field)
         text = settings.ENV_FILE.read_text(encoding="utf-8")
