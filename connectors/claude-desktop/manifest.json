@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "puzzle-lead-scoring",
   "display_name": "Puzzle Lead Scoring",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Check companies against Puzzle's ideal customer profile, score them and set the outreach order.",
-  "long_description": "Runs the Puzzle lead scoring pipeline from your copy of the PuzzleLeadScoring repository. Ask in plain English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. LeadMagic credits are spent only after you approve a limit. Needs the repository set up once (docs/HANDOFF.md, Setup).",
+  "long_description": "Runs the Puzzle lead scoring pipeline from your copy of the PuzzleLeadScoring repository. Ask in plain English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. LeadMagic credits are spent only after you approve a limit. Needs the repository set up once (docs/HANDOFF.md, Setup). Add the LeadMagic key and the Clay webhooks under Configure; they are kept in your system keychain. Keys already in the project's .env work too.",
   "author": {
     "name": "Beat the Bush",
     "url": "https://beatthebush.co"
@@ -24,7 +24,14 @@
       ],
       "env": {
         "PUZZLE_PROJECT_DIR": "${user_config.project_dir}",
-        "PYTHONUTF8": "1"
+        "PYTHONUTF8": "1",
+        "LEADMAGIC_API_KEY": "${user_config.leadmagic_api_key}",
+        "LEADMAGIC_MONTHLY_CREDITS": "${user_config.leadmagic_monthly_credits}",
+        "CLAY_WEBHOOK_URL": "${user_config.clay_webhook_url}",
+        "CLAY_CONTACTS_WEBHOOK_URL": "${user_config.clay_contacts_webhook_url}",
+        "CLAY_WEBHOOK_TOKEN": "${user_config.clay_webhook_token}",
+        "OPENAI_API_KEY": "${user_config.openai_api_key}",
+        "AI_MONTHLY_BUDGET_USD": "${user_config.ai_monthly_budget_usd}"
       },
       "platform_overrides": {
         "win32": {
@@ -39,6 +46,55 @@
       "title": "PuzzleLeadScoring folder",
       "description": "The folder you cloned the repository into (it holds enrich/, config/ and .venv/).",
       "required": true
+    },
+    "leadmagic_api_key": {
+      "type": "string",
+      "title": "LeadMagic API key",
+      "description": "Contacts, emails, mobiles and the finance check. app.leadmagic.io > API > API key.",
+      "required": false,
+      "sensitive": true
+    },
+    "leadmagic_monthly_credits": {
+      "type": "number",
+      "title": "LeadMagic monthly credit cap",
+      "description": "Most LeadMagic credits per calendar month. Blank: no cap.",
+      "required": false,
+      "min": 0
+    },
+    "clay_webhook_url": {
+      "type": "string",
+      "title": "Clay webhook URL (companies)",
+      "description": "Clay table > Add source > Webhook > copy URL. Scored companies are pushed here.",
+      "required": false,
+      "sensitive": true
+    },
+    "clay_contacts_webhook_url": {
+      "type": "string",
+      "title": "Clay webhook URL (contacts)",
+      "description": "A second Clay table for people, one row per person.",
+      "required": false,
+      "sensitive": true
+    },
+    "clay_webhook_token": {
+      "type": "string",
+      "title": "Clay webhook token",
+      "description": "Only if you turned on auth for the webhook (Clay > Webhook source settings).",
+      "required": false,
+      "sensitive": true
+    },
+    "openai_api_key": {
+      "type": "string",
+      "title": "OpenAI API key (big lists only)",
+      "description": "Only for lists over about 100 companies; Claude answers smaller ones for free. platform.openai.com > API keys.",
+      "required": false,
+      "sensitive": true
+    },
+    "ai_monthly_budget_usd": {
+      "type": "number",
+      "title": "OpenAI monthly budget (USD)",
+      "description": "Most OpenAI spend per calendar month. Blank: no cap.",
+      "required": false,
+      "min": 0
     }
   },
   "tools": [

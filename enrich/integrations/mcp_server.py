@@ -428,9 +428,12 @@ def main(http: bool = False, host: str = "127.0.0.1", port: int = 8765, public_u
     from ..core import settings
     from ..core.paths import CACHE
     public_url = (public_url or f"http://{host}:{port}").rstrip("/")
+    from . import settings_page
     mcp_oauth.enable(mcp, public_url, settings.connector_password(), CACHE / "mcp_oauth.json")
+    settings_page.enable(mcp, public_url, settings.admin_password())
     common.console.print(f"Hosted MCP connector at {public_url}/mcp  (claude.ai: Settings > Connectors > Add custom "
                          f"connector). Sign-in password: MCP_CONNECTOR_PASSWORD in .env")
+    common.console.print(f"API keys page: {public_url}/settings  (admin password: MCP_ADMIN_PASSWORD in .env)")
     netloc = urlparse(public_url).netloc
     mcp.run("streamable-http", host=host, port=port, transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,

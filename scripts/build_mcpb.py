@@ -16,7 +16,17 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 SRC = ROOT / "connectors" / "claude-desktop"
 OUT = ROOT / "connectors" / "puzzle-lead-scoring.mcpb"
-VERSION = "1.1.1"
+VERSION = "1.2.0"
+
+# Keys and caps people can enter in Claude Desktop (Settings > Extensions > Puzzle Lead Scoring > Configure), from the
+# shared list in enrich/core/settings.py (the hosted connector's /settings page uses the same one). Secret fields are
+# kept in the macOS Keychain / Windows Credential Manager and passed to the server as these env vars; they win over
+# .env. A field left blank changes nothing: the launcher drops it, so .env's value is used.
+# (field, env var, title, description, secret, type)
+from enrich.core.settings import EDITABLE  # noqa: E402
+
+SETTINGS = [(var.lower(), var, title, desc, secret, "number" if kind == "number" else "string")
+            for var, title, desc, secret, kind in EDITABLE]
 
 
 def manifest() -> dict:
@@ -34,7 +44,8 @@ def manifest() -> dict:
             "English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push "
             "the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost "
             "nothing in OpenAI. LeadMagic credits are spent only after you approve a limit. Needs the repository set up "
-            "once (docs/HANDOFF.md, Setup)."),
+            "once (docs/HANDOFF.md, Setup). Add the LeadMagic key and the Clay webhooks under Configure; they are kept in "
+            "your system keychain. Keys already in the project's .env work too."),
         "author": {"name": "Beat the Bush", "url": "https://beatthebush.co"},
         "icon": "icon.png",  # Puzzle's logo (puzzle.io app icon, 256x256)
         "repository": {"type": "git", "url": "https://github.com/aligmirza/PuzzleLeadScoring"},
@@ -44,7 +55,8 @@ def manifest() -> dict:
             "mcp_config": {
                 "command": f"{folder}/.venv/bin/python",
                 "args": ["${__dirname}/server/main.py"],
-                "env": {"PUZZLE_PROJECT_DIR": folder, "PYTHONUTF8": "1"},
+                "env": {"PUZZLE_PROJECT_DIR": folder, "PYTHONUTF8": "1",
+                        **{env: f"${{user_config.{field}}}" for field, env, *_ in SETTINGS}},
                 "platform_overrides": {"win32": {"command": f"{folder}\\.venv\\Scripts\\python.exe"}},
             },
         },
@@ -55,6 +67,9 @@ def manifest() -> dict:
                 "description": "The folder you cloned the repository into (it holds enrich/, config/ and .venv/).",
                 "required": True,
             },
+            **{field: {"type": kind, "title": title, "description": desc, "required": False,
+                       **({"sensitive": True} if secret else {}), **({"min": 0} if kind == "number" else {})}
+               for field, _, title, desc, secret, kind in SETTINGS},
         },
         "tools": [{"name": t.name, "description": (t.description or "").strip().split("\n")[0][:300]} for t in tools],
         "compatibility": {"platforms": ["darwin", "win32", "linux"]},

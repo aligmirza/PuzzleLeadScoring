@@ -18,6 +18,8 @@ ENV_KEYS = [
      "Created automatically by `python -m enrich settings`", True),
     ("This project", "MCP_CONNECTOR_PASSWORD", "Password people enter once to connect Claude to the hosted MCP connector",
      "Created automatically by `python -m enrich mcp --http`", True),
+    ("This project", "MCP_ADMIN_PASSWORD", "Admin password for the hosted connector's settings page (/settings), where API keys are "
+     "added. Not the team's connector password", "Created automatically by `python -m enrich mcp --http`", True),
     ("AI", "OPENAI_API_KEY", "AI step (gpt-4o-mini): answers prompts and runs the web search step",
      "platform.openai.com > API keys", True),
     ("AI", "ANTHROPIC_API_KEY", "Alternative AI provider (Claude); set provider to anthropic in config/prompts/_shared.json",
@@ -122,6 +124,44 @@ def api_key(create: bool = True, rotate: bool = False) -> str | None:
         key = "pls_" + secrets.token_urlsafe(32)
         set_env("PUZZLE_API_KEY", key)
     return key
+
+
+# Keys people may set without a terminal: the Claude Desktop extension's Configure form (scripts/build_mcpb.py) and
+# the hosted connector's /settings page (integrations/settings_page.py). (env var, title, description, secret, kind)
+EDITABLE = [
+    ("LEADMAGIC_API_KEY", "LeadMagic API key",
+     "Contacts, emails, mobiles and the finance check. app.leadmagic.io > API > API key.", True, "key"),
+    ("LEADMAGIC_MONTHLY_CREDITS", "LeadMagic monthly credit cap", "Most LeadMagic credits per calendar month. Blank: no cap.",
+     False, "number"),
+    ("CLAY_WEBHOOK_URL", "Clay webhook URL (companies)",
+     "Clay table > Add source > Webhook > copy URL. Scored companies are pushed here.", True, "url"),
+    ("CLAY_CONTACTS_WEBHOOK_URL", "Clay webhook URL (contacts)", "A second Clay table for people, one row per person.",
+     True, "url"),
+    ("CLAY_WEBHOOK_TOKEN", "Clay webhook token", "Only if you turned on auth for the webhook (Clay > Webhook source settings).",
+     True, "key"),
+    ("OPENAI_API_KEY", "OpenAI API key (big lists only)",
+     "Only for lists over about 100 companies; Claude answers smaller ones for free. platform.openai.com > API keys.",
+     True, "key"),
+    ("AI_MONTHLY_BUDGET_USD", "OpenAI monthly budget (USD)", "Most OpenAI spend per calendar month. Blank: no cap.",
+     False, "number"),
+]
+
+
+def unset_env(key: str) -> None:
+    """Remove KEY from .env and from this process."""
+    values = _read_values()
+    values.pop(key, None)
+    write_files(values)
+    os.environ.pop(key, None)
+
+
+def admin_password(create: bool = True) -> str | None:
+    """The settings page's admin password (separate from the team's connector password). Created once, saved to .env."""
+    pw = os.environ.get("MCP_ADMIN_PASSWORD")
+    if not pw and create:
+        pw = secrets.token_urlsafe(18)
+        set_env("MCP_ADMIN_PASSWORD", pw)
+    return pw
 
 
 def connector_password(create: bool = True) -> str | None:
