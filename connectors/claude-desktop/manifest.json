@@ -2,13 +2,14 @@
   "manifest_version": "0.3",
   "name": "puzzle-lead-scoring",
   "display_name": "Puzzle Lead Scoring",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Check companies against Puzzle's ideal customer profile, score them and set the outreach order.",
-  "long_description": "Runs the Puzzle lead scoring pipeline from your copy of the PuzzleLeadScoring repository. Ask in plain English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. Prospeo credits are spent only after you approve a limit. Needs the repository set up once (docs/HANDOFF.md, Setup).",
+  "long_description": "Runs the Puzzle lead scoring pipeline from your copy of the PuzzleLeadScoring repository. Ask in plain English: \"check acme.com\", \"score leads.csv\", \"find decision-makers at the ICP companies\", \"push the results to Clay\". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. LeadMagic credits are spent only after you approve a limit. Needs the repository set up once (docs/HANDOFF.md, Setup).",
   "author": {
     "name": "Beat the Bush",
     "url": "https://beatthebush.co"
   },
+  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/aligmirza/PuzzleLeadScoring"
