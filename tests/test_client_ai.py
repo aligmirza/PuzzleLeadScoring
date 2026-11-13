@@ -5,6 +5,7 @@
 Offline: a synthetic company in a temporary lists folder; the OpenAI runner is replaced by a fake that records calls.
 """
 import asyncio
+import os
 import shutil
 import tempfile
 import unittest
@@ -135,7 +136,11 @@ class OpenAIFallback(unittest.TestCase):
 
 class Step5OverMCP(OpenAIFallback.__bases__[0]):
     """The Prospeo finance check through MCP: only when asked, only when still open, never a second credit."""
-    setUp = OpenAIFallback.setUp
+    def setUp(self):
+        OpenAIFallback.setUp(self)
+        p = mock.patch.dict(os.environ, {"CONTACTS_PROVIDER": "prospeo"})  # Prospeo's mocks, whatever .env holds
+        p.start()
+        self.addCleanup(p.stop)
 
     def _signals(self):
         from enrich.pipeline.common import run_rules
@@ -182,7 +187,7 @@ class Step5OverMCP(OpenAIFallback.__bases__[0]):
         from enrich.integrations import mcp_server
         tools = {t.name: t for t in asyncio.run(mcp_server.mcp.list_tools())}
         for name in ("check_company", "enrich_list"):
-            prop = tools[name].input_schema["properties"]["use_prospeo"]
+            prop = tools[name].input_schema["properties"]["use_provider"]
             self.assertIs(prop.get("default"), False)
 
 

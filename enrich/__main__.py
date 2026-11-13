@@ -21,6 +21,7 @@ Other commands:
   python -m enrich review leads           you check each data point's waterfall: right / wrong, saved for fixing and evaluate
   python -m enrich providers leads        Prospeo company data for data points still open (asks first)
   python -m enrich people leads           decision-makers at ICP companies from Prospeo, --emails for emails (asks first)
+  python -m enrich emails leads           LeadMagic: work emails (--phones: mobiles) for contacts without one (asks first)
   python -m enrich costs leads            the actual AI cost per company in a list
   python -m enrich usage                  companies checked and AI cost this month, per list, and the budget left
   python -m enrich cache                  the shared company cache (--clean-older 90 offers to delete old entries)
@@ -337,6 +338,11 @@ def cmd_people(args):
     run.people_step(list_dir(args.list), args.emails, args.per_company, args.strong_only, args.limit, args.yes)
 
 
+def cmd_emails(args):
+    from .providers import run
+    run.emails_step(list_dir(args.list), args.per_company, args.decision_makers_only, args.phones, args.limit, args.yes)
+
+
 def cmd_costs(args):
     folder = list_dir(args.list)
     store = Store(folder)
@@ -373,11 +379,12 @@ def cmd_usage(args):
     from .core import usage
     r = usage.report(args.month)
     t = Table(title=f"Usage {r['month']}", title_justify="left", header_style="bold")
-    for c in ("List", "Companies", "AI runs", "AI calls", "Web searches", "AI cost", "Provider credits"):
+    for c in ("List", "Companies", "AI runs", "AI calls", "Web searches", "AI cost", "Prospeo credits", "LeadMagic credits"):
         t.add_column(c, justify="left" if c == "List" else "right")
     for row in r["lists"]:
         t.add_row(row["list"], str(row["companies_checked"]), str(row["ai_runs"]), str(row["ai_calls"]),
-                  str(row["web_searches"]), f"${row['ai_cost_usd']:.4f}", f"{row['provider_credits']:g}")
+                  str(row["web_searches"]), f"${row['ai_cost_usd']:.4f}", f"{row['provider_credits']:g}",
+                  f"{row.get('leadmagic_credits', 0):g}")
     console.print(t)
     cap = r["budget_usd"]
     console.print(f"Total: {r['companies_checked']} companies checked, AI ${r['ai_cost_usd']:.4f}"
@@ -808,6 +815,16 @@ def main(argv: list[str] | None = None):
     p.add_argument("--limit", type=int, default=0, help="only the first N companies")
     p.add_argument("--yes", action="store_true", help="don't ask before spending")
     p.set_defaults(fn=cmd_people)
+
+    p = sub.add_parser("emails", help="LeadMagic: work emails (and mobiles) for the contacts Prospeo found without one "
+                                      "(asks before spending credits)")
+    p.add_argument("list")
+    p.add_argument("--phones", action="store_true", help="also find mobile numbers (5 credits each found)")
+    p.add_argument("--per-company", type=int, default=3, help="top contacts per company (default 3)")
+    p.add_argument("--decision-makers-only", action="store_true", help="only founders, C-suite and finance leads")
+    p.add_argument("--limit", type=int, default=0, help="only the first N companies")
+    p.add_argument("--yes", action="store_true", help="don't ask before spending")
+    p.set_defaults(fn=cmd_emails)
 
     p = sub.add_parser("costs", help="the actual AI cost per company in a list (phase 1, phase 2, web searches)")
     p.add_argument("list")

@@ -40,7 +40,7 @@ prompt the OpenAI step uses: `system_prompt` (from `config/prompts/_shared.json`
 - **F5:** a clearly stated software product = Yes (sells nationally); a services firm needs stated customers beyond
   its city.
 - **F8:** prices must be named plans with amounts; "Contact Sales" only is No (the rules usually settle it).
-- **F13 / F14:** need a real team list; leave them to Prospeo (step 5), never guess from the founders shown.
+- **F13 / F14:** need a real team list; leave them to the provider (step 5, LeadMagic), never guess from the founders shown.
 - **F15:** the company's own ARR, revenue, customer count or growth, not the market's or its customers'. Counts of
   people helped, patients, projects or jobs done, practices run or years of experience are not growth numbers.
 - **F16:** "hybrid" must be about how the team works ("hybrid team", "(Hybrid)"), not the product ("a hybrid between
@@ -58,5 +58,5 @@ prompt the OpenAI step uses: `system_prompt` (from `config/prompts/_shared.json`
 ## After answering
 
 `submit_answers(domain, answers, list_name)`. Read each answer's `result`: "not counted (...)" tells you why. Call
-`open_questions` again while `next` says questions remain. If `next` mentions **Step 5 / Prospeo**, ask the user before
-`check_company(domain, use_prospeo=true)` (1 credit).
+`open_questions` again while `next` says questions remain. If `next` mentions **Step 5**, ask the user before
+`check_company(domain, use_provider=true)` (one provider search).

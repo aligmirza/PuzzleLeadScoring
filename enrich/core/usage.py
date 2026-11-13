@@ -54,9 +54,11 @@ def report(month: str | None = None) -> dict:
     lists: dict[str, dict] = {}
     for name, e in _entries(month):
         row = lists.setdefault(name, {"list": name, "companies_checked": 0, "ai_runs": 0, "ai_calls": 0,
-                                      "web_searches": 0, "ai_cost_usd": 0.0, "provider_credits": 0.0})
+                                      "web_searches": 0, "ai_cost_usd": 0.0, "provider_credits": 0.0,
+                                      "leadmagic_credits": 0.0})
         if e.get("step", "").startswith("Provider"):
             row["provider_credits"] += e.get("provider_credits", 0) or 0
+            row["leadmagic_credits"] += e.get("leadmagic_credits", 0) or 0
         if e.get("step", "").startswith("Phase 1"):
             row["companies_checked"] = max(row["companies_checked"], e.get("companies", 0))
         if e.get("step", "").startswith("AI"):
@@ -68,5 +70,6 @@ def report(month: str | None = None) -> dict:
     cap = budget()
     return {"month": month, "lists": sorted(lists.values(), key=lambda r: -r["ai_cost_usd"]),
             "provider_credits": sum(r["provider_credits"] for r in lists.values()),
+            "leadmagic_credits": sum(r["leadmagic_credits"] for r in lists.values()),
             "companies_checked": sum(r["companies_checked"] for r in lists.values()), "ai_cost_usd": total,
             "budget_usd": cap, "budget_left_usd": round(cap - total, 4) if cap is not None else None}

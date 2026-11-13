@@ -441,19 +441,20 @@ class WebOnClue(unittest.TestCase):
         self.assertEqual(d.step("B1", "ai_web")["run"], "if_open")      # others unchanged
 
 
-def setUpModule():  # these tests describe the product pipeline's rules
+def setUpModule():  # these tests describe the product pipeline's rules; the Prospeo tests use Prospeo's mocks
     import os
-    global _PIPELINE_BEFORE
-    _PIPELINE_BEFORE = os.environ.get("ICP_PIPELINE")
-    os.environ["ICP_PIPELINE"] = "product"
+    global _ENV_BEFORE
+    _ENV_BEFORE = {k: os.environ.get(k) for k in ("ICP_PIPELINE", "CONTACTS_PROVIDER")}
+    os.environ.update(ICP_PIPELINE="product", CONTACTS_PROVIDER="prospeo")
 
 
 def tearDownModule():
     import os
-    if _PIPELINE_BEFORE is None:
-        os.environ.pop("ICP_PIPELINE", None)
-    else:
-        os.environ["ICP_PIPELINE"] = _PIPELINE_BEFORE
+    for k, v in _ENV_BEFORE.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 
 if __name__ == "__main__":

@@ -36,9 +36,9 @@ mcp = MCPServer(
         "AI: you answer every AI question with the project's prompts; the tool never calls OpenAI or any other AI API. "
         "A question you can't answer the way it asks (e.g. no web search tool) is sent back as cannot_answer and stays open. "
         "Each data point follows its own waterfall (config/datapoints): free steps in check_company / enrich_list, then "
-        "your answers (pages, then web), then step 5, Prospeo, only for the finance-person check: when submit_answers "
-        "says it's next, ask the user (1 credit per company) and only then call check_company with use_prospeo=true. "
-        "Prospeo for a whole list: prospeo_companies (open data points) and find_contacts (decision-makers, optional emails) first return a plan with the most credits they could use; show it, and run only with a max_credits cap the user approved. prospeo_status shows credits left; list_contacts reads contacts already bought; Clay: clay_tables, pull_clay_table, push_list_to_clay (companies) and push_contacts_to_clay (people, its own webhook). "
+        "your answers (pages, then web), then step 5, the paid provider (LeadMagic, Puzzle's provider; Prospeo only without a LeadMagic key), only for the finance-person check: when submit_answers "
+        "says it's next, ask the user (one search per company) and only then call check_company with use_provider=true. "
+        "Provider for a whole list: provider_companies (open data points) and find_contacts (decision-makers, optional emails) first return a plan with the most credits they could use; show it, and run only with a max_credits cap the user approved. find_emails fills in work emails (and mobiles if asked) with LeadMagic for the contacts found without one, with the same plan-then-cap rule. provider_status shows which provider is used and the credits left; list_contacts reads contacts already bought; Clay: clay_tables, pull_clay_table, push_list_to_clay (companies) and push_contacts_to_clay (people, its own webhook). "
         "Lists up to about 100 companies: answer in the chat, one company at a time per helper (in Claude Code, the "
         "company-answerer subagent, about 5 in parallel; the /enrich-chat command runs the whole flow). BIGGER LISTS: "
         "don't answer in the chat; offer list_ai, which runs the AI steps with the OpenAI engine: show its estimate "
@@ -99,38 +99,38 @@ def tool():
 
 @tool()
 async def check_company(domain: str, company: str = "", employees: str = "", include_signals: bool = True,
-                        use_prospeo: bool = False, icp: str = "") -> dict:
+                        use_provider: bool = False, icp: str = "") -> dict:
     """Check one company against the ICP: the free waterfall steps (size, website rules and code checks, YC, SEC,
     IRS, DNS). Example: domain='linear.app'. No OpenAI: questions still open are answered by you via open_questions
-    and submit_answers. use_prospeo=true (only after the user agrees: 1 Prospeo credit at most) runs step 5, the
+    and submit_answers. use_provider=true (only after the user agrees; one LeadMagic search, or 1 Prospeo credit) runs step 5, the
     finance-person check (F13, F14), if it is still open after your answers."""
     return await service.check_one(domain, company, employees, include_signals, False, wait_seconds=120,
-                                   use_prospeo=use_prospeo)
+                                   use_provider=use_provider)
 
 
 @tool()
-async def check_companies(domains: list[str], include_signals: bool = True, use_prospeo: bool = False, icp: str = "") -> dict:
+async def check_companies(domains: list[str], include_signals: bool = True, use_provider: bool = False, icp: str = "") -> dict:
     """Check several companies at once (up to 25): their free waterfall steps run at the same time, so 10 companies
     take about as long as the slowest one, not ten times one. Example: domains=['linear.app', 'resend.com'].
     Then answer each company's open questions (open_questions / submit_answers; in Claude Code one company-answerer
-    per company, 5 at a time). use_prospeo=true only after the user agreed (1 credit per company at most).
+    per company, 5 at a time). use_provider=true only after the user agreed (1 credit per company at most).
     For more than 25 companies use enrich_list."""
-    return await service.check_many(domains, include_signals, use_prospeo)
+    return await service.check_many(domains, include_signals, use_provider)
 
 
 @tool()
 async def enrich_list(csv_path: str, list_name: str = "", include_signals: bool = True, push_to_clay: bool = False,
-                      use_prospeo: bool = False, icp: str = "") -> dict:
+                      use_provider: bool = False, icp: str = "") -> dict:
     """Start enriching a CSV file of companies (needs a Domain or Website column) with the free waterfall steps.
     Runs in the background; check progress with list_status, then answer open questions (questions_overview).
-    push_to_clay sends the results to the Clay webhook in settings when done. use_prospeo=true (only after the user
-    agrees: at most 1 Prospeo credit per company) runs the finance-person check where it is still open."""
+    push_to_clay sends the results to the Clay webhook in settings when done. use_provider=true (only after the user
+    agrees: one provider search per company) runs the finance-person check where it is still open."""
     import csv
     from pathlib import Path
     with open(Path(csv_path).expanduser(), newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     return service.start_list(list_name or Path(csv_path).stem, rows, include_signals, False, True, push_to_clay,
-                              source="mcp", use_prospeo=use_prospeo)
+                              source="mcp", use_provider=use_provider)
 
 
 @tool()
@@ -193,7 +193,7 @@ async def push_list_to_clay(list_name: str, webhook_url: str = "", only_icp: boo
 @tool()
 async def push_contacts_to_clay(list_name: str, webhook_url: str = "", decision_makers_only: bool = False,
                                 icp: str = "") -> dict:
-    """Send a list's Prospeo contacts (one row per person, with the company's ICP, score and tier) to a Clay contacts
+    """Send a list's contacts (LeadMagic or Prospeo) (one row per person, with the company's ICP, score and tier) to a Clay contacts
     table webhook. Uses webhook_url, else CLAY_CONTACTS_WEBHOOK_URL from .env (never the companies webhook)."""
     return await service.push_contacts(list_name, webhook_url or None, decision_makers_only)
 
@@ -209,23 +209,25 @@ def _list_folder(list_name: str):
 
 
 def _need_prospeo():
-    from ..providers import prospeo
-    if not prospeo.enabled():  # a ValueError, not the CLI's SystemExit, so the server keeps running
-        raise ValueError("PROSPEO_API_KEY is not set. Add it to .env (python -m enrich settings --set PROSPEO_API_KEY=...).")
+    from ..providers import run
+    if not run.provider_enabled():  # a ValueError, not the CLI's SystemExit, so the server keeps running
+        raise ValueError("LEADMAGIC_API_KEY is not set. Add it to .env (python -m enrich settings --set LEADMAGIC_API_KEY=...).")
 
 
 @tool()
-def prospeo_status() -> dict:
-    """Prospeo: is the key set, plan, credits left, credits our lists used this month, and the monthly cap. Free."""
+def provider_status() -> dict:
+    """Which provider finds people and company data (LeadMagic when its key is set, else Prospeo), and for each: is
+    the key set, credits left, credits our lists used this month, and the monthly cap. Free."""
     from ..providers import run
     return run.status()
 
 
 @tool()
-async def prospeo_companies(list_name: str, phase: str = "icp", limit: int = 0, max_credits: float = 0,
+async def provider_companies(list_name: str, phase: str = "icp", limit: int = 0, max_credits: float = 0,
                             icp: str = "") -> dict:
-    """Prospeo company data (size, funding, location, team) for a list's companies whose data points Prospeo covers
-    are still open after the free steps and your answers. 1 credit per company at most, never twice for a company.
+    """Provider company data (LeadMagic, else Prospeo: size, funding, location, team) for a list's companies whose data points it covers
+    are still open after the free steps and your answers. One search per company, never twice (LeadMagic: 1 credit per
+    person returned unless the plan includes search; Prospeo: 1 per company); the plan shows the most it could cost.
     max_credits=0 (default) only returns the plan: which companies and the most it could cost. Show it to the user;
     run only after they approve, by calling again with max_credits = the approved cap. phase: icp or signals."""
     import asyncio
@@ -233,9 +235,9 @@ async def prospeo_companies(list_name: str, phase: str = "icp", limit: int = 0, 
     folder = _list_folder(list_name)
     plan = run.company_plan(folder, phase, limit)
     if max_credits <= 0 or not plan["domains"]:
-        return {"estimate_only": True, **plan, "prospeo": run.status(),
+        return {"estimate_only": True, **plan, "providers": run.status(),
                 "next": "Ask the user to approve a cap, then call again with max_credits." if plan["domains"]
-                        else "Nothing to send: the earlier steps answered what Prospeo covers."}
+                        else "Nothing to send: the earlier steps answered what the provider covers."}
     _need_prospeo()
     return await asyncio.to_thread(run.company_step, folder, phase, limit, True, max_credits)
 
@@ -243,8 +245,8 @@ async def prospeo_companies(list_name: str, phase: str = "icp", limit: int = 0, 
 @tool()
 async def find_contacts(list_name: str, emails: bool = False, per_company: int = 3, strong_only: bool = False,
                         limit: int = 0, max_credits: float = 0, icp: str = "") -> dict:
-    """Decision-makers at a list's ICP YES companies from Prospeo (founder, CEO, owner first, then finance, then COO /
-    operations). 1 credit per company (never twice for a company); emails=true also reveals verified emails, 1 credit
+    """Decision-makers at a list's ICP YES companies from LeadMagic (else Prospeo) (founder, CEO, owner first, then finance, then COO /
+    operations). One search per company, never twice (see provider_companies for the cost); emails=true also finds emails, 1 credit
     each, for the top per_company people. strong_only: Strong fit companies only.
     max_credits=0 (default) only returns the plan and the most it could cost. Show it to the user; run only after
     they approve, by calling again with max_credits = the approved cap. Then list_contacts or push_contacts_to_clay."""
@@ -253,7 +255,7 @@ async def find_contacts(list_name: str, emails: bool = False, per_company: int =
     folder = _list_folder(list_name)
     plan = run.people_plan(folder, emails, per_company, strong_only, limit)
     if max_credits <= 0 or not plan["domains"]:
-        return {"estimate_only": True, **plan, "prospeo": run.status(),
+        return {"estimate_only": True, **plan, "providers": run.status(),
                 "next": "Ask the user to approve a cap, then call again with max_credits." if plan["domains"]
                         else "No ICP company is waiting for contacts (see list_contacts)."}
     _need_prospeo()
@@ -261,9 +263,30 @@ async def find_contacts(list_name: str, emails: bool = False, per_company: int =
 
 
 @tool()
+async def find_emails(list_name: str, phones: bool = False, per_company: int = 3, decision_makers_only: bool = False,
+                      limit: int = 0, max_credits: float = 0, icp: str = "") -> dict:
+    """LeadMagic person enrichment: work emails for the contacts found (find_contacts) at ICP YES companies
+    that have no email yet, top per_company per company. 1 LeadMagic credit per valid email found (none found is
+    free); phones=true also finds mobile numbers, 5 credits each found. A person is never looked up twice.
+    max_credits=0 (default) only returns the plan and the most it could cost. Show it to the user; run only after
+    they approve, by calling again with max_credits = the approved cap. Then list_contacts or push_contacts_to_clay."""
+    import asyncio
+    from ..providers import leadmagic, run
+    folder = _list_folder(list_name)
+    plan = run.emails_plan(folder, per_company, decision_makers_only, phones, limit)
+    if max_credits <= 0 or not plan["people"]:
+        return {"estimate_only": True, **plan, "leadmagic": run.leadmagic_status(),
+                "next": "Ask the user to approve a cap, then call again with max_credits." if plan["people"]
+                        else "No contact is waiting for an email. Run find_contacts first if companies have no contacts."}
+    if not leadmagic.enabled():
+        raise ValueError("LEADMAGIC_API_KEY is not set. Add it to .env (python -m enrich settings --set LEADMAGIC_API_KEY=...).")
+    return await asyncio.to_thread(run.emails_step, folder, per_company, decision_makers_only, phones, limit, True, max_credits)
+
+
+@tool()
 def list_contacts(list_name: str, domain: str = "", decision_makers_only: bool = False, limit: int = 50,
                   icp: str = "") -> dict:
-    """The contacts Prospeo found for a list (name, title, LinkedIn, email if revealed, with the company's ICP, score
+    """The contacts found for a list (LeadMagic or Prospeo) (name, title, LinkedIn, email from Prospeo or LeadMagic, mobile, with the company's ICP, score
     and tier), one company with domain=. Free: reads what was already bought. Also written to
     lists/<list>/output/<list>_contacts.csv."""
     from ..providers import run

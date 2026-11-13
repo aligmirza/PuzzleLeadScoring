@@ -263,7 +263,8 @@ def write(folder: Path, store: Store) -> Path:
                      "Why": "Domain is empty or not a valid domain", "Lead tier": "Not ICP"}
         else:
             if domain not in cache:
-                people = (store.get_provider(domain).get("prospeo", {}).get("people") or {}).get("list")
+                from ..providers.apply import pick
+                people = (pick(store.get_provider(domain))[1].get("people") or {}).get("list")
                 cache[domain] = findings(domain, raw.get(ecol, "") if ecol else "",
                                          store.get_result(domain, "icp"), store.get_result(domain, "signals"), people)
                 cache[domain]["AI cost (USD)"] = costs.get(domain, {}).get("total_usd", 0)

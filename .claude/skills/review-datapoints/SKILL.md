@@ -14,7 +14,7 @@ Test list: `dp_test_lead_scoring` (isolated copy; production is never touched). 
 1. `dp_test_run(domain, data_point, "dp_test_lead_scoring", confirm_next=<true only after the user said yes/next>)`.
    If it answers `paused`, the previous data point is waiting for a review or a "yes": ask the user.
 2. If `next_step` waits for an AI stage, answer it with the **icp-answering** skill via `dp_test_answer` (pages
-   first; web only if the waterfall asks next). Never use OpenAI or Prospeo here unless the user asks.
+   first; web only if the waterfall asks next). Never use OpenAI, LeadMagic or Prospeo here unless the user asks.
 3. Show the result as a short table: step | status | proof (quote + link). One or two lines of explanation, no more.
    Point out real problems (weak proof, missing link, a rule that should have decided it) and offer a fix.
 4. Wait. Pass the user's choice to `dp_test_record(action)`: approve, reject, correct (expected_value + notes),

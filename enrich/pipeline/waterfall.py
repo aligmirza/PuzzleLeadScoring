@@ -25,7 +25,6 @@ from ..checks import datapoints
 from ..checks.rules import SIGNALS, UNKNOWN, VALUE_NAMES, extract, phase_of, signal_column
 from ..core.store import Store
 from ..providers import apply as provider_apply
-from ..providers import prospeo
 from ..engine import layers as L
 from . import trace
 from .common import LISTS, console, directory_finder, rel, run_rules
@@ -43,13 +42,13 @@ def _cell(v: dict | None) -> tuple[str, str]:
 
 
 def _provider_view(sid: str, bought: dict, phase: str) -> dict | None:
-    """What Prospeo alone says about this data point (applied to an empty answer sheet)."""
-    if not bought.get("prospeo"):
+    """What the provider (LeadMagic or Prospeo) alone says about this data point (applied to an empty answer sheet)."""
+    if not provider_apply.pick(bought)[0]:
         return None
     blank = {"signals": {k: {"value": UNKNOWN, "evidence": "", "url": "", "note": "", "method": "code"} for k in SIGNALS},
              "crawl": {}, "facts": {}}
     out = provider_apply.apply(copy.deepcopy(blank), bought, phase)["signals"][sid]
-    return out if out["value"] != UNKNOWN else {"value": UNKNOWN, "evidence": "Prospeo has nothing for this", "note": ""}
+    return out if out["value"] != UNKNOWN else {"value": UNKNOWN, "evidence": f"{provider_apply.NAMES[provider_apply.pick(bought)[0]]} has nothing for this", "note": ""}
 
 
 def run(domain: str, company: str = "", group: str = "must", use_ai: bool = False, use_providers: bool = False,
@@ -76,20 +75,23 @@ def run(domain: str, company: str = "", group: str = "must", use_ai: bool = Fals
                 if asyncio.run(trace._ai_step(store, domain, ph, None, assume_yes)):
                     run_rules(store, row, record, ph)
     if use_providers:
-        if not prospeo.enabled():
-            console.print("[yellow]Provider layer skipped: set PROSPEO_API_KEY (python -m enrich settings --set PROSPEO_API_KEY=...).[/]")
+        from ..providers import run as prun
+        if not prun.provider_enabled():
+            console.print("[yellow]Provider layer skipped: set LEADMAGIC_API_KEY (or PROSPEO_API_KEY) "
+                          "(python -m enrich settings --set LEADMAGIC_API_KEY=...).[/]")
         else:
-            from ..providers.run import _balance, _confirm, fetch_one, has_prospeo, save_one, write_contacts
-            if not has_prospeo(store, domain) and _confirm(
-                    f"[bold]Prospeo[/] for {domain}: 1 credit at most (one team search gives the company record and its "
-                    f"people; free if nothing is found). {_balance()}.", assume_yes):
+            from ..providers.run import _balance, _confirm, fetch_one, has_bought, save_one, write_contacts
+            if not has_bought(store, domain) and _confirm(
+                    f"[bold]{prun.LABEL[prun.source()]}[/] for {domain}: at most {prun._per_company_most()} credits (one team "
+                    f"search gives the company record and its people; free if nothing is found). {_balance()}.", assume_yes):
                 from ..providers.run import size_of
                 got = fetch_one(domain, size_of(store, domain))
                 save_one(store, domain, got)
                 write_contacts(folder, store)
                 from ..core.runlog import log
-                log(folder, "Provider: Prospeo company data and people (waterfall)", companies=1,
-                    matched=bool(got["company"]), provider_credits=got["credits"])
+                src = got.get("provider", "prospeo")
+                log(folder, f"Provider: {prun.LABEL[src]} company data and people (waterfall)", companies=1,
+                    matched=bool(got["company"]), **{prun.CAPS[src][1]: got["credits"]})
         for ph in phases:
             if store.get_result(domain, ph) and record:
                 run_rules(store, row, record, ph)

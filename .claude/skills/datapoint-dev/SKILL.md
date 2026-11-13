@@ -1,6 +1,6 @@
 ---
 name: datapoint-dev
-description: Change how a puzzle-lead-scoring data point is answered in the code - its waterfall steps, rules, prompts, directories, DNS / Wappalyzer, Prospeo, size skipping - keeping config, code defaults, tests and docs in sync. Use for any edit under enrich/ or config/ that affects a data point (M1-W12).
+description: Change how a puzzle-lead-scoring data point is answered in the code - its waterfall steps, rules, prompts, directories, DNS / Wappalyzer, LeadMagic / Prospeo, size skipping - keeping config, code defaults, tests and docs in sync. Use for any edit under enrich/ or config/ that affects a data point (M1-W12).
 ---
 
 # Changing a data point
@@ -17,7 +17,7 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
 | Code checks at download time | `enrich/sources/crawl.py` (`payment_scan`), `payments.py`, `wappalyzer.py` |
 | AI prompts (used by OpenAI and by Claude through MCP) | `config/prompts/<group>/<name>.json`, `_shared.json` |
 | AI answer quality checks | `enrich/ai/apply.py` |
-| Prospeo (step 5) | `enrich/providers/` (`run.py`, `apply.py`, `prospeo.py`) |
+| Provider (step 5) | `enrich/providers/` (`run.py`, `apply.py`, `leadmagic.py`, `prospeo.py`) |
 | Merge rules for directory / provider answers | `enrich/engine/merge.py` (`settle`) |
 | Scoring and segments | `config/icps/<pipeline>/scoring.json` and `roles.json`, `enrich/core/icp.py`, `enrich/checks/scoring.py` |
 
@@ -30,7 +30,7 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
    It must print `[]`.
 2. A new rule: proof must be stated (quote + page link via `sig(value, evidence, url, note)`); ambiguous = `CHECK`,
    never a guessed Yes/No. Exclusions and must-have No need strong proof.
-3. Add an offline test (no network): `tests/test_tech_checks.py` (rules, DNS, Wappalyzer, Prospeo with mocks),
+3. Add an offline test (no network): `tests/test_tech_checks.py` (rules, DNS, Wappalyzer, LeadMagic and Prospeo with mocks),
    `tests/test_dp_test.py`, `tests/test_client_ai.py`.
 4. Run lint and all tests:
    ```bash
@@ -45,7 +45,7 @@ description: Change how a puzzle-lead-scoring data point is answered in the code
 
 - Rules, prompt and settings changes bump version stamps: saved results re-run the free rules automatically; saved
   AI answers whose prompt changed are re-asked on the next AI run (costs money through OpenAI, $0 through MCP).
-- Never call paid services in tests or demos without the user's OK (OpenAI, Prospeo credits).
+- Never call paid services in tests or demos without the user's OK (OpenAI, LeadMagic or Prospeo credits).
 - The Mac's DNS sometimes fails: network code uses `PublicDNSFallback` (crawl.py).
 - After changing MCP tools, the user reconnects with `/mcp` (or a new chat) to load them. The same goes for rules,
   prompts and roles.json: until then the MCP server's `submit_answers` re-scores with the old code (on 2026-11-09 a

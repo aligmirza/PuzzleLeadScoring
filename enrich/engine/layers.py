@@ -20,7 +20,7 @@ RULES = Layer("rules", "Rules on the scraped pages", "rules", "free", False)
 DIRECTORIES = Layer("directories", "Free directories", "directories", "free", False)
 AI_PAGES = Layer("ai_pages", "AI reading our pages", "AI on pages", "about $0.0008 a question", True)
 AI_WEB = Layer("ai_web", "AI web search", "AI web search", "about $0.011 a search", True)
-PROVIDER = Layer("provider", "Provider (Prospeo)", "Prospeo", "1 credit per company", True)
+PROVIDER = Layer("provider", "Provider (LeadMagic or Prospeo)", "LeadMagic or Prospeo", "one search per company", True)
 ORDER = [RULES, DIRECTORIES, AI_PAGES, AI_WEB, PROVIDER]
 
 # which data points each layer can answer at all (code support); settings outside this have no effect

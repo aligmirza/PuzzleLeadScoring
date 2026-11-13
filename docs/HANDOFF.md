@@ -22,7 +22,7 @@ Good to know:
 Anyone can score leads by asking Claude, in two steps:
 
 1. Connect Claude to the model. Add the Puzzle Lead Scoring connector in claude.ai under Settings > Connectors, once. This needs no code on your computer: the model runs on Puzzle's server. If the shared connector is not set up yet, clone the repository and set it up (Setup, steps 1 to 3), then double-click `connectors/puzzle-lead-scoring.mcpb` to install it in Claude Desktop, or open Claude Code in the project folder.
-2. Ask Claude to score. For example "score leads.csv", "check acme.com" or "push the results to Clay". Claude returns who to contact, in what order, the offer to lead with and the proof.
+2. Ask Claude to score. For example "score leads.csv", "check acme.com", "find emails for the decision-makers" or "push the results to Clay". Claude returns who to contact, in what order, the offer to lead with and the proof.
 
 Scores can also appear directly in Clay, and the model can later be built into HubSpot (see Everyday Use).
 
@@ -40,7 +40,7 @@ Each company goes through the same steps, from the free sources to the paid ones
 * Website and public records: The company's website, job posts and free public records (YC, SEC, IRS, DNS) are read first, at no cost.
 * AI: Used only for what is still unknown. Through Claude (MCP) it costs nothing; from the command line it uses OpenAI, after a cost estimate and only with approval.
 * Bot checks: If a website shows a bot check (CAPTCHA), the model does not try to get past it. It answers the key questions from other public sources on the web instead.
-* Prospeo: Used only for the finance-person check and for contacts, with an approved credit limit.
+* LeadMagic: Used only for the finance-person check and for contacts (who to reach, their work email and, if asked, their mobile number), with an approved credit limit. Prospeo works the same way and is used only if there is no LeadMagic key.
 * Proof: Every answer carries a short quote and the page it came from. Anything not found stays Unknown and never counts against a company.
 
 How a lead is decided:
@@ -65,7 +65,7 @@ What sales receives for each company:
 An engineer needs about an hour, with Puzzle's own accounts and keys. Keys live only in the `.env` file, which is never committed. It runs on macOS, Linux and Windows.
 
 1. Install. Clone the repo (`git clone https://github.com/aligmirza/PuzzleLeadScoring.git`), then run `python3 -m venv .venv` and `.venv/bin/pip install -r requirements.txt`. On Windows use `py -m venv .venv` and `.venv\Scripts\pip`, and `.venv\Scripts\python` wherever these steps say `.venv/bin/python`.
-2. Add the keys. Run `python -m enrich settings` to add OpenAI (AI step for big lists), Prospeo (company data and contacts) and the Clay webhook URLs.
+2. Add the keys. Run `python -m enrich settings` to add OpenAI (AI step for big lists), LeadMagic (contacts, their emails and mobiles, and company data) and the Clay webhook URLs.
 3. Check it works. Run the 14-company test list from the README, then `.venv/bin/python -m unittest discover -s tests`.
 4. Start the API. Run `python -m enrich serve --host 0.0.0.0` on a small always-on server, with HTTPS in front. It needs disk space for saved pages, and Chrome for sites that only load with JavaScript (or the `--no-browser` option).
 5. Share the key. Show it with `python -m enrich settings --show-key` and give it only to the people setting up Clay.
@@ -77,7 +77,7 @@ There are three ways to use the model:
 * Claude (anyone): Connect it once, then ask in plain English, for example "check acme.com", "score leads.csv", "find decision-makers at the ICP companies" or "push the results to Clay". Claude answers the AI questions itself, so lists up to about 100 companies cost nothing in OpenAI. There are two one-click ways to connect:
    * Hosted connector (whole team, no install): Once the server runs (Setup, step 4), start the connector next to it with `python -m enrich mcp --http --host 0.0.0.0 --public-url https://<connector address>`, with HTTPS in front. Each person adds `https://<connector address>/mcp` in claude.ai under Settings > Connectors > Add custom connector, and enters the connector password once (MCP_CONNECTOR_PASSWORD in the server's `.env`). It then works in Claude on the web, desktop and phone.
    * Desktop extension (one computer): Double-click `connectors/puzzle-lead-scoring.mcpb` and Claude Desktop installs it on macOS or Windows, asking once for the project folder. The repository must be set up on that computer (Setup, steps 1 to 3). Claude Code connects by itself when opened in the project folder ([steps](DOCUMENTATION.md#mcp-server-claude-code-claude-desktop)).
-   * Which one needs the code: The model runs as one piece (website reading, rules, public records, scoring, settings, saved lists and the Prospeo and Clay keys), so the connector always runs where the code is. With the hosted connector the code lives only on the server, and everyone else just adds the address and enters the password; nothing is installed on their computers. The desktop extension and Claude Code run from a copy of the repository on that computer, set up with its own keys (Setup, steps 1 to 3). For the sales team and leadership, the hosted connector is the one to use.
+   * Which one needs the code: The model runs as one piece (website reading, rules, public records, scoring, settings, saved lists and the LeadMagic and Clay keys), so the connector always runs where the code is. With the hosted connector the code lives only on the server, and everyone else just adds the address and enters the password; nothing is installed on their computers. The desktop extension and Claude Code run from a copy of the repository on that computer, set up with its own keys (Setup, steps 1 to 3). For the sales team and leadership, the hosted connector is the one to use.
 * Clay (sales and GTM team): Scores appear as columns in Clay tables. In any table, add an HTTP API column:
    1. Method `POST`, endpoint `https://<server address>/v1/check`.
    2. Header `x-api-key` set to the API key.
@@ -85,8 +85,8 @@ There are three ways to use the model:
    4. Map the answer into columns: ICP, Reason, Outreach priority, Route, Value angle, Lead score, Lead tier.
    5. Start with a rate limit of about 5 requests per 10 seconds. A new company takes 5 to 35 seconds; repeats are instant.
 
-   Whole lists: an engineer can also score a whole list and push it into a Clay table through a webhook. Decision-makers found through Prospeo go into a second Clay table.
-* Command line or API (engineers): For big lists or a weekly batch, run `python -m enrich run leads.csv`, then `python -m enrich ai` (shows the cost and asks first), then `python -m enrich push leads`. Every API call is documented in [openapi.json](openapi.json) for the CRM or other tools.
+   Whole lists: an engineer can also score a whole list and push it into a Clay table through a webhook. Decision-makers found through LeadMagic, with their emails and mobiles, go into a second Clay table.
+* Command line or API (engineers): For big lists or a weekly batch, run `python -m enrich run leads.csv`, then `python -m enrich ai` (shows the cost and asks first), then `python -m enrich push leads`. For contacts: `python -m enrich people leads --emails` (LeadMagic), then `python -m enrich emails leads --phones` for mobile numbers. Every API call is documented in [openapi.json](openapi.json) for the CRM or other tools.
 
 ## Changing the Model
 
@@ -105,7 +105,7 @@ The model spends money only when asked:
 
 * Free steps: Website reading, rules and public records always run first.
 * OpenAI: Runs only on request, after a cost estimate, and stops at a cost cap ($5 by default for the API).
-* Prospeo: Credits are spent only with an approved limit; the first call shows the most it could use.
+* LeadMagic: Credits are spent only with an approved limit; the first call shows the most it could use, and `LEADMAGIC_MONTHLY_CREDITS` caps each month. A company's people search costs 1 credit per person returned (1 if nobody is found), an email 1 credit and a mobile 5 (emails and mobiles not found are free). No company or person is paid for twice. On a test, one company plus its finance lead's email cost 4 credits.
 * Access: Nothing can be deleted through the API, and every call needs the key. Keep the key and the server address private.
 
 ## Further Reading

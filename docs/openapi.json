@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PuzzleLeadScoring API",
-    "description": "Check companies against Puzzle's ICP, score them, and exchange lists with other tools. Every /v1 call needs the header `x-api-key`. AI only runs when asked, within a cost limit.",
+    "description": "Check companies against Puzzle's ICP, score them, and exchange lists with other tools. Every /v1 call needs the header `x-api-key`. Add `?icp=product` to use the product ICP pipeline; services is the default. AI only runs when asked, within a cost limit.",
     "version": "2.0"
   },
   "paths": {
@@ -11,12 +11,46 @@
         "summary": "Health",
         "description": "Is the API up (no key needed).",
         "operationId": "health_health_get",
+        "parameters": [
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -32,6 +66,28 @@
         "description": "One company, answered while you wait: ICP YES/NO/PENDING with the reason, lead score, tier, reasoning and\nevery data point. Cached, so asking again is instant. Use this from a Clay HTTP API column.",
         "operationId": "check_v1_check_post",
         "parameters": [
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
           {
             "name": "x-api-key",
             "in": "header",
@@ -107,6 +163,28 @@
         "operationId": "check_batch_v1_check_batch_post",
         "parameters": [
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -181,6 +259,28 @@
         "operationId": "all_lists_v1_lists_get",
         "parameters": [
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -242,6 +342,28 @@
         "description": "Start a whole list in the background: phase 1, optional AI, phase 2, optional AI, final list, optional Clay\npush and callback. Follow it with GET /v1/lists/{name}.",
         "operationId": "create_list_v1_lists_post",
         "parameters": [
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
           {
             "name": "x-api-key",
             "in": "header",
@@ -316,6 +438,28 @@
         "description": "Same as POST /v1/lists, with a CSV file upload.",
         "operationId": "upload_list_v1_lists_upload_post",
         "parameters": [
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
           {
             "name": "x-api-key",
             "in": "header",
@@ -398,6 +542,28 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -507,6 +673,28 @@
             }
           },
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -589,6 +777,28 @@
             }
           },
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -660,6 +870,28 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -743,6 +975,28 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -861,6 +1115,28 @@
             }
           },
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -934,6 +1210,28 @@
             }
           },
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -1004,7 +1302,7 @@
           "Providers"
         ],
         "summary": "Providers",
-        "description": "Prospeo company data, the last layer of the waterfall, for companies whose data points the earlier layers left\nopen. Refused above max_credits.",
+        "description": "Provider company data (LeadMagic first, else Prospeo), the last layer of the waterfall, for companies whose data points the earlier layers left\nopen. Refused above max_credits.",
         "operationId": "providers_v1_lists__name__providers_post",
         "parameters": [
           {
@@ -1015,6 +1313,28 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -1087,7 +1407,7 @@
           "Providers"
         ],
         "summary": "People",
-        "description": "Decision-makers at the list's ICP companies from Prospeo (founders, C-suite, finance lead), with emails if asked.\nRefused above max_credits.",
+        "description": "Decision-makers at the list's ICP companies from LeadMagic (or Prospeo) (founders, C-suite, finance lead), with emails if asked.\nRefused above max_credits.",
         "operationId": "people_v1_lists__name__people_post",
         "parameters": [
           {
@@ -1098,6 +1418,28 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -1164,6 +1506,111 @@
         }
       }
     },
+    "/v1/lists/{name}/emails": {
+      "post": {
+        "tags": [
+          "Providers"
+        ],
+        "summary": "Emails",
+        "description": "LeadMagic: work emails (and mobiles if asked) for the contacts found without one. 1 credit per valid\nemail found, 5 per mobile found. Refused above max_credits.",
+        "operationId": "emails_v1_lists__name__emails_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailsIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/lists/{name}/contacts": {
       "get": {
         "tags": [
@@ -1195,6 +1642,28 @@
               "default": "json",
               "title": "Format"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -1268,6 +1737,28 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -1353,6 +1844,28 @@
             }
           },
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -1424,6 +1937,28 @@
               "type": "string",
               "title": "Name"
             }
+          },
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
           },
           {
             "name": "x-api-key",
@@ -1535,6 +2070,28 @@
             }
           },
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -1615,6 +2172,28 @@
             }
           },
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -1678,6 +2257,28 @@
         "description": "Every data point: its column name in the results, group (must-have, exclusion, fit, buying, weak) and points.",
         "operationId": "signals_v1_signals_get",
         "parameters": [
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
           {
             "name": "x-api-key",
             "in": "header",
@@ -1743,6 +2344,28 @@
         "operationId": "clay_tables_v1_clay_tables_get",
         "parameters": [
           {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
+          {
             "name": "x-api-key",
             "in": "header",
             "required": false,
@@ -1806,6 +2429,28 @@
         "description": "Read a Clay table and process it as a new list.",
         "operationId": "clay_pull_v1_clay_pull_post",
         "parameters": [
+          {
+            "name": "icp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "services",
+                    "product"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline.",
+              "title": "Icp"
+            },
+            "description": "ICP pipeline: services (default) or product. Results and files are kept per pipeline."
+          },
           {
             "name": "x-api-key",
             "in": "header",
@@ -2116,6 +2761,43 @@
         ],
         "title": "CheckIn"
       },
+      "EmailsIn": {
+        "properties": {
+          "phones": {
+            "type": "boolean",
+            "title": "Phones",
+            "description": "Also find mobile numbers (5 LeadMagic credits each found)",
+            "default": false
+          },
+          "per_company": {
+            "type": "integer",
+            "title": "Per Company",
+            "description": "Top contacts per company: founder/CEO first, then the finance lead",
+            "default": 3
+          },
+          "decision_makers_only": {
+            "type": "boolean",
+            "title": "Decision Makers Only",
+            "description": "Only founders, C-suite and finance leads",
+            "default": false
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 0
+          },
+          "max_credits": {
+            "type": "number",
+            "title": "Max Credits",
+            "description": "Refuse if this could use more LeadMagic credits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_credits"
+        ],
+        "title": "EmailsIn"
+      },
       "EvaluateIn": {
         "properties": {
           "labels": {
@@ -2276,7 +2958,7 @@
           "max_credits": {
             "type": "number",
             "title": "Max Credits",
-            "description": "Refuse if this could use more Prospeo credits"
+            "description": "Refuse if this could use more provider credits"
           }
         },
         "type": "object",
@@ -2306,7 +2988,7 @@
           "max_credits": {
             "type": "number",
             "title": "Max Credits",
-            "description": "Refuse if this could use more Prospeo credits (1 per matched company)"
+            "description": "Refuse if this could use more provider credits (LeadMagic: 1 per person returned unless the plan includes search; Prospeo: 1 per company)"
           }
         },
         "type": "object",
@@ -2494,7 +3176,7 @@
     },
     {
       "name": "Providers",
-      "description": "Paid data (Prospeo): company data for open data points, and decision-makers. Always capped by max_credits."
+      "description": "Paid data (LeadMagic, or Prospeo without a LeadMagic key): company data for open data points, and decision-makers. Always capped by max_credits."
     },
     {
       "name": "Clay",

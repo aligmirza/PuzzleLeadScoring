@@ -78,23 +78,27 @@
     },
     {
       "name": "push_contacts_to_clay",
-      "description": "Send a list's Prospeo contacts (one row per person, with the company's ICP, score and tier) to a Clay contacts"
+      "description": "Send a list's contacts (LeadMagic or Prospeo) (one row per person, with the company's ICP, score and tier) to a Clay contacts"
     },
     {
-      "name": "prospeo_status",
-      "description": "Prospeo: is the key set, plan, credits left, credits our lists used this month, and the monthly cap. Free."
+      "name": "provider_status",
+      "description": "Which provider finds people and company data (LeadMagic when its key is set, else Prospeo), and for each: is"
     },
     {
-      "name": "prospeo_companies",
-      "description": "Prospeo company data (size, funding, location, team) for a list's companies whose data points Prospeo covers"
+      "name": "provider_companies",
+      "description": "Provider company data (LeadMagic, else Prospeo: size, funding, location, team) for a list's companies whose data points it covers"
     },
     {
       "name": "find_contacts",
-      "description": "Decision-makers at a list's ICP YES companies from Prospeo (founder, CEO, owner first, then finance, then COO /"
+      "description": "Decision-makers at a list's ICP YES companies from LeadMagic (else Prospeo) (founder, CEO, owner first, then finance, then COO /"
+    },
+    {
+      "name": "find_emails",
+      "description": "LeadMagic person enrichment: work emails for the contacts found (find_contacts) at ICP YES companies"
     },
     {
       "name": "list_contacts",
-      "description": "The contacts Prospeo found for a list (name, title, LinkedIn, email if revealed, with the company's ICP, score"
+      "description": "The contacts found for a list (LeadMagic or Prospeo) (name, title, LinkedIn, email from Prospeo or LeadMagic, mobile, with the company's ICP, score"
     },
     {
       "name": "open_questions",

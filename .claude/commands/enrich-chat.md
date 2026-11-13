@@ -19,8 +19,8 @@ Pipeline: services (the default). If I wrote `product` in the arguments, pass `i
 4. Call `questions_overview(list_name)` again. Any company with open questions left (a subagent stopped early, or
    ICP YES with phase 2 not started): start a new `company-answerer` for it, saying which phase to finish. Then report
    what is still open (only questions nobody could answer should remain).
-5. Step 5, Prospeo: count the ICP YES companies whose finance check (F13, F14) is still open. Ask me: "Run the Prospeo
-   finance check for N companies (at most N credits)?" Only if I say yes, call `check_company(domain, use_prospeo=true)`
+5. Step 5, the provider (LeadMagic): count the ICP YES companies whose finance check (F13, F14) is still open. Ask me: "Run the LeadMagic
+   finance check for N companies (at most N credits)?" Only if I say yes, call `check_company(domain, use_provider=true)`
    for each of them.
 6. Call `list_results(list_name)` and show a short table: company, ICP, score, tier, top signals. Say where the files
    are (`lists/<list_name>/output/`, contacts in `<list_name>_contacts.csv`).

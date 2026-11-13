@@ -131,7 +131,7 @@ An engineer needs about an hour. Use Puzzle's own accounts and keys; keys live o
    python3 -m venv .venv
    .venv/bin/pip install -r requirements.txt
    ```
-2. Add the keys with `python -m enrich settings`: OpenAI (AI step for big lists), Prospeo (company data and contacts) and the Clay webhook URLs (see [Keys and settings](#keys-and-settings)).
+2. Add the keys with `python -m enrich settings`: OpenAI (AI step for big lists), LeadMagic (contacts, their emails and mobiles, and company data) and the Clay webhook URLs (see [Keys and settings](#keys-and-settings)).
 3. Run the 14-company test list to check it works, then the automated tests:
    ```bash
    .venv/bin/python scripts/icp_check.py examples/sample_leads.csv
@@ -157,8 +157,13 @@ All keys live in `.env` at the project root, each with a comment saying what it'
 | Clay | `CLAY_WEBHOOK_TOKEN` | That webhook's auth token, if it has one | Used |
 | Clay | `CLAY_CONTACTS_WEBHOOK_URL` | Clay table for contacts (`push_contacts_to_clay`); same token | Used |
 | Clay | `CLAY_API_KEY` | Clay Public API (pull and push work without it, through `clay login`) | Not used yet |
-| Data providers | `PROSPEO_API_KEY` | Prospeo: company data (last layer of the waterfall) and people | Used when set |
-| Data providers | `PROVIDER_MONTHLY_CREDITS` | Cap on provider credits per month | Optional |
+| Data providers | `LEADMAGIC_API_KEY` | LeadMagic, Puzzle's provider and used first: people at a company (contacts, the finance check), company data, work emails and mobiles | Used when set |
+| Data providers | `LEADMAGIC_MONTHLY_CREDITS` | Cap on LeadMagic credits per month | Optional |
+| Data providers | `LEADMAGIC_PEOPLE_LIMIT` | People asked for per company search (default 25) | Optional |
+| Data providers | `PROSPEO_API_KEY` | Prospeo: the same people and company data, used only without a LeadMagic key | Optional |
+| Data providers | `PROVIDER_MONTHLY_CREDITS` | Cap on Prospeo credits per month | Optional |
+| Data providers | `CONTACTS_PROVIDER` | Force `leadmagic` or `prospeo` (blank: LeadMagic when its key is set) | Optional |
+| This project | `LEARNING_AUTO_APPLY` | Learning loop: 1 (default) applies safe fixes automatically; 0 = everything waits for approval | Optional |
 | Free directories | `SEC_CONTACT_EMAIL` | Contact email SEC EDGAR asks automated tools to send (YC, SEC and IRS need no key) | Optional |
 | Other data tools | `CRUNCHBASE_API_KEY`, `APOLLO_API_KEY`, `PDL_API_KEY`, `SEARCH_API_KEY` | Funding, headcount, company data, a separate web search service | Planned |
 
@@ -272,8 +277,9 @@ enrich/
     review.py         you mark each data point right or wrong; review.csv and labels.csv
   providers/          paid data, the last layer
     prospeo.py        Prospeo: company data, people search, email reveal, credit balance
+    leadmagic.py      LeadMagic (first): people search, company search, email and mobile finder, credit balance
     apply.py          provider data into answers (medium strength: never makes a company NO alone)
-    run.py            the providers and people steps for a list; contacts file
+    run.py            the providers, people and emails steps for a list; contacts file
   integrations/       using it from outside
     api.py            HTTP API (python -m enrich serve)
     service.py        runs the pipeline from code, for the API and MCP
@@ -322,11 +328,12 @@ AI options:
 |---|---|
 | See all lists: ICP yes / needs check / no, signals done, disk use | `python -m enrich lists` |
 | See every answer and its proof for one company | `python -m enrich explain linear.app` |
-| See each must-have (or any group) through every layer: rules, directories, AI on pages, AI web search, Prospeo | `python -m enrich waterfall linear.app` (add `--ai`, `--providers`; each asks before spending; `--group exclusions/fit/buying/weak/all`) |
+| See each must-have (or any group) through every layer: rules, directories, AI on pages, AI web search, provider (LeadMagic) | `python -m enrich waterfall linear.app` (add `--ai`, `--providers`; each asks before spending; `--group exclusions/fit/buying/weak/all`) |
 | See every data point's waterfall settings, or one in full | `python -m enrich datapoints`, `python -m enrich datapoints --show M3` |
 | Check each data point's waterfall yourself and mark it right or wrong (Enter / n / s / q); saved to `review.csv`, and as labels for `evaluate` | `python -m enrich review accuracy_test` (or one company: `review linear.app`; `--group all`) |
-| Fill data points still open with Prospeo company data (1 credit per matched company) | `python -m enrich providers leads --phase icp` (asks first) |
+| Fill data points still open with provider company data (LeadMagic, else Prospeo) | `python -m enrich providers leads --phase icp` (asks first) |
 | Find decision-makers at ICP companies (founder/CEO, finance lead), with emails if wanted | `python -m enrich people leads --emails` (asks first; writes `leads_contacts.csv`) |
+| Find work emails (and mobiles) with LeadMagic for the contacts found without one | `python -m enrich emails leads` (asks first; `--phones` for mobiles, `--decision-makers-only`, `--per-company 3`) |
 | Follow one company through every step, one at a time (input, download, rules, directories, verdict, AI, signals, score) | `python -m enrich trace linear.app` (add `--ai` for the AI steps; asks before spending). Saved as a report in `lists/trace_linear_app/output/` |
 | Re-check saved pages after changing a rule (no downloading) | `python -m enrich rules leads` (add `--phase icp`, `--phase signals` or `--phase both`) |
 | Re-read open jobs for a list downloaded before (13 job boards, careers pages; free) | `python -m enrich jobs leads` |
@@ -435,15 +442,15 @@ The phases come from the pipeline: phase 1 is that pipeline's must-haves and exc
 ```mermaid
 flowchart TD
     A["Company row<br/>domain, name, employees"] --> B["Download site (free)<br/>pages, job boards, code scan,<br/>Wappalyzer, JavaScript pages in a browser"]
-    B --> C["Size first<br/>list → Prospeo → YC → AI → SMB"]
+    B --> C["Size first<br/>list → provider → YC → AI → SMB"]
     C --> D["Phase 1, one after another<br/>M1 → M2 → M3 → M4 → E1–E6<br/>a proven No stops the rest"]
     D --> E{"ICP verdict"}
-    E -- "NO (proof)" --> X["Stop: the rest of phase 1 is Not applicable,<br/>no phase 2, no Prospeo"]
+    E -- "NO (proof)" --> X["Stop: the rest of phase 1 is Not applicable,<br/>no phase 2, no paid provider"]
     E -- "YES / PENDING" --> F["Phase 2: fit, buying, weak<br/>F1–F21, B1–B14, W1–W12<br/>most valuable questions first;<br/>children wait for their parents"]
     F --> G{"Can the tier still change?"}
     G -- "no" --> H["Stop early: skip the rest"]
     G -- "yes" --> F
-    F --> I["Step 5: Prospeo finance check<br/>F13, F14 · 1 credit, only on your OK"]
+    F --> I["Step 5: LeadMagic finance check<br/>F13, F14 · one search, only on your OK"]
     I --> J["Score + tier<br/>Strong fit at 12"]
     H --> J
     J --> K["Results CSV · contacts CSV · Clay"]
@@ -464,7 +471,7 @@ Every data point is answered by the cheapest layer that can, and a layer only ru
 | 2 | Free directories (YC, SEC, IRS, Internet Archive) | free | strong when tied to the domain or legal name |
 | 3 | AI reading our saved pages (Claude through MCP, or OpenAI) | $0 through MCP; about $0.0008 a question with OpenAI | needs an exact quote |
 | 4 | AI web search (job sites and LinkedIn posts included) | $0 through MCP; about $0.011 a search with OpenAI | needs a quote and a domain match to exclude |
-| 5 | Provider: Prospeo, only the finance-person check (F13, F14) | 1 credit per company at most, only when you agree | team or finance-department search; the contacts go to `<list>_contacts.csv` |
+| 5 | Provider: LeadMagic (Prospeo only without a LeadMagic key), only the finance-person check (F13, F14) | one search per company, only when you agree | team or finance-department search; the contacts go to `<list>_contacts.csv` |
 
 **Each data point has its own waterfall file** in `config/datapoints/<group>/<name>.json`. Change a file to change how that data point is answered; the run still schedules everything together (pages downloaded once per company, free layers for all data points at once, AI questions in parallel, one provider call per company covering all its data points, and each data point stops at the first layer that confirms it).
 
@@ -480,7 +487,13 @@ Every data point is answered by the cheapest layer that can, and a layer only ru
 
 **Opposites** (`opposites` in `config/icps/<pipeline>/roles.json`): when one data point is proven Yes, its opposite is No for free; the full list is in [Waterfall per data point](#69-waterfall-per-data-point).
 
-Prospeo is switched on only for F13 and F14 today. It could cover: based in the US, fintech tools (from its technology data: Stripe, Gusto, Rippling, Deel, Mercury, Brex, Ramp, Carta, Pulley), open roles, public / non-profit, outside the US, funding stage and date, QuickBooks and NetSuite, headcount (company size) and industry. Then, for companies that pass, `people` finds decision-makers (founder or CEO first, then the finance lead), which also answers "Has a finance lead" and "No finance person visible". `python -m enrich waterfall acme.com` shows all five layers for each data point. Provider credits per month are capped by `PROVIDER_MONTHLY_CREDITS`, and responses are cached for 90 days (Prospeo doesn't charge again for those either).
+**Provider: LeadMagic first.** Puzzle has LeadMagic, so it is used whenever `LEADMAGIC_API_KEY` is set; Prospeo only without it (or with `CONTACTS_PROVIDER=prospeo`). Both give the same things: one people search per company (the whole team, or the finance department for a large company) that also brings the company record, a company lookup when nobody is found, and emails. LeadMagic's records are saved in Prospeo's field names (`enrich/providers/leadmagic.py`), so the rules read either, and proof names the provider that found it. LeadMagic files people under the company domain its own data has, which is not always the list's website (Bobsled is bobsled.co, but LeadMagic has its people under bobsled.com). So when the website search finds nobody, the company is looked up by its website and its people are searched by the LinkedIn company page that record links to (tested live on bobsled.co, 2026-11-13: found the VP of Finance, answered F13 and F14, and the email finder returned a valid @bobsled.co address). Costs differ: a LeadMagic people search costs 1 credit per person returned, up to `LEADMAGIC_PEOPLE_LIMIT` (25), and 1 when nobody is found; the company lookup 1; a Prospeo search 1. Plans show the worst case (25 + 2 per company).
+
+The provider is switched on only for F13 and F14 today. It could cover: based in the US, fintech tools (from its technology data: Stripe, Gusto, Rippling, Deel, Mercury, Brex, Ramp, Carta, Pulley), open roles, public / non-profit, outside the US, funding stage and date, QuickBooks and NetSuite, headcount (company size) and industry. Then, for companies that pass, `people` finds decision-makers (founder or CEO first, then the finance lead), which also answers "Has a finance lead" and "No finance person visible". `python -m enrich waterfall acme.com` shows all five layers for each data point. Credits per month are capped by `LEADMAGIC_MONTHLY_CREDITS` (Prospeo: `PROVIDER_MONTHLY_CREDITS`), and responses are cached for 90 days, so nothing is paid for twice.
+
+**Emails and mobiles (LeadMagic).** `python -m enrich people <list> --emails` finds the people and their work emails in one go. For contacts already found without an email, `python -m enrich emails <list>` (MCP `find_emails`, API `POST /v1/lists/{name}/emails`) asks LeadMagic's email finder for the top contacts (`--per-company`, default 3): name and company domain, or the LinkedIn profile when only one name is known. 1 credit per valid email found; nothing found is free; only an email on the company's own domain counts. `--phones` also asks the mobile finder (LinkedIn profile, 5 credits per mobile found). It shows the plan and the most it could cost first, runs only after a yes (or an approved `max_credits`), and never asks about the same person twice, found or not. Results go into the contacts file (Email source; Mobile) and to Clay with `push_contacts_to_clay`. Emails and mobiles don't answer any data point.
+
+
 
 ### 4.3 What runs at the same time
 
@@ -962,7 +975,8 @@ lists/leads/output/
   icp_ai_queue.jsonl       phase 1: prompts waiting for AI, with the page text they need
   signals_ai_queue.jsonl   phase 2: the same for signals
   evaluation.csv           after `evaluate`: every disagreement with the right answers, with our proof
-  leads_contacts.csv       after `people` or Prospeo: decision-makers, one row per person
+  leads_contacts.csv       after `people` or step 5: decision-makers, one row per person (emails and mobiles, with the
+                           provider in Email source)
 ```
 
 **The main file,** `leads_enriched.csv`**,** is your list exactly as you gave it (same rows, order and columns), with findings added on the right. It's rewritten after each phase.
@@ -1062,7 +1076,7 @@ Phase 2 shows the same progress bars, then running counts of fit, buying and wea
 | Layer 1: rules | Pattern checks on the scraped pages | `enrich/checks/rules.py` |
 | Layer 2: free directories | YC, SEC, IRS, Internet Archive | `enrich/sources/directories.py`, `history.py` |
 | Layers 3 and 4: AI | Questions about the pages, then web search; answers checked for proof | `enrich/ai/` |
-| Layer 5: provider | Prospeo company data and people | `enrich/providers/` |
+| Layer 5: provider | LeadMagic (else Prospeo) company data and people | `enrich/providers/` |
 | Each data point's settings | Which layers run for it and when | `config/datapoints/` |
 | Which pipeline runs | Each data point's group, weight, conditional runs and opposites in the chosen pipeline | `enrich/core/icp.py`, `config/icps/` |
 | Collecting the website | Pages, job boards, real browser and DNS fallbacks | `enrich/sources/crawl.py` |
@@ -2140,7 +2154,7 @@ flowchart LR
 
 **Step 1 sources**: page text, the raw page code (payment-code scan: Stripe.js, checkout and payment links, billing portal, publishable keys; plus Wappalyzer's 7,600 technology fingerprints), every open job post, and the job-board feed. **Step 2 sources**: YC, SEC (EDGAR, Form D), IRS (non-profits), Internet Archive, and the DNS check (domain verification records, SPF senders, email provider).
 
-| ID | Data point | 1 Rules | 2 Directories | 3 AI pages | 4 AI web | 5 Prospeo | Depends on | Strategy |
+| ID | Data point | 1 Rules | 2 Directories | 3 AI pages | 4 AI web | 5 Provider (LeadMagic) | Depends on | Strategy |
 |---|---|---|---|---|---|---|---|---|
 | M1 | Based and operating in the US | Rules | YC, SEC | if open | if open | off | - | US address or US governing law on the site (proof keeps its page link); YC / SEC location agrees or decides. |
 | M2 | Live website with a real product | Rules | - | if open | off | n/a | after M1 | The site loads with real pages. Web search off: search results can't prove a site is live. Services pipeline (`website_optional: true` in roles.json): a coming-soon page or a 404 is Unknown, not No, because established local businesses often don't keep a website (Ridgeline Drilling and CanAm Logistics, both paying customers, Nov 9, 2026); with no must-have proven the verdict is 'Needs a call: no website' (PENDING, no AI or Prospeo spend). A domain that doesn't resolve or is for sale stays No in every pipeline. |
@@ -2164,8 +2178,8 @@ flowchart LR
 | F10 | AI is core to the product | Rules | - | if open | if open | n/a | - | The product itself is AI (model, agent, assistant), stated on the site. |
 | F11 | YC or similar accelerator | Rules | YC | if open | if open | n/a | - | YC directory: exact website domain plus a name match; acquired or renamed entries don't count. |
 | F12 | Several open roles | Rules | - | if open | if open | off | after F1 (Yes only) | 3+ open roles from the job-board feed (Ashby, Greenhouse, Lever, Workable, Rippling). Runs only when F1 is Yes (`run_if`); otherwise Not applicable. |
-| F13 | No finance person visible | Rules | - | if open (needs team page) | off | if open | - | Size first. SMB / MM: one Prospeo whole-team search (1 credit): a full list (2-24 people) with no finance title = Yes. Skipped for ENT. Web search off: absence can't be found online. |
-| F14 | Has a finance lead (mid-size and up) | Rules | - | if open (needs team page) | if open | if open | uses F13 | Size first. Skipped for SMB. MM: the same whole-team search (no finance title = No). ENT: Prospeo finance-department search. |
+| F13 | No finance person visible | Rules | - | if open (needs team page) | off | if open | - | Size first. SMB / MM: one provider whole-team search (LeadMagic, else Prospeo): a full list (2-24 people) with no finance title = Yes. Skipped for ENT. Web search off: absence can't be found online. |
+| F14 | Has a finance lead (mid-size and up) | Rules | - | if open (needs team page) | if open | if open | uses F13 | Size first. Skipped for SMB. MM: the same whole-team search (no finance title = No). ENT: the provider's finance-department search. |
 | F15 | Publishes revenue or growth numbers | Rules | - | if open | if open | n/a | - | Rules read pages and job posts for the company's own ARR, revenue, customer count or growth ('7-figure ARR up 5x'); others' numbers don't count. The AI prompt also rejects counts of people helped, patients, projects done or years of experience (Nov 9, 2026). |
 | F16 | Remote-first or hybrid | Rules | - | if open | if open | n/a | - | Job locations and 'In person' / remote wording. Watch: 'hybrid search' is a technology, not hybrid work. 'Hybrid' counts only next to work words ('hybrid team', 'hybrid role', '(Hybrid)', 'remote/hybrid', 'Location: Hybrid', 'Hybrid - Austin'); 'a hybrid between direct mail and digital' or 'our hybrid model' describes the product (Nov 9, 2026). |
 | F17 | Runs several US companies | Rules | - | if open | on clue | n/a | - | Several named entities under one owner; boilerplate 'subsidiaries' doesn't count. |
@@ -2288,8 +2302,9 @@ The full description of every call (fields, types, examples) is in [openapi.json
 | | `GET /v1/lists/{name}/runs` | Run log with AI cost per run and in total |
 | Reference | `GET /v1/lookup?domain=puzzle.io&legal_name=Puzzle Financial Inc.` | YC, SEC and IRS for one company. Free |
 | | `GET /v1/signals` | Every data point: its column name, group and points |
-| Providers | `POST /v1/lists/{name}/providers` | Prospeo company data for data points still open. Body: `{"phase": "icp", "max_credits": 50}` |
-| | `POST /v1/lists/{name}/people` | Decision-makers at ICP companies. Body: `{"emails": true, "per_company": 3, "max_credits": 100}` |
+| Providers | `POST /v1/lists/{name}/providers` | Provider company data (LeadMagic, else Prospeo) for data points still open. Body: `{"phase": "icp", "max_credits": 50}` |
+| | `POST /v1/lists/{name}/people` | Decision-makers at ICP companies (LeadMagic, else Prospeo). Body: `{"emails": true, "per_company": 3, "max_credits": 100}` |
+| | `POST /v1/lists/{name}/emails` | LeadMagic emails (and mobiles) for contacts without one. Body: `{"phones": false, "per_company": 3, "max_credits": 50}` |
 | | `GET /v1/lists/{name}/contacts` | Contacts found, one row per person. `?format=csv` |
 | Clay | `POST /v1/lists/{name}/push` | Send a list to a Clay webhook. Body: `{"only_icp": false}` |
 | | `GET /v1/clay/tables` | Tables in the signed-in Clay workspace |
@@ -2375,7 +2390,7 @@ Each row is one request, with all your original columns plus the findings (74 co
 
 The token is sent as the `x-clay-webhook-auth` header. Check it against your webhook's settings in Clay on the first push.
 
-Decision-makers found through Prospeo go into a second Clay table, with its own webhook (`CLAY_CONTACTS_WEBHOOK_URL`, MCP `push_contacts_to_clay`).
+Decision-makers found through LeadMagic (or Prospeo), with their emails and mobiles, go into a second Clay table, with its own webhook (`CLAY_CONTACTS_WEBHOOK_URL`, MCP `push_contacts_to_clay`).
 
 #### Pull from Clay (flow 3)
 
@@ -2451,10 +2466,10 @@ In `.claude/`, loaded automatically when you open the project:
 
 | List | Steps 1-2 and 5 | Steps 3-4 (AI) |
 |---|---|---|
-| One company or a list up to about 100 | `check_company` / `enrich_list` (+ `use_prospeo`) | **Claude in the chat** (`open_questions`, `submit_answers`): $0 API. In Claude Code, `/enrich-chat <csv>` runs it all, one `company-answerer` subagent per company, 5 at a time |
-| Bigger lists (over about 100, up to thousands) | `enrich_list` (+ `use_prospeo`) | **OpenAI** via `list_ai`: estimate first, then only with your approved cap. Claude can't answer tens of thousands of questions in a chat |
+| One company or a list up to about 100 | `check_company` / `enrich_list` (+ `use_provider`) | **Claude in the chat** (`open_questions`, `submit_answers`): $0 API. In Claude Code, `/enrich-chat <csv>` runs it all, one `company-answerer` subagent per company, 5 at a time |
+| Bigger lists (over about 100, up to thousands) | `enrich_list` (+ `use_provider`) | **OpenAI** via `list_ai`: estimate first, then only with your approved cap. Claude can't answer tens of thousands of questions in a chat |
 
-**Up to about 100 companies in Claude Code:** type `/enrich-chat path/to/list.csv my_list`. It runs the free steps, answers every company's open questions with the `company-answerer` subagent (`.claude/agents/`: its own fresh context per company, so the main chat stays short; 5 in parallel), asks you before any Prospeo credit, and shows the results. About 1,000-1,500 answers for 100 companies; expect roughly an hour and a good share of your Claude plan's usage.
+**Up to about 100 companies in Claude Code:** type `/enrich-chat path/to/list.csv my_list`. It runs the free steps, answers every company's open questions with the `company-answerer` subagent (`.claude/agents/`: its own fresh context per company, so the main chat stays short; 5 in parallel), asks you before any provider credit, and shows the results. About 1,000-1,500 answers for 100 companies; expect roughly an hour and a good share of your Claude plan's usage.
 
 **Bigger lists, bulk workflow:** `enrich_list` (free, background) → `list_status` until done → `list_ai(list, "icp")` shows the estimate → approve a cap → `list_ai(list, "icp", max_cost_usd=<cap>)` → when done, the same for `"signals"` → `list_results` / `push_list_to_clay`.
 
@@ -2464,7 +2479,7 @@ In `.claude/`, loaded automatically when you open the project:
 2. `open_questions` gives the model the data points still open, with **the same prompts the OpenAI step uses**, built from `config/prompts`: the system prompt from `_shared.json` (role, ground rules, confidence scale; no ICP description, since the questions ask for facts), each question's instructions from its own prompt file (named in `prompt_file`, with its version), the company's page text, the answer fields, and whether to answer from the pages or the web. Edit a prompt file and both OpenAI and the MCP model follow the change.
 3. The model answers, quoting its proof, and calls `submit_answers`. Questions come in rounds: a data point that depends on another (`run_if`, or an opposite) appears only after that one is answered, and is dropped as Not applicable when the answer rules it out. Keep calling `open_questions` until nothing is left; phase 2 also stops early once no answer can change the lead tier.
 4. The answers pass the same quality checks as any AI answer (exact quote, confidence, domain match for web answers, dated events for recent signals). The result says which counted, the new verdict and score, and what's next.
-5. Step 5, Prospeo, runs only for the finance-person check (F13, F14) and only when you agree: when the finance check is still open after the model's answers, `submit_answers` says so, and the model asks you before calling `check_company(..., use_prospeo=true)` (1 credit at most per company).
+5. Step 5, the provider (LeadMagic; Prospeo only without a LeadMagic key), runs only for the finance-person check (F13, F14) and only when you agree: when the finance check is still open after the model's answers, `submit_answers` says so, and the model asks you before calling `check_company(..., use_provider=true)` (one search per company).
 6. A question the model can't answer the way it asks (usually a web search in a client without a web tool) is sent back as `cannot_answer` and **stays open**; nothing is sent to another AI.
 
 Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring and answer its open questions". The terminal, the API and Clay keep using OpenAI as configured.
@@ -2472,22 +2487,23 @@ Just ask in plain words, for example: "Check resend.com with puzzle-lead-scoring
 | Tool | What it does |
 |---|---|
 | `check_companies` | Several companies at once (up to 25): their free steps run at the same time, so ten take about as long as the slowest one. Then answer each one's questions as usual |
-| `check_company` | One company through the free waterfall steps (size, rules and code checks, YC, SEC, IRS, DNS): ICP, score, tier, signals. `use_prospeo=true` (after your yes) adds step 5, the Prospeo finance check, at most 1 credit |
+| `check_company` | One company through the free waterfall steps (size, rules and code checks, YC, SEC, IRS, DNS): ICP, score, tier, signals. `use_provider=true` (after your yes) adds step 5, the LeadMagic finance check, one search |
 | `open_questions` | The questions still open for a company, for the model to answer (phase 1, then phase 2). 3 at a time by default (the page text is repeated per question); they arrive in waterfall order, so call it again after each submit until it returns none. `next` says how many are left and when to move to phase 'signals' |
 | `submit_answers` | Saves the model's answers through the quality checks; returns what counted and the new verdict and score. `cannot_answer` items stay open (no other AI is used) |
 | `questions_overview` | For a whole list: open questions per company |
 | `list_ai` | **Big lists only.** The AI steps for a whole list with the OpenAI engine, in the background. Called without a cap it only returns the cost estimate; it runs only with `max_cost_usd` set to a cap you approved, and never above it or the monthly budget |
-| `enrich_list` | Start a CSV file as a list in the background (free waterfall steps); `use_prospeo=true` adds step 5 for each company where the finance check is still open (1 credit each at most) |
+| `enrich_list` | Start a CSV file as a list in the background (free waterfall steps); `use_provider=true` adds step 5 for each company where the finance check is still open (one search each) |
 | `list_status` | Progress and counts of a list |
 | `list_results` | Rows of a finished list (ICP = YES by default) |
 | `explain_company` | Every answer with its proof |
 | `clay_tables` | Tables in your Clay workspace |
 | `pull_clay_table` | Read a Clay table and run it as a list |
 | `push_list_to_clay` | Send a finished list to a Clay webhook |
-| `push_contacts_to_clay` | Send a list's Prospeo contacts, one row per person with the company's ICP, score and tier, to a Clay contacts table. Uses its own webhook (`webhook_url`, else `CLAY_CONTACTS_WEBHOOK_URL`), never the companies one |
-| `prospeo_status` | Prospeo key, plan, credits left, credits our lists used this month and the monthly cap. Free |
-| `prospeo_companies` | Prospeo company data for a list's companies whose Prospeo-covered data points are still open (1 credit each at most, never twice). Called without a cap it only returns the plan; it runs only with `max_credits` set to a cap you approved |
-| `find_contacts` | Decision-makers at a list's ICP YES companies (founder, CEO, owner first, then finance, then operations); `emails=true` also reveals verified emails (1 credit each); `strong_only` for Strong fit only. Plan first; runs only with an approved `max_credits` |
+| `push_contacts_to_clay` | Send a list's contacts (LeadMagic or Prospeo), one row per person with the company's ICP, score and tier, to a Clay contacts table. Uses its own webhook (`webhook_url`, else `CLAY_CONTACTS_WEBHOOK_URL`), never the companies one |
+| `provider_status` | Which provider is used (LeadMagic when its key is set) and, for LeadMagic and Prospeo: key, credits left, credits our lists used this month and the monthly cap. Free |
+| `provider_companies` | Provider company data (LeadMagic, else Prospeo) for a list's companies whose provider-covered data points are still open (one search each, never twice). Called without a cap it only returns the plan; it runs only with `max_credits` set to a cap you approved |
+| `find_contacts` | Decision-makers at a list's ICP YES companies (founder, CEO, owner first, then finance, then operations); `emails=true` also finds emails (1 credit each found); `strong_only` for Strong fit only. Plan first; runs only with an approved `max_credits` |
+| `find_emails` | LeadMagic: work emails for the contacts found without one (1 credit per valid email found, none found is free); `phones=true` also finds mobiles (5 credits each found). Never the same person twice. Plan first; runs only with an approved `max_credits` |
 | `list_contacts` | The contacts already bought for a list (or one company). Free |
 | `improvement_report` | What the pipeline learned from its runs, as proposals with proof; safe setting changes are applied automatically (tests run, reverted if they fail) |
 | `apply_improvement` | Apply a setting proposal after your yes (tests run, reverted if they fail) |
@@ -2574,7 +2590,7 @@ python -m enrich usage
 
 These show your keys and limits (set or not, values hidden), the YC and IRS downloads, the shared company cache, and AI cost and provider credits used this month.
 
-Set a monthly cap so testing can't overspend: `AI_MONTHLY_BUDGET_USD=10` (and `PROVIDER_MONTHLY_CREDITS=50` if Prospeo is set) in `.env`.
+Set a monthly cap so testing can't overspend: `AI_MONTHLY_BUDGET_USD=10` (and `LEADMAGIC_MONTHLY_CREDITS=50`) in `.env`.
 
 ### 8.3 The test set
 

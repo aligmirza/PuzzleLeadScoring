@@ -29,7 +29,7 @@ TAGS = [
     {"name": "AI", "description": "Cost estimates and the AI step for an existing list. Always estimated first and capped."},
     {"name": "Quality", "description": "Accuracy against right answers, and the run log."},
     {"name": "Reference", "description": "Free directory lookups and the list of data points."},
-    {"name": "Providers", "description": "Paid data (Prospeo): company data for open data points, and decision-makers. "
+    {"name": "Providers", "description": "Paid data (LeadMagic, or Prospeo without a LeadMagic key): company data for open data points, and decision-makers. "
                                          "Always capped by max_credits."},
     {"name": "Clay", "description": "Pull lists from Clay and push results to a Clay table."},
 ]
@@ -126,7 +126,7 @@ class EvaluateIn(BaseModel):
 class ProvidersIn(BaseModel):
     phase: Literal["icp", "signals"] = Field("icp", description="icp: open must-haves and exclusions; signals: open fit and buying signals")
     limit: int = Field(0, description="Only the first N companies (0 = all that need it)")
-    max_credits: float = Field(description="Refuse if this could use more Prospeo credits (1 per matched company)")
+    max_credits: float = Field(description="Refuse if this could use more provider credits (LeadMagic: 1 per person returned unless the plan includes search; Prospeo: 1 per company)")
 
 
 class PeopleIn(BaseModel):
@@ -134,7 +134,15 @@ class PeopleIn(BaseModel):
     per_company: int = Field(3, description="Contacts kept per company: founder/CEO first, then the finance lead")
     strong_only: bool = Field(False, description="Only Strong fit companies")
     limit: int = 0
-    max_credits: float = Field(description="Refuse if this could use more Prospeo credits")
+    max_credits: float = Field(description="Refuse if this could use more provider credits")
+
+
+class EmailsIn(BaseModel):
+    phones: bool = Field(False, description="Also find mobile numbers (5 LeadMagic credits each found)")
+    per_company: int = Field(3, description="Top contacts per company: founder/CEO first, then the finance lead")
+    decision_makers_only: bool = Field(False, description="Only founders, C-suite and finance leads")
+    limit: int = 0
+    max_credits: float = Field(description="Refuse if this could use more LeadMagic credits")
 
 
 class PushIn(BaseModel):
@@ -302,7 +310,7 @@ async def ai_run(name: str, body: AiIn):
 # --- providers -----------------------------------------------------------------
 @app.post("/v1/lists/{name}/providers", dependencies=AUTH, tags=["Providers"])
 async def providers(name: str, body: ProvidersIn):
-    """Prospeo company data, the last layer of the waterfall, for companies whose data points the earlier layers left
+    """Provider company data (LeadMagic first, else Prospeo), the last layer of the waterfall, for companies whose data points the earlier layers left
     open. Refused above max_credits."""
     from ..pipeline.common import list_dir
     from ..providers import run as prun
@@ -317,13 +325,29 @@ async def providers(name: str, body: ProvidersIn):
 
 @app.post("/v1/lists/{name}/people", dependencies=AUTH, tags=["Providers"])
 async def people(name: str, body: PeopleIn):
-    """Decision-makers at the list's ICP companies from Prospeo (founders, C-suite, finance lead), with emails if asked.
+    """Decision-makers at the list's ICP companies from LeadMagic (or Prospeo) (founders, C-suite, finance lead), with emails if asked.
     Refused above max_credits."""
     from ..pipeline.common import list_dir
     from ..providers import run as prun
     try:
         out = await asyncio.to_thread(prun.people_step, list_dir(name), body.emails, body.per_company, body.strong_only,
                                       body.limit, True, body.max_credits)
+    except SystemExit as e:
+        raise HTTPException(400, str(e))
+    if out.get("refused"):
+        raise HTTPException(402, out["refused"])
+    return out
+
+
+@app.post("/v1/lists/{name}/emails", dependencies=AUTH, tags=["Providers"])
+async def emails(name: str, body: EmailsIn):
+    """LeadMagic: work emails (and mobiles if asked) for the contacts found without one. 1 credit per valid
+    email found, 5 per mobile found. Refused above max_credits."""
+    from ..pipeline.common import list_dir
+    from ..providers import run as prun
+    try:
+        out = await asyncio.to_thread(prun.emails_step, list_dir(name), body.per_company, body.decision_makers_only,
+                                      body.phones, body.limit, True, body.max_credits)
     except SystemExit as e:
         raise HTTPException(400, str(e))
     if out.get("refused"):

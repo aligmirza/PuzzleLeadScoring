@@ -172,7 +172,7 @@ def _reason(layer: str, status: str, cfg: dict, pending: str | None, note: str) 
                               "an unproven yes/no). A clean 'unknown' from the pages ends here.",
                    "off": "Web search is switched off for this data point" + _web_off_why(cfg) + "."}.get(run, ""))
     if layer == "provider":
-        return "Not run: no Prospeo data bought for this company in the test list."
+        return "Not run: no provider data (LeadMagic or Prospeo) bought for this company in the test list."
     return status
 
 
@@ -392,11 +392,12 @@ def _report(domain: str, data_point: str, test_list: str = PREFIX, include_page_
                       confidence=((dir_v.get("note") or "match strength in note") if is_dir else
                                   "unavailable (directories give match strength, not confidence)"))
         elif layer is L.PROVIDER:
-            bought = (store.get_provider(d) or {}).get("prospeo") or {}
+            from ..providers.apply import NAMES, pick
+            src, bought = pick(store.get_provider(d) or {})
             prov_v = (store.get_result(d, phase) or {}).get("signals", {}).get(sid, {})
             ran = bool(bought) and sid in L.PROVIDER_COVERS
             is_prov = prov_v.get("method") == "provider"
-            st.update(executed=ran, source=("Prospeo " + ", ".join(sorted(bought))) if ran else "not run",
+            st.update(executed=ran, source=(f"{NAMES.get(src, src)} " + ", ".join(sorted(bought))) if ran else "not run",
                       raw_evidence=prov_v.get("evidence", "") if is_prov else "",
                       output=VALUE_NAMES.get(prov_v.get("value"), "") if is_prov else "",
                       confidence=(prov_v.get("note") or "") if is_prov else "unavailable (stage not run)",
@@ -433,7 +434,7 @@ def _report(domain: str, data_point: str, test_list: str = PREFIX, include_page_
         if layer is L.PROVIDER and sid in L.PROVIDER_COVERS and cfg["steps"]["provider"].get("run", "off") == "off":
             status = st["status"] = "off for this data point"
             st["executed"] = False
-            st["fallback_reason"] = f"Prospeo is switched off for this data point in {cfg['file']} (used only where switched on)."
+            st["fallback_reason"] = f"The provider step is switched off for this data point in {cfg['file']} (used only where switched on)."
         elif layer is L.AI_WEB and cfg["steps"]["ai_web"].get("run", "off") == "off" and not ran:
             status = st["status"] = "off for this data point"
             st["fallback_reason"] = "Web search is switched off for this data point" + _web_off_why(cfg) + "."

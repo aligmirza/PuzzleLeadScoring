@@ -3,9 +3,9 @@
 Each provider is set up with its own API key in .env; without a key it is simply skipped. Responses are cached
 (cache/providers.sqlite), so a company is never paid for twice within PROVIDER_CACHE_DAYS (default 90).
 """
-from . import prospeo
+from . import leadmagic, prospeo
 
-PROVIDERS = {"prospeo": prospeo}
+PROVIDERS = {"prospeo": prospeo, "leadmagic": leadmagic}
 
 
 def available() -> list[str]:

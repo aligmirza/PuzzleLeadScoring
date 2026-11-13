@@ -1,6 +1,6 @@
 ---
 name: bulk-enrich
-description: Enrich big lead lists (over ~100 up to thousands of companies) with puzzle-lead-scoring - free steps in the background, OpenAI via list_ai only with an approved cost cap, optional Prospeo, costs, results and Clay push. Use when the user wants to enrich a large CSV or Clay table, check costs, or push results.
+description: Enrich big lead lists (over ~100 up to thousands of companies) with puzzle-lead-scoring - free steps in the background, OpenAI via list_ai only with an approved cost cap, optional LeadMagic (or Prospeo), costs, results and Clay push. Use when the user wants to enrich a large CSV or Clay table, check costs, or push results.
 ---
 
 # Big lists (over ~100 companies)
@@ -19,8 +19,8 @@ thousands of questions in a chat, so the AI steps run on the OpenAI engine, only
 3. **Run with the cap:** `list_ai(list_name, "icp", max_cost_usd=<approved cap>)`. If it's refused, say why (above the
    cap or the monthly budget) and offer cheap mode (`mode="cheap"`) or a higher cap. Never raise a cap on your own.
 4. When `list_status` shows phase 1 AI finished, repeat 2-3 for `"signals"`.
-5. **Optional step 5:** Prospeo finance check, 1 credit per company still open. Ask first; then re-run
-   `enrich_list(..., use_prospeo=true)` on the same CSV and list name (pages and answers are cached).
+5. **Optional step 5:** provider finance check (LeadMagic, else Prospeo), one search per company still open. Ask first; then re-run
+   `enrich_list(..., use_provider=true)` on the same CSV and list name (pages and answers are cached).
 6. **Results:** `list_results(list_name)` (ICP YES by default), `questions_overview(list_name)` for what's open.
    `push_list_to_clay(list_name)` only if the user asks.
 7. **Learn from the run:** the **improve-pipeline** skill (`improvement_report`): report what was fixed automatically,
@@ -36,7 +36,7 @@ thousands of questions in a chat, so the AI steps run on the OpenAI engine, only
 ```
 
 - Rough OpenAI cost: about $0.30-0.50 per ICP-YES company (accurate), about half in cheap mode, near $0 for companies
-  ruled out in phase 1. The monthly cap is `AI_MONTHLY_BUDGET_USD` in `.env`; Prospeo's is `PROVIDER_MONTHLY_CREDITS`.
+  ruled out in phase 1. The monthly cap is `AI_MONTHLY_BUDGET_USD` in `.env`; LeadMagic's is `LEADMAGIC_MONTHLY_CREDITS` (Prospeo's `PROVIDER_MONTHLY_CREDITS`).
 - Answers other lists already paid for are reused from the shared cache (no cost).
 
 ## For speed and cost

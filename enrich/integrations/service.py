@@ -153,7 +153,7 @@ def findings(store: Store, domain: str, company: str = "", employees: str = "") 
 # ---------------------------------------------------------------------------
 async def check_one(domain: str, company: str = "", employees: str = "", signals: bool = True, use_ai: bool = False,
                     web: bool = True, refresh: bool = False, wait_seconds: float = 45, ai: dict | None = None,
-                    use_prospeo: bool = False) -> dict:
+                    use_provider: bool = False) -> dict:
     """Check one company. Results are cached, so asking again is instant. If the check takes longer than
     wait_seconds, it keeps running and the answer says to ask again."""
     d = normalize_domain(domain)
@@ -173,19 +173,19 @@ async def check_one(domain: str, company: str = "", employees: str = "", signals
         return {"domain": d, "company": company, "status": "still running",
                 "message": f"Still checking {d}; call again in a minute for the result."}
     step5 = None
-    if use_prospeo:  # step 5: the Prospeo finance check, only if still open and allowed (1 credit at most)
+    if use_provider:  # step 5: the provider finance check (LeadMagic, else Prospeo), only if still open and allowed
         from ..providers import run as prun
         step5 = await asyncio.to_thread(prun.step5_one, folder, store, d)
     out = {"status": "done", **findings(store, d, company, employees)}
     if step5 is not None:
-        out["prospeo"] = step5
+        out["provider_step"] = step5
     return out
 
 
 MAX_BATCH = 25
 
 
-async def check_many(companies: list, signals: bool = True, use_prospeo: bool = False, wait_seconds: float = 300) -> dict:
+async def check_many(companies: list, signals: bool = True, use_provider: bool = False, wait_seconds: float = 300) -> dict:
     """Several companies at once (free steps, up to 25): all of them download and run their rules at the same time,
     each going on to phase 2 as soon as it passes. Items are domains or {domain, company, employees}. Cached like
     check_one; a company already being checked is waited for, not started twice."""
@@ -217,9 +217,9 @@ async def check_many(companies: list, signals: bool = True, use_prospeo: bool = 
     out = []
     for r in rows:
         item = {"status": "done", **findings(store, r["domain"], r["company"], r["employees"])}
-        if use_prospeo:
+        if use_provider:
             from ..providers import run as prun
-            item["prospeo"] = await asyncio.to_thread(prun.step5_one, folder, store, r["domain"])
+            item["provider_step"] = await asyncio.to_thread(prun.step5_one, folder, store, r["domain"])
         out.append(item)
     return {"status": "done", "companies": out, "bad_domains": bad}
 
@@ -245,7 +245,7 @@ def _status(folder: Path, **update) -> dict:
 
 def start_list(name: str | None, rows: list[dict], signals: bool = True, use_ai: bool = False, web: bool = True,
                push_to_clay: bool = False, clay_webhook_url: str | None = None, source: str = "api",
-               ai: dict | None = None, callback_url: str | None = None, use_prospeo: bool = False) -> dict:
+               ai: dict | None = None, callback_url: str | None = None, use_provider: bool = False) -> dict:
     """Save the rows as a new list and process it in the background. Must be called inside a running event loop."""
     if not rows:
         raise ValueError("No rows given")
@@ -259,11 +259,11 @@ def start_list(name: str | None, rows: list[dict], signals: bool = True, use_ai:
     status = _status(folder, list=name, pipeline=icp.name(), state="queued", step="", rows=len(rows), source=source,
                      options={"signals": signals, "ai": use_ai, "web": web, "push_to_clay": push_to_clay,
                               "ai_options": {**ai_options(ai), "web": web} if use_ai else None, "callback_url": callback_url,
-                              "clay_webhook_url": clay_webhook_url, "prospeo": use_prospeo},
+                              "clay_webhook_url": clay_webhook_url, "provider": use_provider},
                      started=time.strftime("%Y-%m-%d %H:%M:%S"), finished=None, error=None, push=None,
                      ai_phase1=None, ai_phase2=None, callback=None)
     _jobs[name] = asyncio.ensure_future(_run_list(folder, signals, use_ai, web, push_to_clay, clay_webhook_url,
-                                                  {**(ai or {}), "web": web}, callback_url, use_prospeo))
+                                                  {**(ai or {}), "web": web}, callback_url, use_provider))
     return status
 
 
@@ -291,20 +291,20 @@ async def _callback(folder: Path, url: str | None) -> None:
 
 
 async def _run_list(folder: Path, signals, use_ai, web, push_to_clay, webhook, ai=None, callback_url=None,
-                    use_prospeo: bool = False) -> None:
+                    use_provider: bool = False) -> None:
     try:
         _status(folder, state="running")
         rows, _ = load_leads(folder / "input.csv")
         store = await run_rows(folder, rows, signals, use_ai, web, on_step=_stepper(folder), ai=ai)
-        if use_prospeo and signals:  # step 5 for each company whose finance check is still open (1 credit at most each)
+        if use_provider and signals:  # step 5 for each company whose finance check is still open (1 credit at most each)
             from ..providers import run as prun
-            _status(folder, step="step 5: Prospeo finance check")
+            _status(folder, step="step 5: provider finance check")
             used = []
             for row in rows:
                 r = await asyncio.to_thread(prun.step5_one, folder, store, row["domain"])
                 if r.get("used"):
                     used.append({"domain": row["domain"], "credits": r["credits"], "people": r["people_found"]})
-            _status(folder, prospeo={"companies": len(used), "credits": sum(u["credits"] for u in used)})
+            _status(folder, provider={"companies": len(used), "credits": sum(u["credits"] for u in used)})
         _status(folder, step="writing results")
         icp = [r for r in (store.get_result(row["domain"], "icp") for row in rows) if r]
         phase1_icp.report(icp, folder, store, None)
@@ -361,7 +361,7 @@ async def push_list(name: str, webhook_url: str | None = None, only_icp: bool = 
 
 
 async def push_contacts(name: str, webhook_url: str | None = None, decision_makers_only: bool = False) -> dict:
-    """One row per Prospeo contact to a Clay contacts table. Its own webhook: a contacts table is not the companies table."""
+    """One row per contact (LeadMagic or Prospeo) to a Clay contacts table. Its own webhook: a contacts table is not the companies table."""
     import os
     from ..providers import run
     url = webhook_url or os.environ.get("CLAY_CONTACTS_WEBHOOK_URL")

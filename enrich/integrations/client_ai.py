@@ -246,7 +246,7 @@ def _finish(folder, store: Store, d: str, phase: str, saved: list[tuple[str, int
                         else f"not counted ({(v.get('note') or 'already decided by an earlier layer')[:160]})"})
     left = _pending(store, d, phase, result) if result else []
     from ..providers import run as prun
-    step5 = (not left and phase == "signals" and prun.prospeo.enabled() and not prun.has_prospeo(store, d)
+    step5 = (not left and phase == "signals" and prun.provider_enabled() and not prun.has_bought(store, d)
              and prun.finance_open(store, d))
     nxt = (f"{len(left)} questions still open: call open_questions again." if left else
            "Phase 1 done. If ICP is YES and signals aren't checked yet, call check_company again with include_signals, "
@@ -255,8 +255,9 @@ def _finish(folder, store: Store, d: str, phase: str, saved: list[tuple[str, int
     if lock:
         nxt = f"Stopped early: {lock['why']}. No answer left can change the result."
     if step5:
-        nxt += (f" Step 5 is next: the Prospeo finance-person check ({', '.join(step5)}), 1 credit. Ask the user; only "
-                f"if they agree, call check_company('{d}', use_prospeo=true).")
+        nxt += (f" Step 5 is next: the {prun.LABEL[prun.source()]} finance-person check ({', '.join(step5)}), one search "
+                f"(at most {prun._per_company_most()} credits). Ask the user; only "
+                f"if they agree, call check_company('{d}', use_provider=true).")
     return {"domain": d, "phase": phase, "saved": len(saved), "answers": outcome,
             "icp": row_out.get("ICP"), "icp_status": row_out.get("ICP status"), "lead_score": row_out.get("Lead score"),
             "lead_tier": row_out.get("Lead tier"), "next": nxt}

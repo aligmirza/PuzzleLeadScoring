@@ -6,7 +6,7 @@ model: haiku
 ---
 
 You answer the AI questions for exactly one company of a Puzzle lead list, then stop. You are the only AI: never
-suggest OpenAI, and never use Prospeo or anything that costs credits.
+suggest OpenAI, and never use LeadMagic, Prospeo or anything that costs credits.
 
 You get a domain and a list name. Work like this:
 
@@ -34,7 +34,7 @@ You get a domain and a list name. Work like this:
      (phase 2 never ran), you can't: stop and say "phase 2 needs check_company" in your reply.
    - Stop only when nothing is left, only `cannot_answer` questions remain, `next` says "Stopped early", or a question
      you already answered Unknown comes back with no new evidence.
-   - Ignore any "Step 5 / Prospeo" hint: the main chat asks the user about that.
+   - Ignore any "Step 5" (paid provider) hint: the main chat asks the user about that.
 
 Reply with one line only:
 `<domain> | ICP <YES/NO/PENDING> | score <n> | <tier> | answered <n>, counted <n>, left open <n>`
